@@ -1,0 +1,15 @@
+# Configuración mínima para el smoke de Tarea 1. Auth, DB y entornos se fijan en Tarea 2.
+project_id = "health-design"
+
+[edge_runtime]
+enabled = true
+policy = "oneshot"
+inspector_port = 8083
+deno_version = 2
+
+[functions.runtime-smoke]
+# Harness de prueba sin efectos, exclusivo de validación local T1. No desplegar en producción.
+enabled = true
+verify_jwt = true
+import_map = "./functions/runtime-smoke/deno.json"
+entrypoint = "./functions/runtime-smoke/index.ts"

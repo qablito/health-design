@@ -1,0 +1,16 @@
+packages:
+  - apps/*
+  - packages/*
+
+minimumReleaseAge: 1440
+minimumReleaseAgeIgnoreMissingTime: false
+trustPolicy: no-downgrade
+blockExoticSubdeps: true
+
+allowBuilds:
+  esbuild: true
+  supabase: true
+
+nodeVersion: 24.18.0
+engineStrict: true
+savePrefix: ""

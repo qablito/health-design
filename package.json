@@ -1,0 +1,42 @@
+{
+  "name": "health-design",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.13.1",
+  "engines": {
+    "node": ">=24.0.0 <27",
+    "pnpm": "11.13.1"
+  },
+  "scripts": {
+    "build": "pnpm --filter @health-design/web build",
+    "edge:check": "node scripts/generate-edge-contracts.mjs --check",
+    "edge:generate": "node scripts/generate-edge-contracts.mjs",
+    "edge:smoke": "node scripts/edge-smoke.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "supply-chain:artifacts": "node scripts/verify-supply-chain.mjs --generate-release && node scripts/verify-supply-chain.mjs --verify-release",
+    "test": "vitest run",
+    "test:browser": "vitest run --config vitest.browser.config.ts",
+    "test:supply-chain": "node scripts/verify-supply-chain.mjs",
+    "typecheck": "tsc --noEmit --project tsconfig.json",
+    "verify": "pnpm edge:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm test:browser && pnpm build"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@health-design/contracts": "workspace:*",
+    "@health-design/domain": "workspace:*",
+    "@types/node": "24.13.3",
+    "@vitest/browser-playwright": "4.1.10",
+    "esbuild": "0.28.1",
+    "eslint": "10.7.0",
+    "globals": "17.7.0",
+    "prettier": "3.9.5",
+    "supabase": "2.108.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.64.0",
+    "vitest": "4.1.10",
+    "playwright": "1.58.2"
+  }
+}

@@ -1,0 +1,41 @@
+__pycache__/
+*.py[cod]
+*.sqlite3-shm
+*.sqlite3-wal
+
+# Dependencias, builds y pruebas
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+.turbo/
+.vite/
+.worktrees/
+.pnpm-store/
+artifacts/
+supabase/.branches/
+supabase/.temp/
+
+# Configuración y secretos locales
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+*.crt
+*.der
+*.jks
+*.keystore
+
+# Backups, restores y evidencia privada
+backups/
+restore-artifacts/
+private-evidence/
+*.dump
+*.backup
+*.sql.gz
+*.age

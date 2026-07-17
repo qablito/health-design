@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@health-design/contracts": ["./packages/contracts/src/index.ts"],
+      "@health-design/domain": ["./packages/domain/src/index.ts"]
+    },
+    "types": ["node"]
+  },
+  "include": [
+    "apps/web/src",
+    "apps/web/vite.config.ts",
+    "packages/*/src",
+    "supabase/functions/_shared/generated/contracts.d.ts",
+    "supabase/functions/runtime-smoke/index.ts",
+    "tests",
+    "vitest.config.ts",
+    "vitest.browser.config.ts"
+  ]
+}

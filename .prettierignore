@@ -1,0 +1,14 @@
+*.md
+artifacts/
+coverage/
+datos/
+dist/
+node_modules/
+playwright-report/
+pnpm-lock.yaml
+private-evidence/
+restore-artifacts/
+supabase/.temp/
+supabase/functions/_shared/generated/
+supermercados/
+test-results/
