@@ -39,6 +39,9 @@ const FORBIDDEN_PUBLIC_CONTENT = [
   /luna[_-]?(?:api[_-]?)?(?:key|token)/i,
   /cloudflare[_-]?api[_-]?token/i,
   /r2[_-]?(?:access|secret)/i,
+  /continuity[_-]?(?:ledger|reconciler)[_-]?(?:hmac|key|secret|token)/i,
+  /admin[_-]?audit[_-]?kek/i,
+  /ledger[_-]?signing[_-]?(?:private[_-]?)?key/i,
 ];
 
 function assertPublicContent(value, source) {

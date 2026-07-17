@@ -3,6 +3,9 @@ main = "workers/continuity-ledger/src/index.js"
 compatibility_date = "2026-07-17"
 workers_dev = false
 
+[triggers]
+crons = ["*/5 * * * *"]
+
 [exports.ContinuityLedger]
 type = "durable-object"
 storage = "sqlite"
@@ -12,7 +15,10 @@ name = "health-design-continuity-ledger-dev"
 workers_dev = false
 
 [env.development.vars]
+ADMIN_AUDIT_KEK_VERSION = "1"
+CONTINUITY_RECONCILER_URL = "https://nwoivdxdupklervtnovd.supabase.co/functions/v1/admin-reconciler/v1/admin-audit/reconcile"
 ENVIRONMENT = "development"
+LEDGER_SIGNING_KEY_VERSION = "1"
 MUTATIONS_ENABLED = "false"
 
 [[env.development.durable_objects.bindings]]
@@ -34,7 +40,10 @@ name = "health-design-continuity-ledger-prod"
 workers_dev = false
 
 [env.production.vars]
+ADMIN_AUDIT_KEK_VERSION = "1"
+CONTINUITY_RECONCILER_URL = "https://rbfrpgafytexrarcfmmp.supabase.co/functions/v1/admin-reconciler/v1/admin-audit/reconcile"
 ENVIRONMENT = "production"
+LEDGER_SIGNING_KEY_VERSION = "1"
 MUTATIONS_ENABLED = "false"
 
 [[env.production.durable_objects.bindings]]

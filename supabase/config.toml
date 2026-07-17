@@ -61,3 +61,15 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/access/deno.json"
 entrypoint = "./functions/access/index.ts"
+
+[functions.admin]
+enabled = true
+verify_jwt = true
+import_map = "./functions/admin/deno.json"
+entrypoint = "./functions/admin/index.ts"
+
+[functions.admin-reconciler]
+enabled = true
+verify_jwt = false
+import_map = "./functions/admin-reconciler/deno.json"
+entrypoint = "./functions/admin-reconciler/index.ts"

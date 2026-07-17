@@ -90,6 +90,9 @@ describe("frontera de configuración pública", () => {
 
       await writeFile(join(directory, "app.js"), "const role='service_" + "role'");
       await expect(checkPublicBundle(directory)).rejects.toThrow(/app\.js/);
+
+      await writeFile(join(directory, "app.js"), "const key='admin_audit_kek'");
+      await expect(checkPublicBundle(directory)).rejects.toThrow(/app\.js/);
     } finally {
       await rm(directory, { force: true, recursive: true });
     }

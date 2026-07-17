@@ -16,6 +16,8 @@
     "supabase/functions/_shared/generated/contracts.d.ts",
     "supabase/functions/_shared/turnstile.ts",
     "supabase/functions/access/index.ts",
+    "supabase/functions/admin/index.ts",
+    "supabase/functions/admin-reconciler/index.ts",
     "supabase/functions/runtime-smoke/index.ts",
     "tests",
     "vitest.config.ts",

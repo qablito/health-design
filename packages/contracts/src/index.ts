@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export * from "./access";
+export * from "./admin";
 
 export const RuntimeSmokeSchema = z
   .object({

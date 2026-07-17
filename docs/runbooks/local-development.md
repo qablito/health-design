@@ -134,8 +134,26 @@ bindings administrados por Cloudflare.
   - `health-design-admin-audit-prod`.
 
 Los buckets `deletions` tienen la regla `retain-all-indefinitely`. Ambos
-Workers conservan `MUTATIONS_ENABLED="false"`; `/health` solo informa de ese
-estado y no existe todavía ninguna ruta de escritura.
+Workers conservan `MUTATIONS_ENABLED="false"`; `/health` informa de ese estado
+y las rutas de append/pending rechazan toda operación hasta la activación
+manual.
+
+T5 añade un cron cada cinco minutos, pero el handler no llama al reconciliador
+mientras las mutaciones estén desactivadas. La activación requiere, por
+entorno, secretos diferentes y nunca reutilizados:
+
+- `CONTINUITY_LEDGER_HMAC_KEY` en Worker y Supabase Edge;
+- `CONTINUITY_RECONCILER_HMAC_KEY` en Worker y Supabase Edge;
+- `ADMIN_AUDIT_KEK_V1` y `LEDGER_SIGNING_PRIVATE_KEY_PKCS8_V1` solo en Worker;
+- `CONTINUITY_LEDGER_PUBLIC_KEYS` solo en Supabase Edge;
+- `CONTINUITY_LEDGER_URL` como ruta HTTPS alcanzable del Worker privado;
+- `SUPABASE_SERVICE_ROLE_KEY` solo en las Edge Functions.
+
+El orden seguro es desplegar primero `admin` y `admin-reconciler` todavía
+inertes, configurar la ruta y claves, provisionar fuera del flujo de perfiles
+la identidad administrativa con TOTP verificado, comprobar AAL1/AAL2 y solo
+entonces cambiar `MUTATIONS_ENABLED` a `true`. No se ha ejecutado esa
+activación remota en T5 local.
 
 El `wrangler.toml` de la raíz pertenece al Worker y sus bindings. El
 `apps/web/wrangler.toml` pertenece exclusivamente a Pages; mantenerlos

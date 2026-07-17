@@ -4,9 +4,9 @@ Especificación de una aplicación web privada, por invitación, para generar y 
 
 ## Estado del proyecto
 
-- Estado actual: **Tareas 1–4 implementadas; identidad, RLS, invitación, código privado, QR y sesiones verificadas dentro de los límites de sus recibos**.
-- Implementación funcional disponible: **acceso privado y vinculación de dispositivos**. Todavía no existen cuestionarios, datos clínicos ni generación de planes.
-- Evidencia: [T1](docs/quality/TASK_01_VERIFICATION.md) y [T2](docs/quality/TASK_02_VERIFICATION.md) incluyen sus fronteras remotas; [T3](docs/quality/TASK_03_VERIFICATION.md) y [T4](docs/quality/TASK_04_VERIFICATION.md) están demostradas localmente y no se presentan como despliegues remotos.
+- Estado actual: **Tareas 1–5 implementadas y verificadas localmente; la infraestructura remota de T5 permanece desactivada**.
+- Implementación funcional disponible: **acceso privado, vinculación de dispositivos y superficie administrativa con impersonación**. Todavía no existen cuestionarios, datos clínicos ni generación de planes.
+- Evidencia: [T1](docs/quality/TASK_01_VERIFICATION.md) y [T2](docs/quality/TASK_02_VERIFICATION.md) incluyen sus fronteras remotas; [T3](docs/quality/TASK_03_VERIFICATION.md), [T4](docs/quality/TASK_04_VERIFICATION.md) y [T5](docs/quality/TASK_05_VERIFICATION.md) están demostradas localmente y no se presentan como despliegues remotos.
 - Público inicial: adultos de 18 años o más, con España como contexto geográfico de V1.
 - Acceso inicial previsto: hasta 10 usuarios invitados.
 - Los scripts y datos de `supermercados/` y `datos/` son material exploratorio; no constituyen todavía un catálogo de producción ni demuestran cobertura comercial.
@@ -54,7 +54,7 @@ Ningún prototipo, prueba, dato extraído o texto generado por IA puede modifica
 - [docs/quality/SCENARIO_CATALOG.md](docs/quality/SCENARIO_CATALOG.md): banco inicial de 92 escenarios.
 - [docs/quality/TRACEABILITY.md](docs/quality/TRACEABILITY.md): bloques, requisitos, escenarios y puertas.
 - [docs/quality/ACCEPTANCE_GATES.md](docs/quality/ACCEPTANCE_GATES.md): ocho puertas obligatorias de salida.
-- [docs/quality/TASK_01_VERIFICATION.md](docs/quality/TASK_01_VERIFICATION.md), [TASK_02_VERIFICATION.md](docs/quality/TASK_02_VERIFICATION.md), [TASK_03_VERIFICATION.md](docs/quality/TASK_03_VERIFICATION.md) y [TASK_04_VERIFICATION.md](docs/quality/TASK_04_VERIFICATION.md): recibos reproducibles por tarea.
+- [docs/quality/TASK_01_VERIFICATION.md](docs/quality/TASK_01_VERIFICATION.md), [TASK_02_VERIFICATION.md](docs/quality/TASK_02_VERIFICATION.md), [TASK_03_VERIFICATION.md](docs/quality/TASK_03_VERIFICATION.md), [TASK_04_VERIFICATION.md](docs/quality/TASK_04_VERIFICATION.md) y [TASK_05_VERIFICATION.md](docs/quality/TASK_05_VERIFICATION.md): recibos reproducibles por tarea.
 
 ### Entrega
 

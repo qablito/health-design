@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { AccessApp } from "./features/access/AccessApp";
+import { AdminApp } from "./features/admin/AdminApp";
 
 const rootElement = document.getElementById("root");
 
@@ -11,6 +12,6 @@ if (rootElement === null) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <AccessApp />
+    {window.location.pathname.startsWith("/admin") ? <AdminApp /> : <AccessApp />}
   </StrictMode>,
 );

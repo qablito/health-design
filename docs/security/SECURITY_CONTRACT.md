@@ -191,7 +191,10 @@ reclasifica como gasto autorizado.
 
 - Usa una cuenta permanente separada de cualquier perfil.
 - MFA TOTP es obligatorio; las acciones privilegiadas exigen `aal2`.
-- Impersonación, publicación, borrado y restauración requieren reautenticación o desafío reciente.
+- Iniciar una impersonación, publicar, borrar o restaurar exige un desafío TOTP
+  realizado durante los cinco minutos anteriores. Consultar el panel requiere
+  AAL2 sin esa frescura adicional y salir de una impersonación nunca queda
+  bloqueado por la ventana temporal.
 - Cada petición conserva `original_actor_id`, `effective_profile_id`, `impersonation_session_id` y `request_id`.
 - La interfaz muestra un indicador persistente durante la impersonación.
 - Ningún usuario puede autoasignarse rol, claim o membresía administrativa.

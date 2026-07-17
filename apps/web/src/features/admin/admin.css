@@ -1,0 +1,162 @@
+:root {
+  color: #17211d;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  background: #f3f5f2;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.admin-shell {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+.admin-header,
+.impersonation-banner,
+.admin-card {
+  max-width: 64rem;
+  margin-inline: auto;
+}
+
+.admin-header,
+.impersonation-banner,
+.admin-profile-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.admin-header {
+  margin-bottom: 1.5rem;
+}
+
+.admin-header h1,
+.admin-card h2 {
+  margin-block: 0.25rem 0.5rem;
+}
+
+.admin-eyebrow {
+  margin: 0;
+  color: #3f6452;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.impersonation-banner {
+  box-sizing: border-box;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  color: #fff;
+  background: #7a321f;
+  border: 3px solid #4b1b10;
+}
+
+.impersonation-banner div,
+.admin-profile-list li div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.impersonation-banner span,
+.admin-profile-list span {
+  font-size: 0.875rem;
+}
+
+.admin-card,
+.admin-error,
+.admin-audit-pending {
+  box-sizing: border-box;
+  padding: 1.5rem;
+  background: #fff;
+  border: 1px solid #ccd5cf;
+}
+
+.admin-error {
+  max-width: 64rem;
+  margin: 0 auto 1rem;
+  color: #711d1d;
+  border-color: #d99;
+}
+
+.admin-audit-pending {
+  max-width: 64rem;
+  margin: 0 auto 1rem;
+  color: #5b4210;
+  background: #fff9e8;
+  border-color: #d8b45a;
+}
+
+.admin-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 28rem;
+}
+
+.admin-form label {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 700;
+}
+
+.admin-form input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #85958b;
+}
+
+.admin-shell button {
+  min-height: 2.75rem;
+  padding: 0.65rem 1rem;
+  color: #fff;
+  font-weight: 750;
+  background: #244c3a;
+  border: 1px solid #173327;
+  cursor: pointer;
+}
+
+.admin-shell button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.admin-secondary {
+  color: #244c3a !important;
+  background: transparent !important;
+}
+
+.admin-profile-list {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  margin: 1rem 0 0;
+  list-style: none;
+}
+
+.admin-profile-list li {
+  padding-block: 1rem;
+  border-top: 1px solid #e2e7e3;
+}
+
+@media (max-width: 40rem) {
+  .admin-shell {
+    padding: 1rem;
+  }
+
+  .admin-header,
+  .impersonation-banner,
+  .admin-profile-list li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
