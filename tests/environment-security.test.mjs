@@ -116,8 +116,12 @@ describe("frontera de configuración pública", () => {
 
 describe("configuración local reproducible", () => {
   it("fija Auth a 15 minutos, rotación 10 segundos y seed sintético", async () => {
-    const [config, seed] = await Promise.all([
+    const [config, edge, seed] = await Promise.all([
       readFile(new URL("../supabase/config.toml", import.meta.url), "utf8"),
+      readFile(
+        new URL("../supabase/functions/access/index.ts", import.meta.url),
+        "utf8",
+      ),
       readFile(new URL("../supabase/seed.sql", import.meta.url), "utf8"),
     ]);
 
@@ -125,6 +129,8 @@ describe("configuración local reproducible", () => {
     expect(config).toMatch(/enable_refresh_token_rotation\s*=\s*true/);
     expect(config).toMatch(/refresh_token_reuse_interval\s*=\s*10/);
     expect(config).toMatch(/enable_anonymous_sign_ins\s*=\s*true/);
+    expect(config).toMatch(/\[functions\.access\][\s\S]*?verify_jwt\s*=\s*true/);
+    expect(edge).toContain("authClient.auth.getUser(token)");
     expect(config).toMatch(/\[auth\.email\][\s\S]*?enable_signup\s*=\s*false/);
     expect(config).toMatch(/\[auth\.sms\][\s\S]*?enable_signup\s*=\s*false/);
     expect(seed).toContain("synthetic-only");
