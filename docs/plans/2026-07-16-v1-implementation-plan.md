@@ -258,6 +258,11 @@ node scripts/check-public-env.mjs
 
 ## Tarea 3 — Esquema de identidad, perfil, membresía y RLS
 
+> **Estado de ejecución (2026-07-17):** completada y verificada localmente con
+> 56 pruebas pgTAP propias, reconstrucción desde cero y lint de esquema sin
+> warnings. El recibo reproducible está en
+> [`TASK_03_VERIFICATION.md`](../quality/TASK_03_VERIFICATION.md).
+
 **Resultado:** una identidad de dispositivo solo puede leer perfiles con una
 membresía activa.
 
@@ -323,6 +328,11 @@ pnpm test:db -- profile_access
 **Commit sugerido:** `feat: add profile membership model and rls`
 
 ## Tarea 4 — Invitación, código privado, QR y sesiones
+
+> **Estado de ejecución (2026-07-17):** completada y verificada localmente con
+> 42 pruebas pgTAP propias, 3 flujos E2E, smoke HTTP Edge y verificación común.
+> El recibo reproducible está en
+> [`TASK_04_VERIFICATION.md`](../quality/TASK_04_VERIFICATION.md).
 
 **Resultado:** alta por invitación y vinculación segura de un segundo
 dispositivo, con identidades independientes.
