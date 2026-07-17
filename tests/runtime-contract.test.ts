@@ -107,4 +107,30 @@ describe("contrato compartido entre runtimes", () => {
 
     expect(config).toMatch(/\[functions\.runtime-smoke\][\s\S]*?verify_jwt\s*=\s*true/);
   });
+
+  it("aplica CORS exacto y rechaza orígenes ajenos", async () => {
+    const allowedRequest = new Request("http://localhost/runtime-smoke", {
+      body: JSON.stringify(RUNTIME_SMOKE_EXAMPLE),
+      headers: {
+        "content-type": "application/json",
+        origin: "https://health-design.pages.dev",
+      },
+      method: "POST",
+    });
+    const allowedResponse = await handleRuntimeSmoke(allowedRequest, "production");
+    expect(allowedResponse.status).toBe(200);
+    expect(allowedResponse.headers.get("access-control-allow-origin")).toBe(
+      "https://health-design.pages.dev",
+    );
+
+    const rejectedResponse = await handleRuntimeSmoke(
+      new Request("http://localhost/runtime-smoke", {
+        headers: { origin: "https://attacker.invalid" },
+        method: "OPTIONS",
+      }),
+      "production",
+    );
+    expect(rejectedResponse.status).toBe(403);
+    expect(rejectedResponse.headers.has("access-control-allow-origin")).toBe(false);
+  });
 });

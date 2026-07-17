@@ -9,7 +9,9 @@
     "pnpm": "11.13.1"
   },
   "scripts": {
-    "build": "pnpm --filter @health-design/web build",
+    "build": "node scripts/build-web.mjs",
+    "check:public-env": "node scripts/check-public-env.mjs",
+    "dev": "pnpm --filter @health-design/web dev",
     "edge:check": "node scripts/generate-edge-contracts.mjs --check",
     "edge:generate": "node scripts/generate-edge-contracts.mjs",
     "edge:smoke": "node scripts/edge-smoke.mjs",
@@ -21,7 +23,8 @@
     "test:browser": "vitest run --config vitest.browser.config.ts",
     "test:supply-chain": "node scripts/verify-supply-chain.mjs",
     "typecheck": "tsc --noEmit --project tsconfig.json",
-    "verify": "pnpm edge:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm test:browser && pnpm build"
+    "verify": "pnpm edge:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm test:browser && pnpm build",
+    "worker:check": "pnpm exec wrangler deploy --dry-run --env development && pnpm exec wrangler deploy --dry-run --env production"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -32,11 +35,12 @@
     "esbuild": "0.28.1",
     "eslint": "10.7.0",
     "globals": "17.7.0",
+    "playwright": "1.58.2",
     "prettier": "3.9.5",
     "supabase": "2.108.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.64.0",
     "vitest": "4.1.10",
-    "playwright": "1.58.2"
+    "wrangler": "4.111.0"
   }
 }

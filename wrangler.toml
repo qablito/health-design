@@ -1,0 +1,52 @@
+name = "health-design-continuity-ledger"
+main = "workers/continuity-ledger/src/index.js"
+compatibility_date = "2026-07-17"
+workers_dev = false
+
+[exports.ContinuityLedger]
+type = "durable-object"
+storage = "sqlite"
+
+[env.development]
+name = "health-design-continuity-ledger-dev"
+workers_dev = false
+
+[env.development.vars]
+ENVIRONMENT = "development"
+MUTATIONS_ENABLED = "false"
+
+[[env.development.durable_objects.bindings]]
+name = "LEDGER"
+class_name = "ContinuityLedger"
+
+[[env.development.r2_buckets]]
+binding = "DELETIONS_BUCKET"
+bucket_name = "health-design-deletions-dev"
+jurisdiction = "eu"
+
+[[env.development.r2_buckets]]
+binding = "ADMIN_AUDIT_BUCKET"
+bucket_name = "health-design-admin-audit-dev"
+jurisdiction = "eu"
+
+[env.production]
+name = "health-design-continuity-ledger-prod"
+workers_dev = false
+
+[env.production.vars]
+ENVIRONMENT = "production"
+MUTATIONS_ENABLED = "false"
+
+[[env.production.durable_objects.bindings]]
+name = "LEDGER"
+class_name = "ContinuityLedger"
+
+[[env.production.r2_buckets]]
+binding = "DELETIONS_BUCKET"
+bucket_name = "health-design-deletions-prod"
+jurisdiction = "eu"
+
+[[env.production.r2_buckets]]
+binding = "ADMIN_AUDIT_BUCKET"
+bucket_name = "health-design-admin-audit-prod"
+jurisdiction = "eu"

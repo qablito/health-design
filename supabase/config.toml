@@ -1,5 +1,47 @@
-# Configuración mínima para el smoke de Tarea 1. Auth, DB y entornos se fijan en Tarea 2.
 project_id = "health-design"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[db.migrations]
+enabled = true
+schema_paths = []
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:5173"
+additional_redirect_urls = ["http://127.0.0.1:5173"]
+jwt_expiry = 900
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = true
+enable_manual_linking = false
+
+[auth.rate_limit]
+anonymous_users = 30
+token_refresh = 150
+sign_in_sign_ups = 30
+token_verifications = 30
+
+[auth.email]
+enable_signup = false
+
+[auth.sms]
+enable_signup = false
 
 [edge_runtime]
 enabled = true
@@ -8,7 +50,7 @@ inspector_port = 8083
 deno_version = 2
 
 [functions.runtime-smoke]
-# Harness de prueba sin efectos, exclusivo de validación local T1. No desplegar en producción.
+# Harness sin efectos para validación local/CI. No desplegar en producción.
 enabled = true
 verify_jwt = true
 import_map = "./functions/runtime-smoke/deno.json"

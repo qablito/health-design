@@ -1,4 +1,5 @@
 import { isRuntimeSmokePayload } from "../_shared/generated/contracts.js";
+import { resolveCors, type EdgeEnvironment } from "../_shared/cors.ts";
 
 const JSON_HEADERS = {
   "cache-control": "no-store",
@@ -56,7 +57,22 @@ function jsonResponse(body: unknown, status: number): Response {
   });
 }
 
-export async function handleRuntimeSmoke(request: Request): Promise<Response> {
+function addHeaders(
+  response: Response,
+  additionalHeaders: Record<string, string>,
+): Response {
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(additionalHeaders)) {
+    headers.set(name, value);
+  }
+  return new Response(response.body, {
+    headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
+}
+
+async function handleRuntimeSmokePayload(request: Request): Promise<Response> {
   if (request.method !== "POST") {
     return new Response(null, {
       headers: { allow: "POST", "cache-control": "no-store" },
@@ -93,6 +109,50 @@ export async function handleRuntimeSmoke(request: Request): Promise<Response> {
   return jsonResponse(candidate, 200);
 }
 
+export async function handleRuntimeSmoke(
+  request: Request,
+  environment: EdgeEnvironment = "local",
+): Promise<Response> {
+  const cors = resolveCors(request.headers.get("origin"), environment);
+  if (!cors.allowed) {
+    return jsonResponse({ error: "origin_not_allowed" }, 403);
+  }
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      headers: {
+        ...cors.headers,
+        "access-control-allow-headers":
+          "authorization, apikey, content-type, x-client-info",
+        "access-control-allow-methods": "POST",
+        "access-control-max-age": "600",
+        "cache-control": "no-store",
+      },
+      status: 204,
+    });
+  }
+
+  return addHeaders(await handleRuntimeSmokePayload(request), cors.headers);
+}
+
+function runtimeEnvironment(): EdgeEnvironment {
+  const deno = (
+    globalThis as typeof globalThis & {
+      Deno?: { env?: { get(name: string): string | undefined } };
+    }
+  ).Deno;
+  const candidate = deno?.env?.get("APP_ENV") ?? "local";
+  if (
+    candidate === "development" ||
+    candidate === "local" ||
+    candidate === "production"
+  ) {
+    return candidate;
+  }
+  throw new Error("APP_ENV no es un entorno permitido");
+}
+
 export default {
-  fetch: handleRuntimeSmoke,
+  fetch(request: Request) {
+    return handleRuntimeSmoke(request, runtimeEnvironment());
+  },
 };

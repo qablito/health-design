@@ -197,6 +197,12 @@ esta puerta; la regresión y su comparación A/B están documentadas en
 
 ## Tarea 2 — Supabase local, entornos y secretos
 
+> **Estado de ejecución (2026-07-17):** completada. Validación local íntegra
+> con Vector, reset reproducible, smoke Edge y apagado limpio; separación
+> hospedada de Supabase, Pages, Turnstile, Workers y R2 también comprobada. El
+> recibo reproducible está en
+> [`TASK_02_VERIFICATION.md`](../quality/TASK_02_VERIFICATION.md).
+
 **Resultado:** desarrollo y producción tienen configuraciones aisladas y el
 frontend no conoce secretos privilegiados.
 

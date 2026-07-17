@@ -40,6 +40,12 @@ jobs:
       - name: Verify workspace
         run: pnpm verify
 
+      - name: Verify public environment boundary
+        run: pnpm check:public-env
+
+      - name: Verify Cloudflare bindings without deploying
+        run: pnpm worker:check
+
   edge:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -69,6 +75,9 @@ jobs:
 
       - name: Start Supabase local stack
         run: pnpm exec supabase start
+
+      - name: Rebuild database and synthetic seed
+        run: pnpm exec supabase db reset
 
       - name: Serve the runtime smoke function with JWT validation
         run: |

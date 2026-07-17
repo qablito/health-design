@@ -9,7 +9,9 @@ blockExoticSubdeps: true
 
 allowBuilds:
   esbuild: true
+  sharp: true
   supabase: true
+  workerd: true
 
 nodeVersion: 24.18.0
 engineStrict: true
