@@ -206,7 +206,7 @@ jobs:
         run: |
           while IFS= read -r -d '' artifact; do
             gh attestation verify "$artifact" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/supply-chain.yml" --signer-digest "$GITHUB_SHA" --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF"
-            gh attestation verify "$artifact" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/supply-chain.yml" --signer-digest "$GITHUB_SHA" --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --predicate-type https://cyclonedx.org/bom/v1.6
+            gh attestation verify "$artifact" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/supply-chain.yml" --signer-digest "$GITHUB_SHA" --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --predicate-type https://cyclonedx.org/bom
           done < <(find apps/web/dist -type f -print0)
 
       - name: Upload verifiable release bundle
