@@ -1,7 +1,7 @@
 # Verificación de la Tarea 1
 
 > **Fecha:** 2026-07-17  
-> **Estado:** `T1_IMPLEMENTED_LOCAL_PASS_WITH_EXTERNAL_GATES_PENDING`  
+> **Estado:** `T1_COMPLETE_REMOTE_PASS`
 > **Alcance:** fundación del monorepo y contrato compartido entre runtimes; no demuestra funcionalidad de producto.
 
 ## Resultado entregado
@@ -77,7 +77,7 @@
 | HTTP Edge con campo adicional | PASS; `400 invalid_runtime_smoke_payload` |
 | HTTP Edge con payload superior a 1 KiB | PASS; `413 payload_too_large` |
 | `pnpm exec supabase functions serve runtime-smoke` | PASS; proceso activo con CLI `2.108.0` |
-| Attestations de GitHub | Configuradas, no ejecutadas localmente |
+| Attestations de GitHub | PASS; procedencia SLSA y SBOM CycloneDX verificadas para los 3 artefactos de `v0.0.1` |
 
 La prueba HTTP Edge se ejecutó contra
 `pnpm exec supabase functions serve runtime-smoke` con JWT habilitado y la clave
@@ -138,10 +138,22 @@ usa el modo SBOM al recibir `sbom-path`; las firmas se generan con certificados
 de corta duración de Sigstore y se verifican con GitHub CLI:
 [documentación oficial de `actions/attest`](https://github.com/actions/attest).
 
-Esta sesión no ha ejecutado GitHub Actions ni ha creado un tag, por lo que la
-attestation no se presenta como verificada todavía. Si el repositorio es
-privado y el plan de GitHub no admite attestations, el release fallará de forma
-intencionada y no publicará un artefacto sin procedencia verificable.
+La puerta se ejecutó sobre el commit
+[`3b08e15`](https://github.com/qablito/health-design/commit/3b08e150d0345e149c4c1d7308a09cf81cad7d85)
+mediante el tag `v0.0.1` en el repositorio público
+[`qablito/health-design`](https://github.com/qablito/health-design). La
+[ejecución completa](https://github.com/qablito/health-design/actions/runs/29564176683)
+terminó en verde, incluido el runtime Edge real, y publicó:
+
+- [procedencia SLSA](https://github.com/qablito/health-design/attestations/35788200);
+- [SBOM CycloneDX firmado](https://github.com/qablito/health-design/attestations/35788205);
+- [bundle verificable](https://github.com/qablito/health-design/actions/runs/29564176683/artifacts/8400683423)
+  `health-design-web-3b08e150d0345e149c4c1d7308a09cf81cad7d85`.
+
+El propio workflow verificó ambos predicados antes del upload. Una segunda
+comprobación independiente con GitHub CLI confirmó procedencia y SBOM para los
+tres archivos de `dist`, restringiendo firmante, commit fuente y ref exacta
+`refs/tags/v0.0.1`.
 
 ## Límite conocido del cuerpo en streaming
 
