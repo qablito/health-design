@@ -1,10 +1,10 @@
 # Verificación de la Tarea 5
 
 > **Fecha:** 2026-07-17
-> **Estado:** `T5_LOCAL_PASS`
+> **Estado:** `T5_REMOTE_INFRA_PASS`
 > **Alcance:** superadministrador, AAL2, impersonación y continuidad del log
-> privilegiado. Este recibo demuestra implementación local; no afirma
-> provisión de una cuenta administrativa ni activación remota del ledger.
+> privilegiado. Este recibo demuestra implementación local y activación remota
+> de infraestructura; no afirma provisión de una cuenta administrativa real.
 
 ## Resultado implementado
 
@@ -28,8 +28,8 @@
   DEK única, KEK AES-KW versionada, cadena SHA-256 y recibos Ed25519.
 - Rechazo de replay de nonce, firma o clave incorrecta, cambio de AAD,
   ciphertext/KEK alterados, conflicto idempotente y cuerpos mayores de 4 KiB.
-- El cron y las rutas de escritura permanecen inertes mientras
-  `MUTATIONS_ENABLED="false"`.
+- El cron y las rutas de escritura solo operan con firmas válidas; desarrollo
+  y producción conservan `MUTATIONS_ENABLED="true"`.
 
 ## Evidencia RED → GREEN
 
@@ -57,6 +57,11 @@
 | `pnpm worker:check` | PASS; dry-run de desarrollo y producción |
 | `pnpm test:supply-chain` | PASS |
 | `pnpm audit --audit-level high` | PASS; sin vulnerabilidades conocidas |
+| Migraciones remotas | PASS; cuatro migraciones presentes en desarrollo y producción |
+| Edge Functions remotas | PASS; `admin` con JWT y `admin-reconciler` con autenticación HMAC propia, activas en ambos entornos |
+| Workers remotos | PASS; `/health` devuelve `200` y `mutationsEnabled: true` en desarrollo y producción |
+| Smoke remoto de runtime | PASS; `admin` carga su configuración y devuelve `UNAUTHENTICATED` con CORS exacto en ambos entornos |
+| Superficie anónima | PASS; `access` y `admin` rechazan; el reconciliador no expone una ruta GET utilizable |
 
 La primera ejecución de `pnpm verify` quedó bloqueada por `EPERM` al abrir el
 puerto efímero de Vitest Browser dentro del sandbox. La repetición autorizada
@@ -84,15 +89,16 @@ fuera del sandbox pasó completa; no fue un fallo del producto.
   ledger; condiciones, medicación, respuestas y contenido del plan quedan
   fuera del schema.
 
-## Límite y activación pendiente
+## Límite pendiente
 
 - No se ha creado una cuenta administrativa real ni un factor TOTP real.
-- `admin`, `admin-reconciler`, Worker, Durable Object y R2 no se han desplegado
-  o habilitado con secretos reales en este corte.
-- Los Workers conservan `MUTATIONS_ENABLED="false"`; el cron no llama al
-  reconciliador en ese estado.
-- La URL remota del Worker privado debe definirse al activar T5; Supabase Edge
-  no puede consumir un Worker sin ruta HTTPS alcanzable.
+- `admin`, `admin-reconciler`, Worker, Durable Object y R2 están desplegados
+  con secretos distintos por entorno; sus valores no se guardan en el repo.
+- Los endpoints estables `workers.dev` están activos y las URL de preview están
+  deshabilitadas. Las escrituras exigen HMAC aunque la ruta sea alcanzable por
+  Internet.
+- Falta la prueba remota positiva de AAL2 e impersonación, que requiere
+  provisionar deliberadamente la primera cuenta superadministradora y su TOTP.
 - Solo se implementan en este corte listado/contexto e impersonación. Las
   mutaciones de catálogo, backups, restore y borrado se incorporan en sus
   tareas funcionales, reutilizando la autorización y auditoría de T5.

@@ -4,9 +4,9 @@ Especificación de una aplicación web privada, por invitación, para generar y 
 
 ## Estado del proyecto
 
-- Estado actual: **Tareas 1–5 implementadas y verificadas localmente; la infraestructura remota de T5 permanece desactivada**.
+- Estado actual: **Tareas 1–5 implementadas; la infraestructura remota de T3–T5 está desplegada y activa en desarrollo y producción**.
 - Implementación funcional disponible: **acceso privado, vinculación de dispositivos y superficie administrativa con impersonación**. Todavía no existen cuestionarios, datos clínicos ni generación de planes.
-- Evidencia: [T1](docs/quality/TASK_01_VERIFICATION.md) y [T2](docs/quality/TASK_02_VERIFICATION.md) incluyen sus fronteras remotas; [T3](docs/quality/TASK_03_VERIFICATION.md), [T4](docs/quality/TASK_04_VERIFICATION.md) y [T5](docs/quality/TASK_05_VERIFICATION.md) están demostradas localmente y no se presentan como despliegues remotos.
+- Evidencia: [T1](docs/quality/TASK_01_VERIFICATION.md), [T2](docs/quality/TASK_02_VERIFICATION.md), [T3](docs/quality/TASK_03_VERIFICATION.md), [T4](docs/quality/TASK_04_VERIFICATION.md) y [T5](docs/quality/TASK_05_VERIFICATION.md) separan las pruebas locales de los recursos remotos realmente comprobados.
 - Público inicial: adultos de 18 años o más, con España como contexto geográfico de V1.
 - Acceso inicial previsto: hasta 10 usuarios invitados.
 - Los scripts y datos de `supermercados/` y `datos/` son material exploratorio; no constituyen todavía un catálogo de producción ni demuestran cobertura comercial.

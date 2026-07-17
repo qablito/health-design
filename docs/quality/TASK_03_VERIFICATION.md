@@ -1,9 +1,9 @@
 # Verificación de la Tarea 3
 
 > **Fecha:** 2026-07-17
-> **Estado:** `T3_COMPLETE_LOCAL_PASS`
+> **Estado:** `T3_REMOTE_INFRA_PASS`
 > **Alcance:** esquema de identidad, perfil, membresía, sesión y RLS. Este
-> recibo demuestra la implementación local; no demuestra despliegue remoto.
+> recibo demuestra la implementación local y el esquema remoto desplegado.
 
 ## Resultado implementado
 
@@ -37,6 +37,7 @@
 | `pnpm verify` | PASS; 40 pruebas unitarias, 2 de navegador, lint, tipos y build |
 | `pnpm test:supply-chain` | PASS; worktree e historial inspeccionados |
 | `pnpm audit --audit-level high` | PASS; sin vulnerabilidades conocidas |
+| Supabase remoto | PASS; migraciones `identity_and_profiles` y `profile_access_rls` presentes en desarrollo y producción |
 
 La repetición se ejecutó con Supabase CLI `2.108.0`, Postgres local 17, pnpm
 `11.13.1` y Node `v25.6.0`. El runtime objetivo de CI continúa fijado por el
@@ -74,8 +75,8 @@ repositorio; este recibo declara el ejecutor local real de la repetición.
 
 ## Límites explícitos
 
-- Las migraciones de T3 están verificadas localmente, pero este recibo no
-  afirma que estén desplegadas en `development` o `production`.
+- Las migraciones de T3 están desplegadas en `health-design-dev` y
+  `health-design-prod`; todavía no contienen perfiles reales.
 - T3 no implementa invitaciones consumibles, código privado o QR; pertenecen a
   T4.
 - T3 no implementa superadministrador, MFA, AAL2 ni impersonación; pertenecen a

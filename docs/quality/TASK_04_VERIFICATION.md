@@ -1,10 +1,10 @@
 # Verificación de la Tarea 4
 
 > **Fecha:** 2026-07-17
-> **Estado:** `T4_COMPLETE_LOCAL_PASS`
+> **Estado:** `T4_REMOTE_INFRA_PASS`
 > **Alcance:** invitación, código privado, QR, sesiones y superficie web mínima
-> de acceso. Este recibo demuestra la implementación local; no habilita altas
-> ni afirma despliegue remoto.
+> de acceso. Este recibo demuestra la implementación local y su infraestructura
+> remota; no habilita altas sin una invitación válida.
 
 ## Resultado implementado
 
@@ -38,6 +38,8 @@
 | `pnpm verify` | PASS; 40 pruebas unitarias, 2 de navegador, lint, tipos y build |
 | `pnpm test:supply-chain` | PASS; worktree e historial inspeccionados |
 | `pnpm audit --audit-level high` | PASS; sin vulnerabilidades conocidas |
+| Supabase remoto | PASS; `access_tokens`, función `access` y secretos de runtime separados en desarrollo y producción |
+| Smoke remoto de runtime | PASS; la clave pública anon alcanza Edge y recibe `UNAUTHENTICATED` con CORS exacto en ambos entornos |
 
 La repetición se ejecutó con Supabase CLI `2.108.0`, Postgres local 17, pnpm
 `11.13.1` y Node `v25.6.0`. El smoke utilizó exclusivamente claves y secretos
@@ -78,8 +80,8 @@ de prueba locales; no imprimió credenciales del stack.
 
 ## Límites explícitos
 
-- T4 está verificada localmente y fusionada en `main`, pero no está desplegada
-  ni habilitada para usuarios remotos.
+- T4 está fusionada en `main` y desplegada en ambos proyectos remotos; no se
+  han provisionado invitaciones reales.
 - Las pruebas usan identidades, invitaciones, QR y claves completamente
   sintéticas.
 - El restablecimiento excepcional por superadministrador, AAL2, impersonación

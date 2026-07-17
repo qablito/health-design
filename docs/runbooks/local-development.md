@@ -110,6 +110,12 @@ Las Edge Functions leen `APP_ENV=development|production` como configuración
 servidora. Si falta, usan la allowlist local y rechazan los orígenes hospedados;
 si contiene otro valor, fallan antes de procesar la petición.
 
+La función `access` requiere además `ACCESS_IDEMPOTENCY_ENCRYPTION_KEY`,
+`ACCESS_RATE_LIMIT_PEPPER`, `PRIVATE_ACCESS_CODE_PEPPER`,
+`TURNSTILE_EXPECTED_HOSTNAME` y `TURNSTILE_SECRET_KEY`. Son distintos por
+entorno salvo la clave oficial de prueba que corresponde exclusivamente a
+desarrollo; producción usa el widget real y su secreto del Llavero.
+
 Las credenciales operativas creadas durante la provisión están en el Llavero de
 macOS:
 
@@ -123,9 +129,9 @@ bindings administrados por Cloudflare.
 ## Recursos Cloudflare
 
 - Pages: `health-design`, rama de producción `main`.
-- Workers sin ruta pública:
-  - `health-design-continuity-ledger-dev`;
-  - `health-design-continuity-ledger-prod`.
+- Workers con endpoint estable y sin URL de preview:
+  - `https://health-design-continuity-ledger-dev.pablitopineda19.workers.dev`;
+  - `https://health-design-continuity-ledger-prod.pablitopineda19.workers.dev`.
 - Durable Object: `ContinuityLedger`, separado por Worker/entorno.
 - R2 EU:
   - `health-design-deletions-dev`;
@@ -134,26 +140,24 @@ bindings administrados por Cloudflare.
   - `health-design-admin-audit-prod`.
 
 Los buckets `deletions` tienen la regla `retain-all-indefinitely`. Ambos
-Workers conservan `MUTATIONS_ENABLED="false"`; `/health` informa de ese estado
-y las rutas de append/pending rechazan toda operación hasta la activación
-manual.
+Workers conservan `MUTATIONS_ENABLED="true"`; `/health` devuelve `ready` y las
+rutas de escritura siguen exigiendo HMAC válido.
 
-T5 añade un cron cada cinco minutos, pero el handler no llama al reconciliador
-mientras las mutaciones estén desactivadas. La activación requiere, por
-entorno, secretos diferentes y nunca reutilizados:
+T5 añade un cron cada cinco minutos. La activación remota usa, por entorno,
+secretos diferentes y nunca reutilizados:
 
 - `CONTINUITY_LEDGER_HMAC_KEY` en Worker y Supabase Edge;
 - `CONTINUITY_RECONCILER_HMAC_KEY` en Worker y Supabase Edge;
 - `ADMIN_AUDIT_KEK_V1` y `LEDGER_SIGNING_PRIVATE_KEY_PKCS8_V1` solo en Worker;
 - `CONTINUITY_LEDGER_PUBLIC_KEYS` solo en Supabase Edge;
-- `CONTINUITY_LEDGER_URL` como ruta HTTPS alcanzable del Worker privado;
+- `CONTINUITY_LEDGER_URL` como ruta HTTPS alcanzable del Worker autenticado;
 - `SUPABASE_SERVICE_ROLE_KEY` solo en las Edge Functions.
 
-El orden seguro es desplegar primero `admin` y `admin-reconciler` todavía
-inertes, configurar la ruta y claves, provisionar fuera del flujo de perfiles
-la identidad administrativa con TOTP verificado, comprobar AAL1/AAL2 y solo
-entonces cambiar `MUTATIONS_ENABLED` a `true`. No se ha ejecutado esa
-activación remota en T5 local.
+La activación se ejecutó el 2026-07-17: migraciones y Edge Functions primero,
+Workers inertes después, comprobación de `/health` y rechazo anónimo, y por
+último `MUTATIONS_ENABLED="true"`. No existe todavía una identidad
+superadministradora real; su provisión y la prueba positiva AAL2 se harán como
+operación separada.
 
 El `wrangler.toml` de la raíz pertenece al Worker y sus bindings. El
 `apps/web/wrangler.toml` pertenece exclusivamente a Pages; mantenerlos
