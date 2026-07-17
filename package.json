@@ -21,6 +21,7 @@
     "supply-chain:artifacts": "node scripts/verify-supply-chain.mjs --generate-release && node scripts/verify-supply-chain.mjs --verify-release",
     "test": "vitest run",
     "test:browser": "vitest run --config vitest.browser.config.ts",
+    "test:db": "supabase test db",
     "test:supply-chain": "node scripts/verify-supply-chain.mjs",
     "typecheck": "tsc --noEmit --project tsconfig.json",
     "verify": "pnpm edge:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm test:browser && pnpm build",

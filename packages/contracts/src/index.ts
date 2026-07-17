@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export * from "./access";
+
 export const RuntimeSmokeSchema = z
   .object({
     schemaVersion: z.literal(1),

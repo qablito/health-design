@@ -79,6 +79,9 @@ jobs:
       - name: Rebuild database and synthetic seed
         run: pnpm exec supabase db reset
 
+      - name: Verify profile membership and RLS
+        run: pnpm test:db
+
       - name: Serve the runtime smoke function with JWT validation
         run: |
           pnpm exec supabase functions serve runtime-smoke > /tmp/runtime-smoke.log 2>&1 &

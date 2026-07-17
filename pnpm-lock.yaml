@@ -81,6 +81,9 @@ importers:
 
   packages/contracts:
     dependencies:
+      '@health-design/domain':
+        specifier: workspace:*
+        version: link:../domain
       zod:
         specifier: 4.4.3
         version: 4.4.3
