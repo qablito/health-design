@@ -405,10 +405,12 @@ pnpm test:e2e -- access.spec.ts
 
 ## Tarea 5 — Superadministrador, AAL2 e impersonación
 
-> **Estado 2026-07-17:** implementación local y pruebas completas en
-> `codex/task-05-admin-impersonation`; el inicio de impersonación exige un
-> desafío TOTP de los últimos cinco minutos. Queda pendiente activar cuenta,
-> secretos, rutas y mutaciones remotas. Véase
+> **Estado 2026-07-17:** `T5_REMOTE_INFRA_PASS`. Implementación fusionada en
+> `main`; migraciones, Edge Functions, secretos, Workers, Durable Object, R2,
+> rutas estables y mutaciones firmadas están activos en desarrollo y
+> producción. Queda pendiente provisionar la primera cuenta superadministradora,
+> enrolar su TOTP y completar la prueba remota positiva de AAL2, impersonación y
+> continuidad del ledger. Véase
 > [`TASK_05_VERIFICATION.md`](../quality/TASK_05_VERIFICATION.md).
 
 **Resultado:** las operaciones completas del administrador solo ocurren desde
