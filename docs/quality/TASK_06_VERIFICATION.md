@@ -1,10 +1,11 @@
 # Verificación de la Tarea 6
 
 > **Fecha:** 2026-07-18
-> **Estado:** `T6_COMPLETE_LOCAL_PASS`
+> **Estado:** `T6_COMPLETE_REMOTE_PASS`
 > **Alcance:** schema canónico V1, wizard adaptativo, borrador remoto, ramas,
-> provisionalidad y ausencia de persistencia clínica local. Este recibo no
-> demuestra despliegue remoto ni generación de planes.
+> provisionalidad, ausencia de persistencia clínica local y activación en el
+> entorno remoto de desarrollo. Este recibo no demuestra generación de planes
+> ni despliegue en producción.
 
 ## Resultado implementado
 
@@ -31,6 +32,9 @@
   por `service_role` después de verificar sesión y membresía.
 - Edge `plans` con JWT, CORS exacto, `no-store`, límites previos al parseo y
   respuestas de error sin body clínico.
+- Conflictos transaccionales conservados como `40001` en la implementación
+  privada y traducidos a `PT409` únicamente en la frontera RPC para que
+  PostgREST complete la respuesta HTTP `409` sin agotar el tiempo del cliente.
 - Service worker limitado a assets públicos inmutables `/assets/`, sin cachear
   documentos, API ni respuestas de usuario, y con limpieza de caches
   controladas en logout y revocación.
@@ -51,7 +55,7 @@
 
 | Comprobación | Resultado |
 | --- | --- |
-| Rama aislada | `codex/task-06-adaptive-questionnaire` sobre `dc6b943` |
+| Integración | `main` avanzó hasta `72fc195` y la corrección de transporte quedó en `7540611` |
 | `pnpm verify` | PASS; Edge generado, formato, lint, tipos, 91 unitarias, 2 de navegador y build |
 | `pnpm test:e2e` | PASS; 10 flujos Chromium combinados, 4 propios de T6 |
 | `pnpm test:a11y` | PASS; primer paso con teclado, nombres accesibles y 360 px sin overflow |
@@ -61,6 +65,18 @@
 | `pnpm worker:check` | PASS; dry-run de desarrollo y producción |
 | `pnpm test:supply-chain` | PASS |
 | `pnpm audit --audit-level high` | PASS; sin vulnerabilidades conocidas |
+
+## Evidencia remota de desarrollo
+
+| Comprobación | Resultado |
+| --- | --- |
+| Entorno | `health-design-dev` (`nwoivdxdupklervtnovd`) enlazado; `health-design-prod` quedó sin enlazar y sin cambios |
+| Migraciones | `20260718105412_questionnaire_drafts.sql` y `20260718165452_questionnaire_conflict_transport.sql` aplicadas; dry-run final sin pendientes |
+| Edge Function | `plans` `ACTIVE`, versión 1, `verify_jwt=true`, SHA-256 `70bd3c14a83bb62d4521283498e0f310e9383dd7d2b130ba119bc5177275d1e3` |
+| JWT y CORS | GET anónimo `401`; preflight del origen de desarrollo `204`; origen ajeno `403` |
+| Flujo sintético | schema `200`, borrador vacío `200`, guardado `200`, replay idempotente `200`, reanudación `200`, conflicto de versión `409`, envío `200` |
+| Limpieza | PASS; `0` perfiles, `0` borradores y `0` registros idempotentes `t6-smoke-*` |
+| Advisors | sin hallazgo bloqueante propio de T6; avisos informativos heredados o intencionales se conservan para hardening posterior |
 
 ## Propiedades comprobadas
 
@@ -87,8 +103,8 @@
 
 - T6 no crea `ContextSnapshot`, `Plan`, `PlanVersion` ni candidato; corresponde
   a T7 y tareas posteriores.
-- No se ha desplegado la migración ni la Edge Function `plans` en desarrollo o
-  producción. La evidencia remota requerirá una activación solicitada aparte.
+- La migración y `plans` están activas únicamente en desarrollo. Producción no
+  se enlazó, no recibió migraciones y no recibió funciones en este cierre.
 - Las sugerencias farmacológicas son ayuda de entrada, no el catálogo AEMPS ni
   un verificador exhaustivo. La cobertura curada comienza en T12.
 - El diseño visual definitivo, auditoría AA completa con tecnologías de apoyo
@@ -102,3 +118,5 @@
 - [Supabase Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
 - [Autenticación de Edge Functions](https://supabase.com/docs/guides/functions/auth)
 - [Cabeceras de autorización en Edge Functions](https://supabase.com/docs/guides/functions/auth-legacy-jwt)
+- [Despliegue de Edge Functions](https://supabase.com/docs/guides/functions/quickstart)
+- [Errores personalizados de PostgREST](https://docs.postgrest.org/en/latest/references/errors.html#raise-errors-with-http-status-codes)
