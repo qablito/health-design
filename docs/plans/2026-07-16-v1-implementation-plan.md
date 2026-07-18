@@ -405,12 +405,11 @@ pnpm test:e2e -- access.spec.ts
 
 ## Tarea 5 — Superadministrador, AAL2 e impersonación
 
-> **Estado 2026-07-17:** `T5_REMOTE_INFRA_PASS`. Implementación fusionada en
-> `main`; migraciones, Edge Functions, secretos, Workers, Durable Object, R2,
-> rutas estables y mutaciones firmadas están activos en desarrollo y
-> producción. Queda pendiente provisionar la primera cuenta superadministradora,
-> enrolar su TOTP y completar la prueba remota positiva de AAL2, impersonación y
-> continuidad del ledger. Véase
+> **Estado 2026-07-18:** `T5_COMPLETE_REMOTE_PASS`. Implementación fusionada en
+> `main`; infraestructura activa en desarrollo y producción; primera cuenta
+> superadministradora y TOTP real provisionados solo en desarrollo. AAL1
+> rechazado, AAL2 aceptado, inicio/salida de impersonación, `intent/outcome`,
+> outbox y cuatro objetos R2 cifrados se comprobaron de extremo a extremo. Véase
 > [`TASK_05_VERIFICATION.md`](../quality/TASK_05_VERIFICATION.md).
 
 **Resultado:** las operaciones completas del administrador solo ocurren desde

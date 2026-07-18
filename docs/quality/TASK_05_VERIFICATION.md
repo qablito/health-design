@@ -1,15 +1,16 @@
 # Verificación de la Tarea 5
 
-> **Fecha:** 2026-07-17
-> **Estado:** `T5_REMOTE_INFRA_PASS`
+> **Fecha:** 2026-07-18
+> **Estado:** `T5_COMPLETE_REMOTE_PASS`
 > **Alcance:** superadministrador, AAL2, impersonación y continuidad del log
-> privilegiado. Este recibo demuestra implementación local y activación remota
-> de infraestructura; no afirma provisión de una cuenta administrativa real.
+> privilegiado. Este recibo demuestra implementación local, activación remota
+> y el recorrido real completo en desarrollo con la primera cuenta
+> superadministradora y su factor TOTP.
 
 ## Resultado implementado
 
 - Superficie web `/admin` separada del flujo de perfiles, con login propio,
-  factor TOTP ya provisionado y comprobación AAL2.
+  Turnstile, factor TOTP provisionado y comprobación AAL2.
 - Inicio de impersonación limitado a un desafío TOTP de los últimos cinco
   minutos; el panel conserva AAL2 y la salida permanece siempre disponible.
 - Rol `superadmin` no autoasignable, RPC privadas y `service_role` mantenida
@@ -62,6 +63,12 @@
 | Workers remotos | PASS; `/health` devuelve `200` y `mutationsEnabled: true` en desarrollo y producción |
 | Smoke remoto de runtime | PASS; `admin` carga su configuración y devuelve `UNAUTHENTICATED` con CORS exacto en ambos entornos |
 | Superficie anónima | PASS; `access` y `admin` rechazan; el reconciliador no expone una ruta GET utilizable |
+| Primera SU de desarrollo | PASS; identidad separada, rol `superadmin` y factor TOTP real en estado `verified`; credencial solo en Llavero |
+| Autorización remota real | PASS; AAL1 devuelve `403/AAL2_REQUIRED`; AAL2 obtiene contexto y perfiles con `200` |
+| Impersonación remota real | PASS; inicio `201`, salida `200` y contexto final `active: false` |
+| Persistencia remota | PASS; sesión finalizada, cuatro eventos `intent/outcome` con recibo completo y dos outbox `success` |
+| R2 remoto cifrado | PASS; objetos `admin-audit` 1–4 presentes, cadena/hash válidos y sin acción, alias, perfil, actor o sesión en claro |
+| E2E administrativo actualizado | PASS; 3 flujos, incluido el token Turnstile obligatorio en el login SU |
 
 La primera ejecución de `pnpm verify` quedó bloqueada por `EPERM` al abrir el
 puerto efímero de Vitest Browser dentro del sandbox. La repetición autorizada
@@ -89,16 +96,15 @@ fuera del sandbox pasó completa; no fue un fallo del producto.
   ledger; condiciones, medicación, respuestas y contenido del plan quedan
   fuera del schema.
 
-## Límite pendiente
+## Límite de cierre
 
-- No se ha creado una cuenta administrativa real ni un factor TOTP real.
 - `admin`, `admin-reconciler`, Worker, Durable Object y R2 están desplegados
   con secretos distintos por entorno; sus valores no se guardan en el repo.
+- La primera cuenta superadministradora y su TOTP existen únicamente en
+  desarrollo. Producción no recibió ninguna identidad administrativa.
 - Los endpoints estables `workers.dev` están activos y las URL de preview están
   deshabilitadas. Las escrituras exigen HMAC aunque la ruta sea alcanzable por
   Internet.
-- Falta la prueba remota positiva de AAL2 e impersonación, que requiere
-  provisionar deliberadamente la primera cuenta superadministradora y su TOTP.
 - Solo se implementan en este corte listado/contexto e impersonación. Las
   mutaciones de catálogo, backups, restore y borrado se incorporan en sus
   tareas funcionales, reutilizando la autorización y auditoría de T5.

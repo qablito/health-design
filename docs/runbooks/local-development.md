@@ -155,9 +155,11 @@ secretos diferentes y nunca reutilizados:
 
 La activación se ejecutó el 2026-07-17: migraciones y Edge Functions primero,
 Workers inertes después, comprobación de `/health` y rechazo anónimo, y por
-último `MUTATIONS_ENABLED="true"`. No existe todavía una identidad
-superadministradora real; su provisión y la prueba positiva AAL2 se harán como
-operación separada.
+último `MUTATIONS_ENABLED="true"`. El 2026-07-18 se provisionó la primera
+identidad superadministradora únicamente en desarrollo, se verificó su TOTP y
+pasó el recorrido AAL1/AAL2, impersonación, salida, auditoría y R2. La
+contraseña permanece en el Llavero; producción continúa sin identidad
+administrativa provisionada.
 
 El `wrangler.toml` de la raíz pertenece al Worker y sus bindings. El
 `apps/web/wrangler.toml` pertenece exclusivamente a Pages; mantenerlos
