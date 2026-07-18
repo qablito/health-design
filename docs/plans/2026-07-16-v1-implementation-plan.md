@@ -539,12 +539,13 @@ pnpm test:a11y -- questionnaire
 
 ## Tarea 7 — Snapshots de contexto y ciclo de vida del plan
 
-> **Estado 2026-07-18:** `T7_COMPLETE_LOCAL_PASS`. Snapshots inmutables,
+> **Estado 2026-07-18:** `T7_COMPLETE_REMOTE_PASS`. Snapshots inmutables,
 > versiones de plan, candidatos, diff de impacto, activación manual,
-> idempotencia y concurrencia implementados en la rama aislada de T7. Pasan
-> `pnpm verify`, 10 E2E, 197 pgTAP, lint SQL, deriva cero y el smoke local de
-> la Edge Function. El motor numérico continúa siendo frontera de T8; no se ha
-> activado nada en Supabase remoto ni en producción. Véase
+> idempotencia y concurrencia validados localmente y en el entorno remoto de
+> desarrollo. Pasan `pnpm verify`, 10 E2E, 197 pgTAP, lint SQL, deriva cero y
+> el recorrido remoto con snapshot inmutable, replay idempotente, aislamiento
+> de actor y cero planes ante `ENGINE_UNAVAILABLE`. El motor numérico continúa
+> siendo frontera de T8; producción no se enlazó ni recibió cambios. Véase
 > [`TASK_07_VERIFICATION.md`](../quality/TASK_07_VERIFICATION.md).
 
 **Resultado:** contexto normalizado e inmutable; borrador, activo, archivado,
@@ -587,6 +588,13 @@ pnpm test --filter plan-lifecycle
 **Commit sugerido:** `feat: add immutable plan lifecycle`
 
 ## Tarea 8 — Núcleo numérico y motor de restricciones
+
+> **Fronteras confirmadas 2026-07-18:** T8 implementará únicamente el núcleo
+> puro, determinista y versionado; no incluirá catálogos nutricionales, planes
+> finales de módulos, reglas clínicas exhaustivas, Luna, interfaz final ni
+> cambios en producción. La generación seguirá creando borradores y nunca
+> activará un plan automáticamente. Su implementación queda pendiente de la
+> confirmación expresa posterior a este preflight.
 
 **Resultado:** pipeline puro y reproducible que aplica obligatorias,
 condicionales y preferentes dentro del espacio seguro.

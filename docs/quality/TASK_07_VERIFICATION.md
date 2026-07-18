@@ -1,11 +1,12 @@
 # Verificación de la Tarea 7
 
 > **Fecha:** 2026-07-18
-> **Estado:** `T7_COMPLETE_LOCAL_PASS`
+> **Estado:** `T7_COMPLETE_REMOTE_PASS`
 > **Alcance:** snapshots de contexto, ciclo inmutable y versionado del plan,
 > candidatos revisables, activación manual, concurrencia, contratos y rutas
-> Edge. Este recibo no demuestra el motor numérico de T8, una generación
-> clínica real ni activación remota.
+> Edge, incluida su activación y validación remota en desarrollo. Este recibo
+> no demuestra el motor numérico de T8, una generación clínica real ni un
+> despliegue en producción.
 
 ## Resultado implementado
 
@@ -65,6 +66,23 @@
 | `supabase functions serve plans --no-verify-jwt` | PASS; Edge Runtime 1.74.1 cargó `plans` |
 | Smoke HTTP local | PASS; lectura anónima `401 UNAUTHENTICATED`, `cache-control: no-store, private`, `referrer-policy: no-referrer` |
 
+## Evidencia remota de desarrollo
+
+| Comprobación | Resultado |
+|---|---|
+| Publicación previa | `main` avanzó a `542d901`; GitHub Actions `Verify` 29656204380 y `Supply chain` 29656204438 terminaron en `success` |
+| Copia precrítica | PASS; DMG AES-256 local `backups/t7-precritical-development-20260718T184046Z.dmg`, verificado con `hdiutil`; clave únicamente en Llavero, servicio `health-design-dev-t7-precritical-20260718T184046Z` |
+| Integridad de la copia | schema SHA-256 `dc1289d81e3231da5387bd194b1271958b624ac061e4f817839af5eecb04462a`; data SHA-256 `9f649012012c18d2f7ab4c48a35a426ebeb430aee189e54d779d783665d9b87d` |
+| Entorno | `health-design-dev` (`nwoivdxdupklervtnovd`) enlazado; producción (`rbfrpgafytexrarcfmmp`) quedó sin enlazar y sin cambios |
+| Migración | `20260718160007_context_and_plan_versions.sql` aplicada; historial local/remoto alineado y dry-run final sin pendientes |
+| Edge Function | `plans` `ACTIVE`, versión 2, `verify_jwt=true`, SHA-256 `8214b975b911dae97a18524ba9a9e7db27bd426c19de8539d83e6277c1a30bbd` |
+| CORS y autenticación | preflight permitido `204`, origen ajeno `403` y lectura anónima `401` |
+| Flujo sintético | cuestionario `submitted_complete`; snapshot creado y replay con el mismo identificador; actor ajeno `403` |
+| Frontera T8 | generación autenticada `503 ENGINE_UNAVAILABLE`, `no-store`; persistencia resultante: un snapshot y cero planes |
+| Inmutabilidad | actualización del snapshot rechazada y valor remoto sin cambios |
+| Limpieza | PASS; perfil, acceso, borrador, snapshot, plan, sesiones, actores y usuarios Auth sintéticos verificados a `0` |
+| Advisors | sin `ERROR` bloqueante; avisos globales e informativos de RLS deny-by-default, protección de contraseñas e índices quedan registrados para hardening posterior |
+
 El primer intento de `pnpm verify` dentro del sandbox no pudo abrir el puerto
 efímero de Vitest Browser (`listen EPERM`). La misma suite se repitió fuera de
 esa restricción y terminó íntegramente en verde; no se contabiliza el intento
@@ -117,13 +135,15 @@ incompleto como evidencia funcional.
   revisiones activables corresponden a tareas posteriores.
 - No se implementó todavía la interfaz de consulta/activación del plan; la
   experiencia visual final pertenece a T19.
-- No se desplegó la migración ni la Edge Function en Supabase remoto. El
+- La migración y la Edge Function están activas únicamente en desarrollo. El
   proyecto de producción no se enlazó ni recibió cambios.
 
 ## Referencias verificadas
 
 - [Supabase Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
 - [Supabase Edge Functions: quickstart](https://supabase.com/docs/guides/functions/quickstart)
+- [Flujo local y migraciones enlazadas](https://supabase.com/docs/guides/local-development/cli-workflows)
+- [Despliegue de Edge Functions](https://supabase.com/docs/guides/functions/deploy)
 - [Métodos HTTP en Edge Functions](https://supabase.com/docs/guides/functions/http-methods)
 - [`ADR-0002`](../adr/0002-versioned-plans-and-manual-activation.md)
 - [`API_CONTRACT.md`](../architecture/API_CONTRACT.md)
