@@ -46,6 +46,52 @@ async function installAdminSession(page: Page) {
   }, adminSession());
 }
 
+async function installTurnstileStub(page: Page) {
+  await page.addInitScript(() => {
+    const target = window as Window & {
+      turnstile?: {
+        execute(widgetId: string): void;
+        remove(widgetId: string): void;
+        render(
+          container: HTMLElement,
+          options: { callback(token: string): void },
+        ): string;
+      };
+    };
+    target.turnstile = {
+      execute() {},
+      remove() {},
+      render(_container, options) {
+        setTimeout(() => options.callback("admin-turnstile-token"), 0);
+        return "admin-turnstile-widget";
+      },
+    };
+  });
+}
+
+test("el acceso SU envía el desafío Turnstile a Supabase Auth", async ({ page }) => {
+  await installTurnstileStub(page);
+  let captchaToken: unknown;
+  await page.route("http://127.0.0.1:54321/auth/v1/token**", async (route) => {
+    const body = route.request().postDataJSON() as {
+      gotrue_meta_security?: { captcha_token?: unknown };
+    };
+    captchaToken = body.gotrue_meta_security?.captcha_token;
+    await route.fulfill({
+      body: JSON.stringify({ error_code: "invalid_credentials" }),
+      contentType: "application/json",
+      status: 400,
+    });
+  });
+
+  await page.goto("/admin");
+  await page.getByLabel("Correo").fill("admin@example.test");
+  await page.getByLabel("Contraseña").fill("test-password");
+  await page.getByRole("button", { name: "Continuar" }).click();
+
+  await expect.poll(() => captchaToken).toBe("admin-turnstile-token");
+});
+
 test("el indicador de impersonación persiste al refrescar y salir restaura admin", async ({
   page,
 }) => {

@@ -1,7 +1,8 @@
 export const TURNSTILE_SCRIPT_URL =
   "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 
-type TurnstileAction = "access_identity" | "access_invitation" | "access_link";
+type TurnstileAction =
+  "access_identity" | "access_invitation" | "access_link" | "admin_signin";
 
 type TurnstileOptions = {
   action: TurnstileAction;

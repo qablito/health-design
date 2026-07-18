@@ -7,6 +7,7 @@ import {
   type AdminProfileSummary,
 } from "./admin-client";
 import { supabaseAuth } from "../../services/supabase";
+import { requestTurnstileToken } from "../../services/turnstile";
 
 import "./admin.css";
 
@@ -129,8 +130,10 @@ export function AdminApp() {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     await run(async () => {
+      const captchaToken = await requestTurnstileToken({ action: "admin_signin" });
       const { error: signInError } = await supabaseAuth.signInWithPassword({
         email: formValue(form, "email"),
+        options: { captchaToken },
         password: formValue(form, "password"),
       });
       if (signInError) throw signInError;
