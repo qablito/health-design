@@ -83,6 +83,7 @@ const previousContext = {
 
 const engineResult: PlanEngineResult = {
   canonicalizationVersion: "canonical-json-v1",
+  completeness: "provisional",
   engineVersion: "engine-v1",
   inputHash: hash("21"),
   moduleResults: [
@@ -117,6 +118,16 @@ const firstAck = {
   validationStatus: "valid",
 } as const;
 
+const persistedSleepResult = {
+  confidence: "high",
+  createdAt: timestamp,
+  id: "71000000-0000-4000-8000-000000000101",
+  module: "sleep",
+  payload: { marker: "persisted-base-sleep" },
+  status: "valid",
+  uncertainties: [],
+} as const;
+
 const baseVersion = {
   activatedAt: timestamp,
   archivedAt: null,
@@ -128,7 +139,7 @@ const baseVersion = {
   hashAlgorithm: "sha256",
   id: firstVersionId,
   inputHash: hash("31"),
-  moduleResults: [],
+  moduleResults: [persistedSleepResult],
   ordinal: 1,
   outputHash: hash("32"),
   planId,
@@ -359,6 +370,7 @@ describe("Edge del ciclo de vida del plan", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ status: "draft" });
     expect(current.engineCalls).toHaveLength(1);
+    expect(current.engineCalls[0]).toMatchObject({ baseModuleResults: null });
     expect(current.calls.map(({ name }) => name)).toEqual([
       "internal_get_context_snapshot",
       "internal_create_plan_draft",
@@ -366,6 +378,10 @@ describe("Edge del ciclo de vida del plan", () => {
     expect(current.calls[1]?.args).toMatchObject({
       p_canonicalization_version: "canonical-json-v1",
       p_engine_version: "engine-v1",
+      p_validation: {
+        checks: ["structure"],
+        completeness: "provisional",
+      },
       p_validation_status: "valid",
     });
   });
@@ -420,6 +436,17 @@ describe("Edge del ciclo de vida del plan", () => {
         p_impact: "dependent_modules",
       },
       name: "internal_create_plan_candidate",
+    });
+    expect(current.engineCalls[0]).toMatchObject({
+      baseModuleResults: [
+        {
+          confidence: "high",
+          module: "sleep",
+          payload: { marker: "persisted-base-sleep" },
+          status: "valid",
+          uncertainties: [],
+        },
+      ],
     });
   });
 
@@ -531,10 +558,10 @@ describe("Edge del ciclo de vida del plan", () => {
     expect(detail.calls[0]?.name).toBe("internal_get_plan_version");
     expect(
       PlanVersionDetailSchema.parse(await detailResponse.json()).moduleResults,
-    ).toEqual([]);
+    ).toEqual([persistedSleepResult]);
   });
 
-  it("mantiene una salida honesta cuando T8 todavía no aporta motor", async () => {
+  it("falla de forma honesta cuando la dependencia del motor no está disponible", async () => {
     const current = setup({
       engine: () => Promise.reject(new Error("engine_unavailable")),
     });

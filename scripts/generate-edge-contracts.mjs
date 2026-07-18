@@ -54,6 +54,7 @@ export async function generateEdgeContracts({ check = false } = {}) {
   let plansDeclaration = "";
   const program = ts.createProgram({
     options: {
+      allowImportingTsExtensions: true,
       declaration: true,
       emitDeclarationOnly: true,
       module: ts.ModuleKind.ESNext,

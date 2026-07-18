@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { runDeterministicEngine } from "@health-design/engine";
 
 import {
   handleQuestionnaire,
@@ -67,7 +68,7 @@ function dependencies(): QuestionnaireDependencies & PlanLifecycleDependencies {
       };
       return { data, error };
     },
-    runEngine: () => Promise.reject(new Error("engine_unavailable")),
+    runEngine: runDeterministicEngine,
   };
 }
 

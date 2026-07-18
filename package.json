@@ -34,6 +34,7 @@
     "@eslint/js": "10.0.1",
     "@health-design/contracts": "workspace:*",
     "@health-design/domain": "workspace:*",
+    "@health-design/engine": "workspace:*",
     "@playwright/test": "1.58.2",
     "@supabase/supabase-js": "2.110.6",
     "@types/node": "24.13.3",

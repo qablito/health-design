@@ -64,6 +64,7 @@ describe("contratos del ciclo de vida del plan", () => {
   it("valida salida normativa cerrada, hashes y un resultado por módulo", () => {
     const result = {
       canonicalizationVersion: "canonical-json-v1",
+      completeness: "provisional",
       engineVersion: "engine-v1",
       inputHash: hash("11"),
       moduleResults: [
@@ -92,6 +93,8 @@ describe("contratos del ciclo de vida del plan", () => {
     };
 
     expect(PlanEngineResultSchema.safeParse(result).success).toBe(true);
+    const withoutCompleteness = { ...result, completeness: undefined };
+    expect(PlanEngineResultSchema.safeParse(withoutCompleteness).success).toBe(false);
     expect(
       PlanEngineResultSchema.safeParse({
         ...result,

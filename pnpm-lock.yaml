@@ -17,6 +17,9 @@ importers:
       '@health-design/domain':
         specifier: workspace:*
         version: link:packages/domain
+      '@health-design/engine':
+        specifier: workspace:*
+        version: link:packages/engine
       '@playwright/test':
         specifier: 1.58.2
         version: 1.58.2
@@ -101,6 +104,15 @@ importers:
         version: 4.4.3
 
   packages/domain: {}
+
+  packages/engine:
+    dependencies:
+      '@health-design/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@health-design/domain':
+        specifier: workspace:*
+        version: link:../domain
 
 packages:
 

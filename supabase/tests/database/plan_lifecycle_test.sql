@@ -359,7 +359,7 @@ select public.internal_create_plan_candidate(
   '82000000-0000-4000-8000-000000007101',
   decode(repeat('44', 32), 'hex'),
   decode(repeat('45', 32), 'hex'),
-  'valid', '{"checks":["structure","constraints"]}'::jsonb,
+  'valid', '{"checks":["structure","constraints"],"completeness":"provisional"}'::jsonb,
   '[{"module":"nutrition","status":"valid","confidence":"high","payload":{"days":7},"uncertainties":[]}]'::jsonb,
   '[]'::jsonb,
   decode(repeat('46', 32), 'hex'),
@@ -430,8 +430,32 @@ select is(
     from public.plan_versions
     where id = (select (response ->> 'planVersionId')::uuid from valid_candidate)
   ),
-  'complete:active',
-  'una versión completa puede estar activa sin mezclar ambos ejes de estado'
+  'provisional:active',
+  'la completitud provisional del motor prevalece aunque el snapshot esté completo'
+);
+
+select throws_ok(
+  $$
+    insert into public.plan_versions (
+      id, plan_id, ordinal, status, completeness, validation_status, validation,
+      context_snapshot_id, engine_version, rule_set_revision_id,
+      source_manifest_id, input_hash, output_hash, canonicalization_version
+    ) values (
+      '74000000-0000-4000-8000-000000007198',
+      (select (response ->> 'planId')::uuid from first_plan),
+      99, 'draft', 'complete', 'valid',
+      '{"completeness":"unknown"}'::jsonb,
+      (select (response ->> 'id')::uuid from second_snapshot),
+      'engine-contract-v1',
+      '81000000-0000-4000-8000-000000007198',
+      '82000000-0000-4000-8000-000000007198',
+      decode(repeat('48', 32), 'hex'), decode(repeat('49', 32), 'hex'),
+      'plan-canonical-v1'
+    )
+  $$,
+  '23514',
+  'invalid_engine_completeness',
+  'la base rechaza una completitud del motor fuera del contrato'
 );
 
 update public.questionnaire_drafts

@@ -130,6 +130,7 @@ const UniqueModuleResultsSchema = z
 export const PlanEngineResultSchema = z
   .object({
     canonicalizationVersion: VersionNameSchema,
+    completeness: PlanCompletenessSchema,
     engineVersion: VersionNameSchema,
     inputHash: HexSha256Schema,
     moduleResults: UniqueModuleResultsSchema,
@@ -233,5 +234,6 @@ export type PlanCandidateCreateRequest = z.infer<
   typeof PlanCandidateCreateRequestSchema
 >;
 export type PlanEngineResult = z.infer<typeof PlanEngineResultSchema>;
+export type PlanModuleResultInput = z.infer<typeof PlanModuleResultInputSchema>;
 export type PlanGenerationRequest = z.infer<typeof PlanGenerationRequestSchema>;
 export type PlanMutationRequest = z.infer<typeof PlanMutationRequestSchema>;

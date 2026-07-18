@@ -17,6 +17,7 @@ import {
   type ContextSnapshotInternal,
   type PlanContextChange,
   type PlanEngineResult,
+  type PlanModuleResultInput,
 } from "@health-design/contracts";
 
 import { canonicalJson, hashSha256Hex } from "../_shared/access-security.ts";
@@ -35,6 +36,7 @@ type RpcResult = { data: unknown; error: RpcError | null };
 
 export type PlanEngineInput = Readonly<{
   baseContext: ContextSnapshotInternal | null;
+  baseModuleResults: readonly PlanModuleResultInput[] | null;
   change: PlanContextChange | null;
   context: ContextSnapshotInternal;
 }>;
@@ -449,7 +451,7 @@ function engineRpcArgs(result: PlanEngineResult) {
     p_rule_set_revision_id: result.ruleSetRevisionId,
     p_safety_findings: result.safetyFindings,
     p_source_manifest_id: result.sourceManifestId,
-    p_validation: result.validation,
+    p_validation: { ...result.validation, completeness: result.completeness },
     p_validation_status: result.validationStatus,
   };
 }
@@ -469,6 +471,7 @@ async function generatePlan(
   );
   const result = await runEngine(dependencies, {
     baseContext: null,
+    baseModuleResults: null,
     change: null,
     context,
   });
@@ -508,8 +511,20 @@ async function createCandidate(
       }),
     ),
   );
-  const baseVersion = history.versions.find(({ id }) => id === body.baseVersionId);
-  if (!baseVersion) throw new PlanHttpError("NOT_FOUND", 404);
+  const baseVersionSummary = history.versions.find(
+    ({ id }) => id === body.baseVersionId,
+  );
+  if (!baseVersionSummary) throw new PlanHttpError("NOT_FOUND", 404);
+  const baseVersion = parseDependency(
+    PlanVersionDetailSchema,
+    firstRow(
+      await rpc(dependencies, "internal_get_plan_version", {
+        ...authArgs(auth),
+        p_plan_id: route.planId,
+        p_plan_version_id: body.baseVersionId,
+      }),
+    ),
+  );
   const [baseContext, context] = await Promise.all([
     getContext(dependencies, auth, history.profileId, baseVersion.contextSnapshotId),
     getContext(dependencies, auth, history.profileId, body.contextSnapshotId),
@@ -518,7 +533,19 @@ async function createCandidate(
   if (change.impact === "unaffected") {
     throw new PlanHttpError("NO_CONTEXT_CHANGE", 422);
   }
-  const result = await runEngine(dependencies, { baseContext, change, context });
+  const baseModuleResults = baseVersion.moduleResults.map((moduleResult) => ({
+    confidence: moduleResult.confidence,
+    module: moduleResult.module,
+    payload: moduleResult.payload,
+    status: moduleResult.status,
+    uncertainties: moduleResult.uncertainties,
+  }));
+  const result = await runEngine(dependencies, {
+    baseContext,
+    baseModuleResults,
+    change,
+    context,
+  });
   const digests = await mutationDigests(request, body, route);
   return parseDependency(
     PlanCandidateAckSchema,

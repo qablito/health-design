@@ -1,4 +1,4 @@
-import type { QuestionnaireAnswers } from "../questionnaire/index";
+import type { QuestionnaireAnswers } from "../questionnaire/index.ts";
 
 export const CONTEXT_NORMALIZATION_VERSION = "normalization-v1" as const;
 export const CONTEXT_CANONICALIZATION_VERSION = "canonical-json-v1" as const;

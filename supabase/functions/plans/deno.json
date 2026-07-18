@@ -1,6 +1,8 @@
 {
   "imports": {
     "@health-design/contracts": "../_shared/generated/contracts.js",
+    "@health-design/domain": "../../../packages/domain/src/index.ts",
+    "@health-design/engine": "../../../packages/engine/src/index.ts",
     "@supabase/supabase-js": "npm:@supabase/supabase-js@2.110.6"
   }
 }

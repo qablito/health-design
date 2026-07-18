@@ -2,7 +2,7 @@ import {
   QUESTIONNAIRE_MODULES,
   type QuestionnaireAnswers,
   type QuestionnaireModule,
-} from "../questionnaire/index";
+} from "../questionnaire/index.ts";
 
 export const PLAN_VERSION_STATUSES = ["draft", "active", "archived"] as const;
 export type PlanVersionStatus = (typeof PLAN_VERSION_STATUSES)[number];

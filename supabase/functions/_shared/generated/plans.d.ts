@@ -362,6 +362,10 @@ export declare const PlanSafetyFindingInputSchema: z.ZodObject<{
 }, z.core.$strict>;
 export declare const PlanEngineResultSchema: z.ZodObject<{
     canonicalizationVersion: z.ZodString;
+    completeness: z.ZodEnum<{
+        complete: "complete";
+        provisional: "provisional";
+    }>;
     engineVersion: z.ZodString;
     inputHash: z.ZodString;
     moduleResults: z.ZodArray<z.ZodObject<{
@@ -690,5 +694,6 @@ export type ContextSnapshotAck = z.infer<typeof ContextSnapshotAckSchema>;
 export type ContextSnapshotInternal = z.infer<typeof ContextSnapshotInternalSchema>;
 export type PlanCandidateCreateRequest = z.infer<typeof PlanCandidateCreateRequestSchema>;
 export type PlanEngineResult = z.infer<typeof PlanEngineResultSchema>;
+export type PlanModuleResultInput = z.infer<typeof PlanModuleResultInputSchema>;
 export type PlanGenerationRequest = z.infer<typeof PlanGenerationRequestSchema>;
 export type PlanMutationRequest = z.infer<typeof PlanMutationRequestSchema>;
