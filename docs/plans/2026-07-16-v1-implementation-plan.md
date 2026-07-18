@@ -589,12 +589,12 @@ pnpm test --filter plan-lifecycle
 
 ## Tarea 8 — Núcleo numérico y motor de restricciones
 
-> **Fronteras confirmadas 2026-07-18:** T8 implementará únicamente el núcleo
-> puro, determinista y versionado; no incluirá catálogos nutricionales, planes
-> finales de módulos, reglas clínicas exhaustivas, Luna, interfaz final ni
-> cambios en producción. La generación seguirá creando borradores y nunca
-> activará un plan automáticamente. Su implementación queda pendiente de la
-> confirmación expresa posterior a este preflight.
+> **Estado 2026-07-18:** `T8_COMPLETE_REMOTE_PASS`. Núcleo puro, determinista
+> y versionado implementado y validado en desarrollo. La generación crea
+> borradores provisionales y la activación continúa siendo manual. No incluye
+> catálogos nutricionales, planes finales de módulos, reglas clínicas
+> exhaustivas, Luna, interfaz final ni cambios en producción. Véase
+> [`TASK_08_VERIFICATION.md`](../quality/TASK_08_VERIFICATION.md).
 
 **Resultado:** pipeline puro y reproducible que aplica obligatorias,
 condicionales y preferentes dentro del espacio seguro.

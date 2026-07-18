@@ -1,6 +1,6 @@
 # Motor de decisión determinista y frontera de IA
 
-**Estado:** contrato ejecutable previsto  
+**Estado:** núcleo ejecutable T8; catálogos y módulos finales pendientes
 **Versión:** 1.0  
 **Fuente:** [`PRODUCT.md`](../../PRODUCT.md)
 

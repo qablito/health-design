@@ -10,8 +10,12 @@ tienen recibo remoto de desarrollo `T6_COMPLETE_REMOTE_PASS` en
 [`TASK_06_VERIFICATION.md`](TASK_06_VERIFICATION.md). El núcleo de ciclo de
 vida de B17 tiene recibo remoto de desarrollo `T7_COMPLETE_REMOTE_PASS` en
 [`TASK_07_VERIFICATION.md`](TASK_07_VERIFICATION.md), incluida la evidencia de
-INV-06, INV-07 y la persistencia necesaria para INV-16. Esto no convierte en
-`PASS` los cálculos, reglas clínicas ni generación real que comienzan en T8.
+INV-06, INV-07 y la persistencia necesaria para INV-16. El núcleo numérico,
+la canonicalización, los hashes, la resolución mínima de restricciones y el
+corte cuestionario→borrador tienen recibo remoto de desarrollo
+`T8_COMPLETE_REMOTE_PASS` en
+[`TASK_08_VERIFICATION.md`](TASK_08_VERIFICATION.md). Los catálogos, fórmulas
+nutricionales y reglas clínicas completas continúan en T9–T12.
 
 ## 1. Bloques de producto
 
