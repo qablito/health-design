@@ -71,7 +71,7 @@
 | Comprobación | Resultado |
 |---|---|
 | Publicación previa | `main` avanzó a `542d901`; GitHub Actions `Verify` 29656204380 y `Supply chain` 29656204438 terminaron en `success` |
-| Copia precrítica | PASS; DMG AES-256 local `backups/t7-precritical-development-20260718T184046Z.dmg`, verificado con `hdiutil`; clave únicamente en Llavero, servicio `health-design-dev-t7-precritical-20260718T184046Z` |
+| Copia precrítica | PASS; DMG AES-256 local `/Users/pablito/Documents/health-design-private-backups/t7-precritical-development-20260718T184046Z.dmg`, SHA-256 `e89f78ad4451dd6392f9a261c1e75a6abfc5b31abdde60c35094853d8d08501d`, verificado con `hdiutil`; clave únicamente en Llavero, servicio `health-design-dev-t7-precritical-20260718T184046Z` |
 | Integridad de la copia | schema SHA-256 `dc1289d81e3231da5387bd194b1271958b624ac061e4f817839af5eecb04462a`; data SHA-256 `9f649012012c18d2f7ab4c48a35a426ebeb430aee189e54d779d783665d9b87d` |
 | Entorno | `health-design-dev` (`nwoivdxdupklervtnovd`) enlazado; producción (`rbfrpgafytexrarcfmmp`) quedó sin enlazar y sin cambios |
 | Migración | `20260718160007_context_and_plan_versions.sql` aplicada; historial local/remoto alineado y dry-run final sin pendientes |

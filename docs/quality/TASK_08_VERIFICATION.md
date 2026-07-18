@@ -81,7 +81,7 @@ el mismo grafo de imports correctamente.
 
 | Comprobación | Resultado |
 |---|---|
-| Copia precrítica | PASS; DMG AES-256 `backups/t8-precritical-development-20260718T195532Z.dmg`; clave solo en Llavero, servicio `health-design-dev-t8-precritical-20260718T195532Z` |
+| Copia precrítica | PASS; DMG AES-256 `/Users/pablito/Documents/health-design-private-backups/t8-precritical-development-20260718T195532Z.dmg`, SHA-256 `889ae01f677f47c5c842b3aa3b0e693875fce8b7a311d7da88d57e0530c30030`; clave solo en Llavero, servicio `health-design-dev-t8-precritical-20260718T195532Z` |
 | Integridad de copia | schema SHA-256 `2e522cfea82d4f3be891269ff2a51701af293b9a73451b4dd612fe7b02f69447`; data SHA-256 `2f6f331b4fd0a155b2aaf1972b3c687aec7b80381685856a3a3b57e98da2dcb4` |
 | Entorno | `health-design-dev` (`nwoivdxdupklervtnovd`), `ACTIVE_HEALTHY`; producción no se enlazó ni recibió cambios |
 | Migración | `20260718193402_enforce_engine_completeness.sql` aplicada y presente en el historial remoto |
