@@ -76,6 +76,7 @@ begin
   );
   return 'ok';
 exception
+  when sqlstate 'PT409' then return 'PT409';
   when serialization_failure then return '40001';
   when unique_violation then return '23505';
   when others then return sqlstate || ':' || sqlerrm;
@@ -127,9 +128,9 @@ select is(
   'una única primera escritura concurrente crea el borrador'
 );
 select is(
-  (select count(*) from concurrent_questionnaire_results where result = '40001'),
+  (select count(*) from concurrent_questionnaire_results where result = 'PT409'),
   1::bigint,
-  'la otra primera escritura recibe conflicto de versión, no violación única'
+  'la otra primera escritura recibe un conflicto HTTP explícito, no violación única'
 );
 
 do $$
@@ -332,7 +333,7 @@ select throws_ok(
       decode(repeat('21', 32), 'hex'), decode(repeat('22', 32), 'hex')
     )
   $$,
-  '40001',
+  'PT409',
   'version_conflict',
   'una versión obsoleta no sobrescribe respuestas'
 );
