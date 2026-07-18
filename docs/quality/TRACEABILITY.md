@@ -7,9 +7,11 @@ La trazabilidad demuestra cobertura; no demuestra que una prueba haya pasado. Ca
 
 **Evidencia implementada:** B06 y la captura contextual aplicable de B05/B07
 tienen recibo remoto de desarrollo `T6_COMPLETE_REMOTE_PASS` en
-[`TASK_06_VERIFICATION.md`](TASK_06_VERIFICATION.md). Esto no cambia a `PASS`
-los escenarios de generación, reglas clínicas o plan que pertenecen a tareas
-posteriores.
+[`TASK_06_VERIFICATION.md`](TASK_06_VERIFICATION.md). El núcleo de ciclo de
+vida de B17 tiene recibo local `T7_COMPLETE_LOCAL_PASS` en
+[`TASK_07_VERIFICATION.md`](TASK_07_VERIFICATION.md), incluida la evidencia de
+INV-06, INV-07 y la persistencia necesaria para INV-16. Esto no convierte en
+`PASS` los cálculos, reglas clínicas ni generación real que comienzan en T8.
 
 ## 1. Bloques de producto
 

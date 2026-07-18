@@ -4,6 +4,7 @@ import {
   handleQuestionnaire,
   type QuestionnaireDependencies,
 } from "./questionnaire.ts";
+import { handlePlanLifecycle, type PlanLifecycleDependencies } from "./lifecycle.ts";
 
 function secret(name: string, fallback?: string): string {
   const value = runtimeValue(name) ?? fallback;
@@ -31,7 +32,7 @@ function decodeSessionId(token: string): string {
   return decoded.session_id;
 }
 
-function dependencies(): QuestionnaireDependencies {
+function dependencies(): QuestionnaireDependencies & PlanLifecycleDependencies {
   const url = secret("SUPABASE_URL");
   const publishableKey =
     runtimeValue("SUPABASE_PUBLISHABLE_KEY") ?? secret("SUPABASE_ANON_KEY");
@@ -66,11 +67,26 @@ function dependencies(): QuestionnaireDependencies {
       };
       return { data, error };
     },
+    runEngine: () => Promise.reject(new Error("engine_unavailable")),
   };
+}
+
+function isQuestionnaireRoute(request: Request): boolean {
+  const url = new URL(request.url);
+  const versionIndex = url.pathname.lastIndexOf("/v1/");
+  if (versionIndex < 0) return false;
+  const path = url.pathname.slice(versionIndex);
+  return (
+    path === "/v1/questionnaire/schema" ||
+    /^\/v1\/profiles\/[0-9a-f-]+\/draft(?:\/submit)?$/i.test(path)
+  );
 }
 
 export default {
   fetch(request: Request) {
-    return handleQuestionnaire(request, dependencies());
+    const current = dependencies();
+    return isQuestionnaireRoute(request)
+      ? handleQuestionnaire(request, current)
+      : handlePlanLifecycle(request, current);
   },
 };

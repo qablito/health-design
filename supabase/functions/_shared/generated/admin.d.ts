@@ -14,8 +14,8 @@ export declare const AdminProfileSummarySchema: z.ZodObject<{
 export declare const AdminImpersonationContextSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     active: z.ZodLiteral<true>;
     auditClosure: z.ZodOptional<z.ZodEnum<{
-        closed: "closed";
         pending: "pending";
+        closed: "closed";
     }>>;
     effectiveProfileId: z.ZodUUID;
     impersonationSessionId: z.ZodUUID;
@@ -23,8 +23,8 @@ export declare const AdminImpersonationContextSchema: z.ZodDiscriminatedUnion<[z
 }, z.core.$strict>, z.ZodObject<{
     active: z.ZodLiteral<false>;
     auditClosure: z.ZodOptional<z.ZodEnum<{
-        closed: "closed";
         pending: "pending";
+        closed: "closed";
     }>>;
 }, z.core.$strict>], "active">;
 export declare const LedgerReceiptSchema: z.ZodObject<{

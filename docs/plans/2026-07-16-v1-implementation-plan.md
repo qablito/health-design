@@ -539,6 +539,14 @@ pnpm test:a11y -- questionnaire
 
 ## Tarea 7 — Snapshots de contexto y ciclo de vida del plan
 
+> **Estado 2026-07-18:** `T7_COMPLETE_LOCAL_PASS`. Snapshots inmutables,
+> versiones de plan, candidatos, diff de impacto, activación manual,
+> idempotencia y concurrencia implementados en la rama aislada de T7. Pasan
+> `pnpm verify`, 10 E2E, 197 pgTAP, lint SQL, deriva cero y el smoke local de
+> la Edge Function. El motor numérico continúa siendo frontera de T8; no se ha
+> activado nada en Supabase remoto ni en producción. Véase
+> [`TASK_07_VERIFICATION.md`](../quality/TASK_07_VERIFICATION.md).
+
 **Resultado:** contexto normalizado e inmutable; borrador, activo, archivado,
 completo y provisional son estados independientes.
 

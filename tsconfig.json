@@ -19,6 +19,7 @@
     "supabase/functions/admin/index.ts",
     "supabase/functions/admin-reconciler/index.ts",
     "supabase/functions/plans/index.ts",
+    "supabase/functions/plans/lifecycle.ts",
     "supabase/functions/plans/questionnaire.ts",
     "supabase/functions/runtime-smoke/index.ts",
     "tests",

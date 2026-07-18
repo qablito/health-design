@@ -1,6 +1,7 @@
 import type { z } from "zod";
 export * from "./access";
 export * from "./admin";
+export * from "./plans";
 export * from "./questionnaire";
 export declare const RuntimeSmokeSchema: z.ZodObject<{
     schemaVersion: z.ZodLiteral<1>;
