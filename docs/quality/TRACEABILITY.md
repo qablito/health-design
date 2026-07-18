@@ -5,6 +5,12 @@
 
 La trazabilidad demuestra cobertura; no demuestra que una prueba haya pasado. Cada ejecución futura añade estado, commit, entorno, dataset y evidencia.
 
+**Evidencia implementada:** B06 y la captura contextual aplicable de B05/B07
+tienen recibo local `T6_COMPLETE_LOCAL_PASS` en
+[`TASK_06_VERIFICATION.md`](TASK_06_VERIFICATION.md). Esto no cambia a `PASS`
+los escenarios de generación, reglas clínicas o plan que pertenecen a tareas
+posteriores.
+
 ## 1. Bloques de producto
 
 | Bloque | Contrato | Requisitos principales | Escenarios representativos | Gates |

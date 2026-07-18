@@ -12,6 +12,7 @@ import {
 } from "./access-client";
 import { QrScanner } from "./QrScanner";
 import { requestTurnstileToken } from "../../services/turnstile";
+import { clearPublicAssetCaches } from "../../services/client-cache";
 
 import "./access.css";
 
@@ -285,6 +286,7 @@ export function AccessApp() {
     if (!selectedProfileId) return;
     await run(async () => {
       await accessClient.revokeSession(selectedProfileId, deviceSessionId);
+      await clearPublicAssetCaches();
       setSessions((current) =>
         current.filter((session) => session.deviceSessionId !== deviceSessionId),
       );
@@ -380,8 +382,11 @@ export function AccessApp() {
                 </select>
               </div>
               <div className="profile-actions">
+                <a className="primary-button inline-link" href="/questionnaire">
+                  Abrir cuestionario
+                </a>
                 <button
-                  className="primary-button"
+                  className="secondary-button"
                   disabled={busy}
                   onClick={() => void createQr()}
                   type="button"

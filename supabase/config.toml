@@ -73,3 +73,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/admin-reconciler/deno.json"
 entrypoint = "./functions/admin-reconciler/index.ts"
+
+[functions.plans]
+enabled = true
+verify_jwt = true
+import_map = "./functions/plans/deno.json"
+entrypoint = "./functions/plans/index.ts"

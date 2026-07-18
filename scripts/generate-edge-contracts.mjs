@@ -20,6 +20,10 @@ const adminDeclarationPath = resolve(
   root,
   "supabase/functions/_shared/generated/admin.d.ts",
 );
+const questionnaireDeclarationPath = resolve(
+  root,
+  "supabase/functions/_shared/generated/questionnaire.d.ts",
+);
 const banner =
   "// Generated from packages/contracts/src/index.ts. Do not edit manually.";
 
@@ -42,6 +46,7 @@ export async function generateEdgeContracts({ check = false } = {}) {
   let declaration = "";
   let accessDeclaration = "";
   let adminDeclaration = "";
+  let questionnaireDeclaration = "";
   const program = ts.createProgram({
     options: {
       declaration: true,
@@ -59,6 +64,7 @@ export async function generateEdgeContracts({ check = false } = {}) {
     if (fileName.endsWith("index.d.ts")) declaration = content;
     if (fileName.endsWith("access.d.ts")) accessDeclaration = content;
     if (fileName.endsWith("admin.d.ts")) adminDeclaration = content;
+    if (fileName.endsWith("questionnaire.d.ts")) questionnaireDeclaration = content;
   });
   const diagnostics = ts
     .getPreEmitDiagnostics(program)
@@ -68,7 +74,8 @@ export async function generateEdgeContracts({ check = false } = {}) {
     diagnostics.length > 0 ||
     !declaration ||
     !accessDeclaration ||
-    !adminDeclaration
+    !adminDeclaration ||
+    !questionnaireDeclaration
   ) {
     const detail = ts.formatDiagnosticsWithColorAndContext(diagnostics, {
       getCanonicalFileName: (fileName) => fileName,
@@ -89,20 +96,31 @@ export async function generateEdgeContracts({ check = false } = {}) {
     'import { z } from "zod";',
     'import type { z } from "zod";',
   );
+  questionnaireDeclaration = questionnaireDeclaration.replace(
+    'import { z } from "zod";',
+    'import type { z } from "zod";',
+  );
 
   if (check) {
     let current;
     let currentDeclaration;
     let currentAccessDeclaration;
     let currentAdminDeclaration;
+    let currentQuestionnaireDeclaration;
     try {
-      [current, currentDeclaration, currentAccessDeclaration, currentAdminDeclaration] =
-        await Promise.all([
-          readFile(outputPath, "utf8"),
-          readFile(declarationPath, "utf8"),
-          readFile(accessDeclarationPath, "utf8"),
-          readFile(adminDeclarationPath, "utf8"),
-        ]);
+      [
+        current,
+        currentDeclaration,
+        currentAccessDeclaration,
+        currentAdminDeclaration,
+        currentQuestionnaireDeclaration,
+      ] = await Promise.all([
+        readFile(outputPath, "utf8"),
+        readFile(declarationPath, "utf8"),
+        readFile(accessDeclarationPath, "utf8"),
+        readFile(adminDeclarationPath, "utf8"),
+        readFile(questionnaireDeclarationPath, "utf8"),
+      ]);
     } catch {
       throw new Error("Falta el contrato Edge generado. Ejecuta pnpm edge:generate.");
     }
@@ -110,7 +128,8 @@ export async function generateEdgeContracts({ check = false } = {}) {
       current !== output ||
       currentDeclaration !== declaration ||
       currentAccessDeclaration !== accessDeclaration ||
-      currentAdminDeclaration !== adminDeclaration
+      currentAdminDeclaration !== adminDeclaration ||
+      currentQuestionnaireDeclaration !== questionnaireDeclaration
     ) {
       throw new Error(
         "El contrato Edge generado está desactualizado. Ejecuta pnpm edge:generate.",
@@ -125,6 +144,7 @@ export async function generateEdgeContracts({ check = false } = {}) {
     writeFile(declarationPath, declaration),
     writeFile(accessDeclarationPath, accessDeclaration),
     writeFile(adminDeclarationPath, adminDeclaration),
+    writeFile(questionnaireDeclarationPath, questionnaireDeclaration),
   ]);
   return { changed: true, outputPath };
 }

@@ -24,6 +24,7 @@ import {
 } from "@health-design/contracts";
 
 import { supabaseAuth } from "../../services/supabase";
+import { clearPublicAssetCaches } from "../../services/client-cache";
 
 type AccessErrorBody = {
   error?: {
@@ -233,7 +234,11 @@ async function currentAccessToken(): Promise<string> {
 }
 
 export async function clearLocalIdentity(): Promise<void> {
-  await supabaseAuth.signOut({ scope: "local" });
+  try {
+    await supabaseAuth.signOut({ scope: "local" });
+  } finally {
+    await clearPublicAssetCaches();
+  }
 }
 
 export async function ensureAnonymousIdentity(

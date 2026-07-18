@@ -477,6 +477,13 @@ pnpm test --filter admin
 
 ## Tarea 6 — Schema del cuestionario y asistente adaptativo
 
+> **Estado 2026-07-18:** `T6_COMPLETE_LOCAL_PASS`. Schema canónico, wizard,
+> borrador remoto versionado, ramas, provisionalidad, límites de entrada y
+> política de cache pública implementados en rama aislada. Pasan `pnpm verify`,
+> 10 E2E, 157 pgTAP y lint SQL sin avisos. No se reclama despliegue remoto ni
+> generación de planes. Véase
+> [`TASK_06_VERIFICATION.md`](../quality/TASK_06_VERIFICATION.md).
+
 **Resultado:** wizard reanudable, con texto libre mínimo, progreso y ramas
 condicionadas por módulos y contexto.
 

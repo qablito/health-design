@@ -75,7 +75,7 @@ puede retroceder durante un restore.
 
 | Entidad | Propósito | Campos mínimos |
 |---|---|---|
-| `ContextDraft` | respuestas parciales del asistente | `id`, `profile_id`, `schema_version`, `status`, `answers`, `updated_at` |
+| `QuestionnaireDraft` | respuestas parciales y reanudables del asistente | `id`, `profile_id`, `schema_version`, `version`, `status=editing\|submitted`, `completeness=complete\|provisional`, `answers`, `confirmed_block_ids`, `current_block_id`, `uncertainties`, `hard_errors`, `updated_at` |
 | `ContextSnapshot` | contexto normalizado inmutable usado en generación | `id`, `profile_id`, `source_draft_id`, `effective_at`, `answers`, `normalization_version` |
 | `ConditionRecord` | condición clínica/fisiológica declarada | `id`, `snapshot_id`, `term_id`, `status`, `onset?`, `confidence` |
 | `MedicationRecord` | medicamento declarado | `id`, `snapshot_id`, `aemps_id?`, `name_entered`, `dose?`, `frequency?`, `route?`, `schedule?`, `confidence` |
@@ -83,8 +83,9 @@ puede retroceder durante un restore.
 | `FollowUpEntry` | revisión semanal o detalle diario | `id`, `profile_id`, `scope`, `observed_at`, `values`, `completeness` |
 | `ChangeEvent` | dato que puede recalcular | `id`, `profile_id`, `kind`, `payload`, `effective_at`, `impact_status` |
 
-`ContextSnapshot` congela lo que el motor vio. Editar el borrador no cambia un
-plan histórico.
+`QuestionnaireDraft` tiene una única fila por perfil y usa versión optimista e
+idempotencia privada por actor, perfil y operación. `ContextSnapshot` congela
+lo que el motor vio. Editar el borrador no cambia un plan histórico.
 
 ### Generación y planes
 

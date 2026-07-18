@@ -58,7 +58,8 @@ mínimo.
 
 1. **Núcleo:** edad, sexo, altura, peso, país (España en V1), contexto de
    actividad, objetivo principal y hasta dos secundarios (composición,
-   rendimiento, bienestar), horarios y preferencias generales.
+   rendimiento, bienestar), peso objetivo cuando la meta lo requiera, horarios
+   y preferencias generales.
 2. **Módulos:** el usuario activa alimentación, entrenamiento, hidratación,
    sueño/descanso, movilidad/estiramiento y suplementación.
 3. **Alimentación:** comidas (2–6), alergias y contaminación cruzada,
@@ -84,6 +85,10 @@ mínimo.
 Los campos condicionales aparecen solo cuando pueden cambiar una decisión. Una
 pregunta crítica sin respuesta abre una incertidumbre y permite continuar con
 un plan provisional conservador.
+
+Al pulsar «Continuar», el bloque se confirma y se guarda automáticamente en
+remoto. La edición del bloque actual permanece solo en memoria hasta esa
+confirmación; así no se replica contexto clínico en almacenamiento local.
 
 Se requiere al menos un módulo. El núcleo y las ramas comunes no contienen
 campos de texto largo obligatorios; las entradas ausentes de los catálogos usan

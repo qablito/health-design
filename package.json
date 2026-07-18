@@ -21,6 +21,7 @@
     "lint": "eslint .",
     "supply-chain:artifacts": "node scripts/verify-supply-chain.mjs --generate-release && node scripts/verify-supply-chain.mjs --verify-release",
     "test": "vitest run",
+    "test:a11y": "playwright test tests/e2e/questionnaire.spec.ts --grep accesible",
     "test:browser": "vitest run --config vitest.browser.config.ts",
     "test:db": "supabase test db",
     "test:e2e": "playwright test",

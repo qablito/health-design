@@ -18,6 +18,8 @@
     "supabase/functions/access/index.ts",
     "supabase/functions/admin/index.ts",
     "supabase/functions/admin-reconciler/index.ts",
+    "supabase/functions/plans/index.ts",
+    "supabase/functions/plans/questionnaire.ts",
     "supabase/functions/runtime-smoke/index.ts",
     "tests",
     "vitest.config.ts",

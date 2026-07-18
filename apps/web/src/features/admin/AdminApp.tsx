@@ -7,6 +7,7 @@ import {
   type AdminProfileSummary,
 } from "./admin-client";
 import { supabaseAuth } from "../../services/supabase";
+import { clearPublicAssetCaches } from "../../services/client-cache";
 import { requestTurnstileToken } from "../../services/turnstile";
 
 import "./admin.css";
@@ -177,7 +178,11 @@ export function AdminApp() {
 
   async function signOut() {
     await run(async () => {
-      await supabaseAuth.signOut({ scope: "local" });
+      try {
+        await supabaseAuth.signOut({ scope: "local" });
+      } finally {
+        await clearPublicAssetCaches();
+      }
       setProfiles([]);
       setContext({ active: false });
       setStage("signed-out");
