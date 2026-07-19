@@ -608,6 +608,51 @@ select is(
 );
 
 select is(
+  public.internal_get_profile_current_plan(
+    '00000000-0000-4000-8000-000000007101',
+    '21000000-0000-4000-8000-000000007101',
+    '51000000-0000-4000-8000-000000007101'
+  ) ->> 'planId',
+  (select response ->> 'planId' from first_plan),
+  'el perfil descubre su único plan actual sin exponer tablas sanitarias'
+);
+
+select is(
+  jsonb_array_length(public.internal_get_profile_current_plan(
+    '00000000-0000-4000-8000-000000007101',
+    '21000000-0000-4000-8000-000000007101',
+    '51000000-0000-4000-8000-000000007101'
+  ) -> 'versions'),
+  3,
+  'la consulta por perfil devuelve el mismo historial versionado'
+);
+
+insert into public.profiles (id, alias, timezone, adult_attested_at)
+values (
+  '51000000-0000-4000-8000-000000007104',
+  'Perfil sin plan', 'Europe/Madrid', now()
+);
+insert into public.profile_access (id, profile_id, actor_id)
+values (
+  '61000000-0000-4000-8000-000000007104',
+  '51000000-0000-4000-8000-000000007104',
+  '31000000-0000-4000-8000-000000007101'
+);
+
+select throws_ok(
+  $$
+    select public.internal_get_profile_current_plan(
+      '00000000-0000-4000-8000-000000007101',
+      '21000000-0000-4000-8000-000000007101',
+      '51000000-0000-4000-8000-000000007104'
+    )
+  $$,
+  'P0002',
+  'plan_not_found',
+  'un perfil accesible sin plan devuelve ausencia estable'
+);
+
+select is(
   jsonb_array_length(public.internal_get_plan_version(
     '00000000-0000-4000-8000-000000007101',
     '21000000-0000-4000-8000-000000007101',
@@ -669,6 +714,20 @@ select ok(
     'EXECUTE'
   ),
   'los RPC internos solo se ejecutan con rol servidor'
+);
+
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.internal_get_profile_current_plan(uuid,uuid,uuid)',
+    'EXECUTE'
+  )
+  and has_function_privilege(
+    'service_role',
+    'public.internal_get_profile_current_plan(uuid,uuid,uuid)',
+    'EXECUTE'
+  ),
+  'el lookup por perfil queda cerrado salvo al rol servidor'
 );
 
 insert into public.profiles (id, alias, timezone, adult_attested_at)

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  PlanHistorySchema,
   PlanVersionDetailSchema,
   type PlanEngineResult,
 } from "@health-design/contracts";
@@ -257,6 +258,15 @@ function setup(options?: {
             ? [previousContext]
             : [context],
         internal_get_plan_version: [baseVersion],
+        internal_get_profile_current_plan: [
+          {
+            activeVersionId: firstVersionId,
+            aggregateVersion: 2,
+            planId,
+            profileId,
+            versions: [baseVersionSummary],
+          },
+        ],
         internal_get_questionnaire_draft: [
           {
             answers,
@@ -583,6 +593,53 @@ describe("Edge del ciclo de vida del plan", () => {
     expect(
       PlanVersionDetailSchema.parse(await detailResponse.json()).moduleResults,
     ).toEqual([persistedSleepResult]);
+  });
+
+  it("descubre el plan actual desde el perfil y conserva el historial", async () => {
+    const current = setup();
+    const response = await handlePlanLifecycle(
+      request(`/v1/profiles/${profileId}/plans/current`, "GET"),
+      current.dependencies,
+    );
+
+    expect(response.status).toBe(200);
+    expect(PlanHistorySchema.parse(await response.json())).toEqual({
+      activeVersionId: firstVersionId,
+      aggregateVersion: 2,
+      planId,
+      profileId,
+      versions: [baseVersionSummary],
+    });
+    expect(current.calls).toEqual([
+      {
+        args: {
+          p_auth_session_id: sessionId,
+          p_auth_subject: userId,
+          p_profile_id: profileId,
+        },
+        name: "internal_get_profile_current_plan",
+      },
+    ]);
+  });
+
+  it("traduce un perfil sin plan a NOT_FOUND", async () => {
+    const current = setup({
+      rpcErrors: {
+        internal_get_profile_current_plan: {
+          code: "P0002",
+          message: "plan_not_found",
+        },
+      },
+    });
+    const response = await handlePlanLifecycle(
+      request(`/v1/profiles/${profileId}/plans/current`, "GET"),
+      current.dependencies,
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({
+      error: { code: "NOT_FOUND" },
+    });
   });
 
   it("falla de forma honesta cuando la dependencia del motor no está disponible", async () => {

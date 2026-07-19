@@ -146,6 +146,21 @@ describe("cliente del plan nutricional", () => {
     );
   });
 
+  it("conserva un 404 para que la app permita generar el primer plan", async () => {
+    const fetcher = vi.fn<typeof fetch>(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ error: { code: "NOT_FOUND" } }), {
+          status: 404,
+        }),
+      ),
+    );
+
+    await expect(client(fetcher).getCurrent(profileId)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      status: 404,
+    });
+  });
+
   it("prioriza la versión activa aunque exista un borrador más reciente", () => {
     const newerDraft = {
       ...history.versions[0],

@@ -52,6 +52,7 @@ export interface PlanLifecycleDependencies {
 
 type PlanRoute =
   | { kind: "context-snapshot"; profileId: string }
+  | { kind: "profile-current-plan"; profileId: string }
   | { kind: "plan-generate"; profileId: string }
   | { kind: "plan-versions"; planId: string }
   | { kind: "plan-version"; planId: string; versionId: string }
@@ -143,6 +144,14 @@ function parseRoute(url: URL, method: string): PlanRoute | null {
         profileMatch[2] === "contexts/snapshot" ? "context-snapshot" : "plan-generate",
       profileId: profileMatch[1],
     };
+  }
+
+  const currentPlanMatch = new RegExp(
+    `^/v1/profiles/(${UUID_PATTERN})/plans/current$`,
+    "i",
+  ).exec(path);
+  if (currentPlanMatch?.[1] && method === "GET") {
+    return { kind: "profile-current-plan", profileId: currentPlanMatch[1] };
   }
 
   const candidateAction = new RegExp(
@@ -598,6 +607,17 @@ async function dispatch(
 ): Promise<unknown> {
   if (route.kind === "context-snapshot") {
     return createSnapshot(request, route, dependencies, auth);
+  }
+  if (route.kind === "profile-current-plan") {
+    return parseDependency(
+      PlanHistorySchema,
+      firstRow(
+        await rpc(dependencies, "internal_get_profile_current_plan", {
+          ...authArgs(auth),
+          p_profile_id: route.profileId,
+        }),
+      ),
+    );
   }
   if (route.kind === "plan-generate") {
     return generatePlan(request, route, dependencies, auth);
