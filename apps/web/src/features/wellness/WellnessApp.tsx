@@ -803,7 +803,7 @@ export function WellnessApp() {
       })
       .catch((loadError: unknown) => {
         if (!current) return;
-        if (isPlanNotFound(loadError)) {
+        if (isPlanNotFound(loadError, `/v1/profiles/${profileId}/plans/current`)) {
           setRestoreStatus("can_generate");
           return;
         }

@@ -49,13 +49,15 @@ function errorBody(value: unknown): ErrorBody {
 
 export class NutritionPlanApiError extends Error {
   readonly code: string;
+  readonly path: string | undefined;
   readonly requestId: string | undefined;
   readonly status: number;
 
-  constructor(status: number, body: ErrorBody) {
+  constructor(status: number, body: ErrorBody, path?: string) {
     super(body.error?.message_key ?? "nutrition_plan.unknown_error");
     this.name = "NutritionPlanApiError";
     this.code = body.error?.code ?? "UNKNOWN_ERROR";
+    this.path = path;
     this.status = status;
     this.requestId = body.error?.request_id;
   }
@@ -64,8 +66,12 @@ export class NutritionPlanApiError extends Error {
 type PlanHistory = ReturnType<typeof PlanHistorySchema.parse>;
 type PlanVersion = PlanHistory["versions"][number];
 
-export function isPlanNotFound(error: unknown): boolean {
-  return error instanceof NutritionPlanApiError && error.status === 404;
+export function isPlanNotFound(error: unknown, expectedPath: string): boolean {
+  return (
+    error instanceof NutritionPlanApiError &&
+    error.status === 404 &&
+    error.path === expectedPath
+  );
 }
 
 export function selectCurrentVersion(history: PlanHistory): PlanVersion | undefined {
@@ -141,7 +147,7 @@ export function createNutritionPlanClient(dependencies: Dependencies) {
     });
     const value = await json(response);
     if (!response.ok) {
-      throw new NutritionPlanApiError(response.status, errorBody(value));
+      throw new NutritionPlanApiError(response.status, errorBody(value), input.path);
     }
     return input.parse(value);
   }

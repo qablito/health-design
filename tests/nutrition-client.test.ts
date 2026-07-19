@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createNutritionPlanClient,
+  isPlanNotFound,
   selectCurrentVersion,
 } from "../apps/web/src/features/nutrition/nutrition-client";
 import type { NutritionPlanApiError } from "../apps/web/src/features/nutrition/nutrition-client";
@@ -63,6 +64,15 @@ function client(fetcher: typeof fetch) {
     getAccessToken: () => Promise.resolve("user-jwt"),
     publishableKey: "publishable-key",
   });
+}
+
+async function captureError<T>(promise: Promise<T>): Promise<unknown> {
+  try {
+    await promise;
+    return undefined;
+  } catch (error: unknown) {
+    return error;
+  }
 }
 
 describe("cliente del plan nutricional", () => {
@@ -159,6 +169,25 @@ describe("cliente del plan nutricional", () => {
       code: "NOT_FOUND",
       status: 404,
     });
+  });
+
+  it("solo interpreta como plan ausente el 404 del lookup por perfil", async () => {
+    const fetcher = vi.fn<typeof fetch>(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ error: { code: "NOT_FOUND" } }), {
+          status: 404,
+        }),
+      ),
+    );
+    const currentPath = `/v1/profiles/${profileId}/plans/current`;
+
+    const currentError = await captureError(client(fetcher).getCurrent(profileId));
+    const detailError = await captureError(
+      client(fetcher).getVersion(planId, planVersionId),
+    );
+
+    expect(isPlanNotFound(currentError, currentPath)).toBe(true);
+    expect(isPlanNotFound(detailError, currentPath)).toBe(false);
   });
 
   it("prioriza la versión activa aunque exista un borrador más reciente", () => {
