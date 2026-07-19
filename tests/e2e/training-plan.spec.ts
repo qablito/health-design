@@ -317,11 +317,11 @@ test("muestra un plan accesible de cuatro semanas, movilidad modular y activaciÃ
   ).toBeLessThanOrEqual(0.001);
 
   await page.setViewportSize({ height: 780, width: 360 });
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    )
+    .toBe(true);
   await page.getByRole("button", { name: "Activar plan" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: "Plan activo" })).toBeVisible();
