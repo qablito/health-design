@@ -374,6 +374,11 @@ const CRITICAL_RULES: readonly CriticalRule[] = [
     blockId: "hydration",
     modules: ["hydration"],
   },
+  {
+    answerId: "hydrationFluidRestriction",
+    blockId: "hydration",
+    modules: ["hydration"],
+  },
   { answerId: "hydrationSweat", blockId: "hydration", modules: ["hydration"] },
   { answerId: "sleepHours", blockId: "sleep", modules: ["sleep"] },
   { answerId: "sleepQuality", blockId: "sleep", modules: ["sleep"] },
@@ -464,6 +469,7 @@ export function getVisibleQuestionIds(
   if (answers.activeModules?.includes("hydration")) {
     visible.add("habitualBeverages");
     visible.add("hydrationClimate");
+    visible.add("hydrationFluidRestriction");
     visible.add("hydrationAnchors");
     visible.add("hydrationReminders");
   }

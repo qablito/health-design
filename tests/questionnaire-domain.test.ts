@@ -241,4 +241,28 @@ describe("cuestionario adaptativo V2", () => {
       getVisibleQuestionIds({ ...baseAnswers, activeModules: ["sleep"] }),
     ).not.toContain("nutritionMealAnchors");
   });
+
+  it("muestra la restricción triestado solo con hidratación y la trata como crítica", () => {
+    const hydrationAnswers = { ...baseAnswers, activeModules: ["hydration" as const] };
+    expect(getVisibleQuestionIds(hydrationAnswers)).toContain(
+      "hydrationFluidRestriction",
+    );
+    expect(getVisibleQuestionIds(baseAnswers)).not.toContain(
+      "hydrationFluidRestriction",
+    );
+    expect(evaluateQuestionnaire(hydrationAnswers).uncertainties).toContainEqual({
+      affectedModules: ["hydration"],
+      answerId: "hydrationFluidRestriction",
+      blockId: "hydration",
+      reason: "questionnaire.missing.hydrationFluidRestriction",
+    });
+    expect(
+      evaluateQuestionnaire({
+        ...hydrationAnswers,
+        hydrationFluidRestriction: "none",
+      }).uncertainties,
+    ).not.toContainEqual(
+      expect.objectContaining({ answerId: "hydrationFluidRestriction" }),
+    );
+  });
 });

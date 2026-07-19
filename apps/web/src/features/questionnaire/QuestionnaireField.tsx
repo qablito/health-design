@@ -60,6 +60,11 @@ const FALLBACK_OPTIONS: Readonly<Record<string, readonly Option[]>> = {
     { label: "Frío", value: "cold" },
     { label: "Variable", value: "variable" },
   ],
+  hydrationFluidRestriction: [
+    { label: "Ninguna conocida", value: "none" },
+    { label: "Sí, está indicada", value: "declared" },
+    { label: "No lo sé", value: "unknown" },
+  ],
   hydrationSweat: [
     { label: "Baja", value: "low" },
     { label: "Media", value: "medium" },
@@ -269,6 +274,12 @@ export function QuestionnaireField({
     );
   }
   if (question.kind === "single") {
+    const singleValue =
+      question.id === "hydrationFluidRestriction" && typeof value === "boolean"
+        ? value
+          ? "declared"
+          : "none"
+        : scalarValue(value);
     return (
       <label className="question-field">
         <span>{question.label}</span>
@@ -284,7 +295,7 @@ export function QuestionnaireField({
                   : next,
             );
           }}
-          value={scalarValue(value)}
+          value={singleValue}
         >
           <option value="">Selecciona una opción</option>
           {options.map((option) => (

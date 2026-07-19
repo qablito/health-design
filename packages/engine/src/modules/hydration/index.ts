@@ -56,7 +56,16 @@ function rangeFor(answers: Answers) {
 
 function isAlcohol(value: string): boolean {
   const normalized = normalize(value);
-  return ALCOHOL_WORDS.some((word) => normalized === word || normalized.includes(word));
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  return ALCOHOL_WORDS.some((word) => {
+    const phrase = normalize(word).split(/\s+/).filter(Boolean);
+    return (
+      phrase.length <= tokens.length &&
+      tokens.some((_, index) =>
+        phrase.every((token, offset) => tokens[index + offset] === token),
+      )
+    );
+  });
 }
 
 function anchorsFor(answers: Answers) {
@@ -94,13 +103,14 @@ function emptyNotRequested(): HydrationPlanContract {
   return {
     alcoholRecorded: false,
     anchorSource: "default",
-    anchors: [...DEFAULT_ANCHORS],
+    anchors: [],
     beverageBandMl: null,
     clinicalCoverage: "modeled",
     completeness: "complete",
     countedBeverages: [],
     electrolyteStrategy: "not_indicated",
     foodWaterEstimate: { center: 0.25, maximum: 0.3, minimum: 0.2 },
+    habitualWaterMl: null,
     proposedBeverages: [],
     reminders: false,
     safetyFindings: [],
@@ -135,8 +145,30 @@ export function generateHydrationPlan(
   const alcoholRecorded = declaredBeverages.some(isAlcohol);
   const { anchors, anchorSource } = anchorsFor(answers);
   const uncertainties = [...clinical.uncertainties];
+  const restrictionStatus = answers.hydrationFluidRestriction;
+  const restrictionUnknown =
+    restrictionStatus === undefined || restrictionStatus === "unknown";
+  if (restrictionUnknown) {
+    uncertainties.push({
+      code: "FLUID_RESTRICTION_STATUS_UNKNOWN",
+      messageKey: "hydration.uncertainty.fluid_restriction_status_unknown",
+    });
+  }
+  if (typeof answers.habitualWaterMl !== "number") {
+    uncertainties.push({
+      code: "HABITUAL_WATER_MISSING",
+      messageKey: "hydration.uncertainty.habitual_water_missing",
+    });
+  }
+  if (answers.hydrationSweat === undefined || answers.hydrationSweat === "unknown") {
+    uncertainties.push({
+      code: "HYDRATION_SWEAT_MISSING",
+      messageKey: "hydration.uncertainty.hydration_sweat_missing",
+    });
+  }
   if (
-    answers.physiologicalSex === undefined &&
+    answers.physiologicalSex !== "female" &&
+    answers.physiologicalSex !== "male" &&
     answers.pregnancyLactation !== "pregnant" &&
     answers.pregnancyLactation !== "lactating"
   ) {
@@ -158,8 +190,13 @@ export function generateHydrationPlan(
     clinical.detected.cardiac ||
     clinical.detected.hyponatremia;
   const bandUnavailable =
+    restrictionUnknown ||
     clinical.detected.fluidRestriction ||
     (limitMissing && !clinical.detected.fluidRestriction);
+  const strictestActionLevel =
+    restrictionUnknown && clinical.strictestActionLevel === "information"
+      ? "priority_review"
+      : clinical.strictestActionLevel;
 
   const choiceRules: ChoiceRule<"high_side" | "standard">[] = [
     {
@@ -201,6 +238,7 @@ export function generateHydrationPlan(
   ];
   if (sideChoice === "high_side") strategies.push("high_side_only");
   if (bandUnavailable) strategies.push("clinical_limit_precedes_reference");
+  if (restrictionUnknown) strategies.push("fluid_limit_status_required");
   const planUncertainties = [
     ...new Map(uncertainties.map((item) => [item.code, item])).values(),
   ];
@@ -211,18 +249,23 @@ export function generateHydrationPlan(
     anchorSource,
     anchors,
     beverageBandMl,
-    clinicalCoverage: clinical.coverage,
+    clinicalCoverage:
+      restrictionUnknown && clinical.coverage === "modeled"
+        ? "partial"
+        : clinical.coverage,
     completeness,
     countedBeverages,
     electrolyteStrategy: electrolyteActive ? "contextual_review" : "not_indicated",
     foodWaterEstimate: { center: 0.25, maximum: 0.3, minimum: 0.2 },
-    proposedBeverages: ["agua"],
+    proposedBeverages: beverageBandMl === null ? [] : ["agua"],
     reminders: answers.hydrationReminders === true,
     safetyFindings: clinical.safetyFindings.map(({ code }) => code),
     status: completeness === "complete" ? "valid" : "provisional",
     strategies,
-    strictestActionLevel: clinical.strictestActionLevel,
+    strictestActionLevel,
     totalReferenceMl,
+    habitualWaterMl:
+      typeof answers.habitualWaterMl === "number" ? answers.habitualWaterMl : null,
     uncertainties: planUncertainties,
   };
 }

@@ -38,6 +38,23 @@ describe("reglas clínicas selectivas", () => {
     ).toBe(true);
   });
 
+  it("no confunde subcadenas sensibles con entidades clínicas", () => {
+    const result = detectClinicalContext({
+      conditions: [{ name: "renalina" }, { name: "suprarrenal" }],
+      medications: [{ name: "Semaglutidares" }, { name: "SARMiento" }],
+    });
+    expect(result.detected.renal).toBe(false);
+    expect(result.detected.glp1).toBe(false);
+    expect(result.detected.anabolic).toBe(false);
+  });
+
+  it("conserva frases válidas dentro de nombres descriptivos", () => {
+    const result = detectClinicalContext({
+      conditions: [{ name: "Antecedente de enfermedad renal crónica" }],
+    });
+    expect(result.detected.renal).toBe(true);
+  });
+
   it("marca GLP-1 y diuréticos como parciales sin usar dosis", () => {
     const result = detectClinicalContext({
       medications: [

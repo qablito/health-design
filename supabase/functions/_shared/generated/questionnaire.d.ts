@@ -127,12 +127,17 @@ export declare const QuestionnaireAnswersSchema: z.ZodObject<{
         hot: "hot";
         cold: "cold";
     }>>;
+    hydrationFluidRestriction: z.ZodOptional<z.ZodUnion<readonly [z.ZodBoolean, z.ZodEnum<{
+        none: "none";
+        declared: "declared";
+        unknown: "unknown";
+    }>]>>;
     hydrationReminders: z.ZodOptional<z.ZodBoolean>;
     hydrationSweat: z.ZodOptional<z.ZodEnum<{
         high: "high";
+        unknown: "unknown";
         low: "low";
         medium: "medium";
-        unknown: "unknown";
     }>>;
     labValues: z.ZodOptional<z.ZodArray<z.ZodObject<{
         dateApproximate: z.ZodString;
@@ -179,9 +184,9 @@ export declare const QuestionnaireAnswersSchema: z.ZodObject<{
     }>>>;
     mobilityDiscomfortDetails: z.ZodOptional<z.ZodArray<z.ZodString>>;
     mobilityDiscomfortStatus: z.ZodOptional<z.ZodEnum<{
-        unknown: "unknown";
         none: "none";
         declared: "declared";
+        unknown: "unknown";
     }>>;
     mobilityMinutes: z.ZodOptional<z.ZodUnion<readonly [z.ZodLiteral<5>, z.ZodLiteral<10>, z.ZodLiteral<15>]>>;
     nutritionAllergies: z.ZodOptional<z.ZodArray<z.ZodObject<{
@@ -189,9 +194,9 @@ export declare const QuestionnaireAnswersSchema: z.ZodObject<{
         note: z.ZodOptional<z.ZodString>;
     }, z.core.$strict>>>;
     nutritionAllergiesStatus: z.ZodOptional<z.ZodEnum<{
-        unknown: "unknown";
         none: "none";
         declared: "declared";
+        unknown: "unknown";
     }>>;
     nutritionFoodAnxiety: z.ZodOptional<z.ZodEnum<{
         no: "no";
@@ -210,9 +215,9 @@ export declare const QuestionnaireAnswersSchema: z.ZodObject<{
         toleratedAmount: z.ZodOptional<z.ZodString>;
     }, z.core.$strict>>>;
     nutritionIntolerancesStatus: z.ZodOptional<z.ZodEnum<{
-        unknown: "unknown";
         none: "none";
         declared: "declared";
+        unknown: "unknown";
     }>>;
     nutritionMealAnchors: z.ZodOptional<z.ZodArray<z.ZodEnum<{
         wake_up: "wake_up";
@@ -264,9 +269,9 @@ export declare const QuestionnaireAnswersSchema: z.ZodObject<{
         intersex: "intersex";
     }>>;
     pregnancyLactation: z.ZodOptional<z.ZodEnum<{
+        none: "none";
         unknown: "unknown";
         not_applicable: "not_applicable";
-        none: "none";
         pregnant: "pregnant";
         lactating: "lactating";
         trying_to_conceive: "trying_to_conceive";
@@ -334,9 +339,9 @@ export declare const QuestionnaireAnswersSchema: z.ZodObject<{
     targetWeightKg: z.ZodOptional<z.ZodNumber>;
     trainingLimitations: z.ZodOptional<z.ZodArray<z.ZodString>>;
     trainingLimitationsStatus: z.ZodOptional<z.ZodEnum<{
-        unknown: "unknown";
         none: "none";
         declared: "declared";
+        unknown: "unknown";
     }>>;
     trainingMode: z.ZodOptional<z.ZodEnum<{
         none: "none";
@@ -482,12 +487,17 @@ export declare const QuestionnaireDraftSaveRequestSchema: z.ZodObject<{
             hot: "hot";
             cold: "cold";
         }>>;
+        hydrationFluidRestriction: z.ZodOptional<z.ZodUnion<readonly [z.ZodBoolean, z.ZodEnum<{
+            none: "none";
+            declared: "declared";
+            unknown: "unknown";
+        }>]>>;
         hydrationReminders: z.ZodOptional<z.ZodBoolean>;
         hydrationSweat: z.ZodOptional<z.ZodEnum<{
             high: "high";
+            unknown: "unknown";
             low: "low";
             medium: "medium";
-            unknown: "unknown";
         }>>;
         labValues: z.ZodOptional<z.ZodArray<z.ZodObject<{
             dateApproximate: z.ZodString;
@@ -534,9 +544,9 @@ export declare const QuestionnaireDraftSaveRequestSchema: z.ZodObject<{
         }>>>;
         mobilityDiscomfortDetails: z.ZodOptional<z.ZodArray<z.ZodString>>;
         mobilityDiscomfortStatus: z.ZodOptional<z.ZodEnum<{
-            unknown: "unknown";
             none: "none";
             declared: "declared";
+            unknown: "unknown";
         }>>;
         mobilityMinutes: z.ZodOptional<z.ZodUnion<readonly [z.ZodLiteral<5>, z.ZodLiteral<10>, z.ZodLiteral<15>]>>;
         nutritionAllergies: z.ZodOptional<z.ZodArray<z.ZodObject<{
@@ -544,9 +554,9 @@ export declare const QuestionnaireDraftSaveRequestSchema: z.ZodObject<{
             note: z.ZodOptional<z.ZodString>;
         }, z.core.$strict>>>;
         nutritionAllergiesStatus: z.ZodOptional<z.ZodEnum<{
-            unknown: "unknown";
             none: "none";
             declared: "declared";
+            unknown: "unknown";
         }>>;
         nutritionFoodAnxiety: z.ZodOptional<z.ZodEnum<{
             no: "no";
@@ -565,9 +575,9 @@ export declare const QuestionnaireDraftSaveRequestSchema: z.ZodObject<{
             toleratedAmount: z.ZodOptional<z.ZodString>;
         }, z.core.$strict>>>;
         nutritionIntolerancesStatus: z.ZodOptional<z.ZodEnum<{
-            unknown: "unknown";
             none: "none";
             declared: "declared";
+            unknown: "unknown";
         }>>;
         nutritionMealAnchors: z.ZodOptional<z.ZodArray<z.ZodEnum<{
             wake_up: "wake_up";
@@ -619,9 +629,9 @@ export declare const QuestionnaireDraftSaveRequestSchema: z.ZodObject<{
             intersex: "intersex";
         }>>;
         pregnancyLactation: z.ZodOptional<z.ZodEnum<{
+            none: "none";
             unknown: "unknown";
             not_applicable: "not_applicable";
-            none: "none";
             pregnant: "pregnant";
             lactating: "lactating";
             trying_to_conceive: "trying_to_conceive";
@@ -689,9 +699,9 @@ export declare const QuestionnaireDraftSaveRequestSchema: z.ZodObject<{
         targetWeightKg: z.ZodOptional<z.ZodNumber>;
         trainingLimitations: z.ZodOptional<z.ZodArray<z.ZodString>>;
         trainingLimitationsStatus: z.ZodOptional<z.ZodEnum<{
-            unknown: "unknown";
             none: "none";
             declared: "declared";
+            unknown: "unknown";
         }>>;
         trainingMode: z.ZodOptional<z.ZodEnum<{
             none: "none";
@@ -985,12 +995,17 @@ export declare const QuestionnaireDraftSchema: z.ZodObject<{
             hot: "hot";
             cold: "cold";
         }>>;
+        hydrationFluidRestriction: z.ZodOptional<z.ZodUnion<readonly [z.ZodBoolean, z.ZodEnum<{
+            none: "none";
+            declared: "declared";
+            unknown: "unknown";
+        }>]>>;
         hydrationReminders: z.ZodOptional<z.ZodBoolean>;
         hydrationSweat: z.ZodOptional<z.ZodEnum<{
             high: "high";
+            unknown: "unknown";
             low: "low";
             medium: "medium";
-            unknown: "unknown";
         }>>;
         labValues: z.ZodOptional<z.ZodArray<z.ZodObject<{
             dateApproximate: z.ZodString;
@@ -1037,9 +1052,9 @@ export declare const QuestionnaireDraftSchema: z.ZodObject<{
         }>>>;
         mobilityDiscomfortDetails: z.ZodOptional<z.ZodArray<z.ZodString>>;
         mobilityDiscomfortStatus: z.ZodOptional<z.ZodEnum<{
-            unknown: "unknown";
             none: "none";
             declared: "declared";
+            unknown: "unknown";
         }>>;
         mobilityMinutes: z.ZodOptional<z.ZodUnion<readonly [z.ZodLiteral<5>, z.ZodLiteral<10>, z.ZodLiteral<15>]>>;
         nutritionAllergies: z.ZodOptional<z.ZodArray<z.ZodObject<{
@@ -1047,9 +1062,9 @@ export declare const QuestionnaireDraftSchema: z.ZodObject<{
             note: z.ZodOptional<z.ZodString>;
         }, z.core.$strict>>>;
         nutritionAllergiesStatus: z.ZodOptional<z.ZodEnum<{
-            unknown: "unknown";
             none: "none";
             declared: "declared";
+            unknown: "unknown";
         }>>;
         nutritionFoodAnxiety: z.ZodOptional<z.ZodEnum<{
             no: "no";
@@ -1068,9 +1083,9 @@ export declare const QuestionnaireDraftSchema: z.ZodObject<{
             toleratedAmount: z.ZodOptional<z.ZodString>;
         }, z.core.$strict>>>;
         nutritionIntolerancesStatus: z.ZodOptional<z.ZodEnum<{
-            unknown: "unknown";
             none: "none";
             declared: "declared";
+            unknown: "unknown";
         }>>;
         nutritionMealAnchors: z.ZodOptional<z.ZodArray<z.ZodEnum<{
             wake_up: "wake_up";
@@ -1122,9 +1137,9 @@ export declare const QuestionnaireDraftSchema: z.ZodObject<{
             intersex: "intersex";
         }>>;
         pregnancyLactation: z.ZodOptional<z.ZodEnum<{
+            none: "none";
             unknown: "unknown";
             not_applicable: "not_applicable";
-            none: "none";
             pregnant: "pregnant";
             lactating: "lactating";
             trying_to_conceive: "trying_to_conceive";
@@ -1192,9 +1207,9 @@ export declare const QuestionnaireDraftSchema: z.ZodObject<{
         targetWeightKg: z.ZodOptional<z.ZodNumber>;
         trainingLimitations: z.ZodOptional<z.ZodArray<z.ZodString>>;
         trainingLimitationsStatus: z.ZodOptional<z.ZodEnum<{
-            unknown: "unknown";
             none: "none";
             declared: "declared";
+            unknown: "unknown";
         }>>;
         trainingMode: z.ZodOptional<z.ZodEnum<{
             none: "none";

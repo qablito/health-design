@@ -96,6 +96,16 @@ describe("contratos del cuestionario", () => {
         inventedClinicalField: true,
       }).success,
     ).toBe(false);
+    expect(
+      QuestionnaireAnswersSchema.safeParse({
+        hydrationFluidRestriction: "unknown",
+      }).success,
+    ).toBe(true);
+    expect(
+      QuestionnaireAnswersSchema.safeParse({
+        hydrationFluidRestriction: true,
+      }).success,
+    ).toBe(true);
   });
 
   it("mide texto breve por grafemas y limita búsquedas por separado", () => {
@@ -213,6 +223,14 @@ describe("contratos del cuestionario", () => {
         .find(({ id }) => id === "preferredSupermarket")
         ?.options?.map(({ value }) => value),
     ).toEqual(["Mercadona", "Lidl", "DIA", "Carrefour", "Alcampo"]);
+    expect(
+      QUESTIONNAIRE_PUBLIC_SCHEMA_V2.questions.find(
+        ({ id }) => id === "hydrationFluidRestriction",
+      ),
+    ).toMatchObject({
+      kind: "single",
+      options: [{ value: "none" }, { value: "declared" }, { value: "unknown" }],
+    });
   });
 
   it("conserva la fuente opcional de una analítica manual", () => {

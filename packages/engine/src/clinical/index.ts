@@ -47,13 +47,18 @@ function entries(record: Record<string, unknown>, key: string): string[] {
     .filter((value): value is string => value.length > 0);
 }
 
-function hasAlias(texts: readonly string[], aliases: readonly string[]): boolean {
-  return texts.some((text) =>
-    aliases.some((alias) => {
-      const normalizedAlias = normalizeClinicalText(alias);
-      return text === normalizedAlias || text.includes(normalizedAlias);
-    }),
+function phraseMatches(text: string, phrase: string): boolean {
+  const textTokens = normalizeClinicalText(text).split(" ").filter(Boolean);
+  const phraseTokens = normalizeClinicalText(phrase).split(" ").filter(Boolean);
+  if (phraseTokens.length === 0 || phraseTokens.length > textTokens.length)
+    return false;
+  return textTokens.some((_, index) =>
+    phraseTokens.every((token, offset) => textTokens[index + offset] === token),
   );
+}
+
+function hasAlias(texts: readonly string[], aliases: readonly string[]): boolean {
+  return texts.some((text) => aliases.some((alias) => phraseMatches(text, alias)));
 }
 
 function pushUnique<T extends { code: string }>(items: T[], item: T): void {
@@ -161,7 +166,7 @@ export function detectClinicalContext(input: ClinicalContextInput): ClinicalResu
     normalizeClinicalText,
   );
   const hasUnknownContext = allTexts.some(
-    (text) => !knownTexts.some((alias) => text === alias || text.includes(alias)),
+    (text) => !knownTexts.some((alias) => phraseMatches(text, alias)),
   );
   if (hasUnknownContext) {
     const finding: ClinicalSafetyFinding = {

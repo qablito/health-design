@@ -9,6 +9,7 @@ import { runDeterministicEngine } from "../packages/engine/src/index";
 
 const base = {
   activeModules: ["hydration" as const],
+  hydrationFluidRestriction: "none" as const,
   hydrationClimate: "temperate" as const,
   hydrationSweat: "low" as const,
 };
@@ -43,6 +44,26 @@ describe("motor de hidratación", () => {
     });
     expect(plan.completeness).toBe("provisional");
   });
+
+  it.each(["intersex", "prefer_not_to_say", undefined] as const)(
+    "mantiene rango provisional para sexo %s",
+    (physiologicalSex) => {
+      const plan = generateHydrationPlan({
+        answers: { ...base, physiologicalSex },
+      });
+      expect(plan.totalReferenceMl).toEqual({
+        center: 2250,
+        maximum: 2500,
+        minimum: 2000,
+      });
+      expect(plan.completeness).toBe("provisional");
+      expect(plan.uncertainties).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: "SEX_REFERENCE_UNAVAILABLE" }),
+        ]),
+      );
+    },
+  );
 
   it("estima bebidas al 70–80 %, centro 75 %, redondeadas a 50 ml", () => {
     const plan = generateHydrationPlan({
@@ -94,15 +115,67 @@ describe("motor de hidratación", () => {
     expect(renal.completeness).toBe("provisional");
   });
 
+  it("mantiene la banda con agua habitual ausente y marca F49", () => {
+    const plan = generateHydrationPlan({
+      answers: {
+        ...base,
+        physiologicalSex: "female",
+        hydrationFluidRestriction: "none",
+        hydrationSweat: "low",
+      },
+    });
+    expect(plan.beverageBandMl).not.toBeNull();
+    expect(plan.habitualWaterMl).toBeNull();
+    expect(plan.uncertainties).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "HABITUAL_WATER_MISSING" }),
+      ]),
+    );
+  });
+
+  it.each(["Enfermedad cardiaca", "Hiponatremia"] as const)(
+    "evita cifra falsa para %s sin límite explícito",
+    (condition) => {
+      const plan = generateHydrationPlan({
+        answers: {
+          ...base,
+          physiologicalSex: "female",
+          conditions: [{ name: condition }],
+        },
+      });
+      expect(plan.beverageBandMl).toBeNull();
+      expect(plan.clinicalCoverage).toBe("partial");
+      expect(plan.completeness).toBe("provisional");
+    },
+  );
+
+  it("marca sudor ausente y restricción desconocida como incertidumbre conservadora", () => {
+    const plan = generateHydrationPlan({
+      answers: {
+        ...base,
+        physiologicalSex: "female",
+        hydrationFluidRestriction: "unknown",
+        hydrationSweat: undefined,
+      },
+    });
+    expect(plan.beverageBandMl).toBeNull();
+    expect(plan.uncertainties.map(({ code }) => code)).toEqual(
+      expect.arrayContaining([
+        "FLUID_RESTRICTION_STATUS_UNKNOWN",
+        "HYDRATION_SWEAT_MISSING",
+      ]),
+    );
+  });
+
   it("cuenta bebidas declaradas, registra alcohol y nunca lo propone", () => {
     const plan = generateHydrationPlan({
       answers: {
         ...base,
         physiologicalSex: "male",
-        habitualBeverages: ["café", "leche", "cerveza"],
+        habitualBeverages: ["café", "leche", "cerveza", "ginger"],
       },
     });
-    expect(plan.countedBeverages).toEqual(["café", "leche"]);
+    expect(plan.countedBeverages).toEqual(["café", "leche", "ginger"]);
     expect(plan.alcoholRecorded).toBe(true);
     expect(plan.proposedBeverages).not.toContain("cerveza");
   });
@@ -117,6 +190,73 @@ describe("motor de hidratación", () => {
   it("devuelve not_requested cuando hidratación no está seleccionada", () => {
     const plan = generateHydrationPlan({ answers: { activeModules: ["nutrition"] } });
     expect(plan.status).toBe("not_requested");
+    expect(plan.anchors).toEqual([]);
+    expect(HydrationPlanSchema.parse(plan)).toEqual(plan);
+  });
+
+  it("rechaza contradicciones entre estado, completitud e incertidumbres", () => {
+    const valid = generateHydrationPlan({
+      answers: {
+        ...base,
+        physiologicalSex: "female",
+        habitualWaterMl: 1500,
+        hydrationFluidRestriction: "none",
+        hydrationSweat: "low",
+      },
+    });
+    expect(valid.status).toBe("valid");
+    expect(() =>
+      HydrationPlanSchema.parse({ ...valid, status: "provisional" }),
+    ).toThrow();
+    expect(() =>
+      HydrationPlanSchema.parse({
+        ...valid,
+        status: "valid",
+        completeness: "provisional",
+      }),
+    ).toThrow();
+    expect(() =>
+      HydrationPlanSchema.parse({
+        ...valid,
+        status: "not_requested",
+        beverageBandMl: null,
+      }),
+    ).toThrow();
+  });
+
+  it("no añade volumen por GLP-1 o diurético y limita electrolitos al contexto permitido", () => {
+    const baseline = generateHydrationPlan({
+      answers: {
+        ...base,
+        physiologicalSex: "female",
+        habitualWaterMl: 1500,
+        hydrationFluidRestriction: "none",
+        hydrationSweat: "low",
+      },
+    });
+    const pharmacology = generateHydrationPlan({
+      answers: {
+        ...base,
+        physiologicalSex: "female",
+        habitualWaterMl: 1500,
+        hydrationFluidRestriction: "none",
+        hydrationSweat: "low",
+        medications: [{ name: "Semaglutida" }, { name: "Furosemida" }],
+      },
+    });
+    expect(pharmacology.beverageBandMl).toEqual(baseline.beverageBandMl);
+    expect(pharmacology.electrolyteStrategy).toBe("not_indicated");
+    const heat = generateHydrationPlan({
+      answers: {
+        ...base,
+        physiologicalSex: "female",
+        habitualWaterMl: 1500,
+        hydrationFluidRestriction: "none",
+        hydrationClimate: "hot",
+        hydrationSweat: "high",
+      },
+    });
+    expect(heat.electrolyteStrategy).toBe("contextual_review");
   });
 
   it("cumple el contrato Zod", () => {

@@ -858,8 +858,14 @@ const questions: PublicQuestion[] = [
   {
     blockId: "hydration",
     id: "hydrationFluidRestriction",
-    kind: "boolean",
-    label: "Tienes una restricción explícita de líquidos",
+    kind: "single",
+    label: "Restricción explícita de líquidos",
+    options: options([
+      ["none", "Ninguna conocida"],
+      ["declared", "Sí, está indicada"],
+      ["unknown", "No lo sé"],
+    ]),
+    visibleWhen: { answerId: "activeModules", includes: "hydration" },
   },
   {
     blockId: "hydration",

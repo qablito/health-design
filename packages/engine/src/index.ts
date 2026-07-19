@@ -532,9 +532,31 @@ export const CORE_RULE_REVISIONS = [
 
 export const HISTORICAL_RULE_SET_REVISION = {
   id: "04edd58c-5fff-4f6b-85ad-472ec538885c",
-  ruleRevisionIds: CORE_RULE_REVISIONS.slice(0, -2).map(({ id }) => id),
+  ruleRevisionIds: [
+    "rule.module-selection@1.0.0",
+    "rule.training-none@1.0.0",
+    "rule.nutrition-targets@1.0.0",
+    "rule.nutrition-substitutions@1.0.0",
+    "rule.training-generated-block@1.0.0",
+    "rule.training-declared-limitations@1.0.0",
+    "rule.mobility-modular-duration@1.0.0",
+  ],
   status: "active",
   version: "3.0.0",
+} as const;
+export const HISTORICAL_SOURCE_MANIFEST = {
+  id: HISTORICAL_SOURCE_MANIFEST_ID,
+  sourceRevisionIds: [
+    "source:who-physical-activity-guidelines-2020@1.0.0",
+    "source:acsm-resistance-training-position-2026@1.0.0",
+    "source:ingram-static-stretching-meta-analysis-2025@1.0.0",
+  ],
+  version: "core-with-training-mobility-v1",
+} as const;
+export const HISTORICAL_ENGINE_SNAPSHOT = {
+  engineVersion: HISTORICAL_ENGINE_VERSION,
+  ruleSetRevision: HISTORICAL_RULE_SET_REVISION,
+  sourceManifest: HISTORICAL_SOURCE_MANIFEST,
 } as const;
 export const CORE_RULE_SET_REVISION = {
   id: "d1bd58fd-54dc-4358-9242-43b1fdf20dc4",

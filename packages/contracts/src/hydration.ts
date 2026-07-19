@@ -30,13 +30,14 @@ export const HydrationPlanSchema = z
   .object({
     alcoholRecorded: z.boolean(),
     anchorSource: z.enum(["default", "selected"]),
-    anchors: z.array(z.string().min(1).max(80)).min(1).max(10),
+    anchors: z.array(z.string().min(1).max(80)).max(10),
     beverageBandMl: HydrationMlRangeSchema.nullable(),
     clinicalCoverage: ClinicalCoverageSchema,
     completeness: z.enum(["complete", "provisional"]),
     countedBeverages: z.array(z.string().min(1).max(120)).max(50),
     electrolyteStrategy: z.enum(["not_indicated", "contextual_review"]),
     foodWaterEstimate: FoodWaterEstimateSchema,
+    habitualWaterMl: z.number().int().min(0).max(10_000).nullable(),
     proposedBeverages: z.array(z.string().min(1).max(120)).max(20),
     reminders: z.boolean(),
     safetyFindings: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{0,79}$/)).max(20),
@@ -48,18 +49,42 @@ export const HydrationPlanSchema = z
   })
   .strict()
   .superRefine((plan, context) => {
-    if (plan.status === "not_requested") return;
-    if ((plan.completeness === "complete") !== (plan.uncertainties.length === 0)) {
-      context.addIssue({
-        code: "custom",
-        message: "hydration_completeness_uncertainty_mismatch",
-        path: ["completeness"],
-      });
+    if (plan.status === "valid") {
+      if (plan.completeness !== "complete" || plan.uncertainties.length > 0) {
+        context.addIssue({
+          code: "custom",
+          message: "hydration_valid_requires_complete",
+          path: ["status"],
+        });
+      }
+      return;
     }
-    if (plan.status === "valid" && plan.completeness !== "complete") {
+    if (plan.status === "provisional") {
+      if (plan.completeness !== "provisional" || plan.uncertainties.length === 0) {
+        context.addIssue({
+          code: "custom",
+          message: "hydration_provisional_requires_uncertainty",
+          path: ["status"],
+        });
+      }
+      return;
+    }
+    if (
+      plan.completeness !== "complete" ||
+      plan.uncertainties.length > 0 ||
+      plan.beverageBandMl !== null ||
+      plan.anchors.length > 0 ||
+      plan.countedBeverages.length > 0 ||
+      plan.proposedBeverages.length > 0 ||
+      plan.strategies.length > 0 ||
+      plan.safetyFindings.length > 0 ||
+      plan.reminders ||
+      plan.electrolyteStrategy !== "not_indicated" ||
+      plan.strictestActionLevel !== "information"
+    ) {
       context.addIssue({
         code: "custom",
-        message: "hydration_status_mismatch",
+        message: "hydration_not_requested_must_have_no_operational_plan",
         path: ["status"],
       });
     }
