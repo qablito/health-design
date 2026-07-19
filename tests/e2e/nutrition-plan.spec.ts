@@ -124,6 +124,8 @@ async function mockNutritionApi(page: Page, options: { provisional?: boolean } =
       }
     : nutritionWeek;
   const seenRequests: Array<{ body: unknown; method: string; path: string }> = [];
+  let currentStatus: "active" | "draft" | undefined;
+  let currentAggregateVersion = 1;
   await page.route("http://127.0.0.1:54321/functions/v1/access/**", (route) =>
     route.fulfill({
       body: JSON.stringify([
@@ -145,6 +147,55 @@ async function mockNutritionApi(page: Page, options: { provisional?: boolean } =
       ? (request.postDataJSON() as unknown)
       : null;
     seenRequests.push({ body, method: request.method(), path });
+
+    if (
+      path.endsWith(`/v1/profiles/${profileId}/plans/current`) &&
+      request.method() === "GET"
+    ) {
+      if (!currentStatus) {
+        await route.fulfill({
+          body: JSON.stringify({ error: { code: "NOT_FOUND" } }),
+          contentType: "application/json",
+          status: 404,
+        });
+        return;
+      }
+      await route.fulfill({
+        body: JSON.stringify({
+          activeVersionId: currentStatus === "active" ? planVersionId : null,
+          aggregateVersion: currentAggregateVersion,
+          planId,
+          profileId,
+          versions: [
+            {
+              activatedAt:
+                currentStatus === "active" ? "2026-07-19T10:05:00.000Z" : null,
+              archivedAt: null,
+              canonicalizationVersion: "canonical-json-v1",
+              completeness,
+              contextSnapshotId,
+              createdAt,
+              engineVersion: "engine-v3",
+              hashAlgorithm: "sha256",
+              id: planVersionId,
+              inputHash: "a".repeat(64),
+              ordinal: 1,
+              outputHash: "b".repeat(64),
+              planId,
+              ruleSetRevisionId: "04edd58c-5fff-4f6b-85ad-472ec538885c",
+              sourceManifestId: "90000000-0000-4000-8000-000000000001",
+              status: currentStatus,
+              validatedAt: createdAt,
+              validation: { status: "valid" },
+              validationStatus: "valid",
+            },
+          ],
+        }),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
 
     if (
       path.endsWith(`/v1/profiles/${profileId}/draft`) &&
@@ -191,6 +242,8 @@ async function mockNutritionApi(page: Page, options: { provisional?: boolean } =
       return;
     }
     if (path.endsWith(`/v1/profiles/${profileId}/plans/generate`)) {
+      currentStatus = "draft";
+      currentAggregateVersion = 1;
       await route.fulfill({
         body: JSON.stringify(mutationAck("draft", 1, completeness)),
         contentType: "application/json",
@@ -259,6 +312,8 @@ async function mockNutritionApi(page: Page, options: { provisional?: boolean } =
       return;
     }
     if (path.endsWith(`/v1/plans/${planId}/versions/${planVersionId}/activate`)) {
+      currentStatus = "active";
+      currentAggregateVersion = 2;
       await route.fulfill({
         body: JSON.stringify(mutationAck("active", 2, completeness)),
         contentType: "application/json",
@@ -340,4 +395,32 @@ test("presenta y activa un plan provisional validado sin exponer códigos intern
   expect(visible).not.toContain("private://clinical-source");
   await page.getByRole("button", { name: "Activar plan" }).click();
   await expect(page.getByRole("button", { name: "Plan activo" })).toBeVisible();
+});
+
+test("recarga el plan actual de nutrición sin volver a ofrecer generación", async ({
+  page,
+}) => {
+  await installSession(page);
+  const requests = await mockNutritionApi(page);
+  await page.goto("/nutrition");
+  await page.getByRole("button", { name: "Generar semana estable" }).click();
+  await expect(
+    page.getByRole("region", { name: "Objetivos nutricionales" }),
+  ).toBeVisible();
+
+  await page.reload();
+
+  await expect(
+    page.getByRole("region", { name: "Objetivos nutricionales" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Activar plan" })).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Generar semana estable" }),
+  ).toHaveCount(0);
+  expect(
+    requests.some(
+      ({ method, path }) =>
+        method === "GET" && path.endsWith(`/v1/profiles/${profileId}/plans/current`),
+    ),
+  ).toBe(true);
 });

@@ -11,7 +11,13 @@ import { applyNutritionSubstitution } from "@health-design/engine";
 import { accessClient, type ProfileAccessSummary } from "../access/access-client";
 import { questionnaireClient } from "../questionnaire/questionnaire-client";
 import { clinicalFindingLabel } from "../wellness/wellness-view";
-import { NutritionPlanApiError, nutritionPlanClient } from "./nutrition-client";
+import {
+  isPlanNotFound,
+  mutationAckFromHistory,
+  NutritionPlanApiError,
+  nutritionPlanClient,
+  selectCurrentVersion,
+} from "./nutrition-client";
 
 import "../access/access.css";
 import "./nutrition.css";
@@ -75,6 +81,54 @@ type NutritionReview = Readonly<{
   uncertainties: unknown[];
   validationStatus: "invalid" | "valid";
 }>;
+
+type NutritionDetailState = Readonly<{
+  ack: PlanMutationAck;
+  original?: NutritionWeekContract;
+  plan?: NutritionWeekContract;
+  provisionalReason?: string;
+  review?: NutritionReview;
+}>;
+
+function readNutritionDetail(
+  detail: PlanVersionDetail,
+  ack: PlanMutationAck,
+): NutritionDetailState {
+  const nutrition = detail.moduleResults.find(({ module }) => module === "nutrition");
+  const parsed = NutritionWeekSchema.safeParse(nutrition?.payload);
+  if (!parsed.success) {
+    const uncertainty = nutrition?.uncertainties[0] as { code?: string } | undefined;
+    return {
+      ack,
+      provisionalReason: uncertainty?.code ?? "NUTRITION_PLAN_PROVISIONAL_WITHOUT_WEEK",
+    };
+  }
+  const uncertainties = [
+    ...(nutrition?.uncertainties ?? []),
+    ...parsed.data.targets.uncertainties,
+  ];
+  const review: NutritionReview = {
+    completeness:
+      ack.completeness === "provisional" ||
+      nutrition?.status === "provisional" ||
+      parsed.data.targets.completeness === "provisional"
+        ? "provisional"
+        : "complete",
+    moduleStatus: nutrition?.status ?? "invalid",
+    safetyFindings: detail.safetyFindings.filter(
+      ({ module }) => module === "nutrition",
+    ),
+    strategies: parsed.data.strategies,
+    uncertainties,
+    validationStatus: detail.validationStatus,
+  };
+  return {
+    ack,
+    original: parsed.data,
+    plan: parsed.data,
+    review,
+  };
+}
 
 function codeFrom(value: unknown): string | undefined {
   if (typeof value === "string") return value;
@@ -151,6 +205,9 @@ export function NutritionApp() {
   const [profileId, setProfileId] = useState<string>();
   const [provisionalReason, setProvisionalReason] = useState<string>();
   const [review, setReview] = useState<NutritionReview>();
+  const [restoreStatus, setRestoreStatus] = useState<
+    "blocked" | "can_generate" | "loaded" | "loading"
+  >("loading");
 
   useEffect(() => {
     let active = true;
@@ -176,6 +233,45 @@ export function NutritionApp() {
     setProvisionalReason(undefined);
     setReview(undefined);
     setError(undefined);
+    if (!profileId) {
+      setRestoreStatus("loading");
+      return;
+    }
+    let current = true;
+    setRestoreStatus("loading");
+    setBusy(true);
+    nutritionPlanClient
+      .getCurrent(profileId)
+      .then(async (history) => {
+        if (history.profileId !== profileId) throw new Error("plan_profile_mismatch");
+        const version = selectCurrentVersion(history);
+        if (!version) throw new Error("plan_version_missing");
+        const detail = await nutritionPlanClient.getVersion(version.planId, version.id);
+        if (!current) return;
+        const state = readNutritionDetail(
+          detail,
+          mutationAckFromHistory(history, version),
+        );
+        setAck(state.ack);
+        setOriginal(state.original);
+        setPlan(state.plan);
+        setProvisionalReason(state.provisionalReason);
+        setReview(state.review);
+        setRestoreStatus("loaded");
+      })
+      .catch((loadError: unknown) => {
+        if (!current) return;
+        if (isPlanNotFound(loadError)) {
+          setRestoreStatus("can_generate");
+          return;
+        }
+        setError(message(loadError));
+        setRestoreStatus("blocked");
+      })
+      .finally(() => current && setBusy(false));
+    return () => {
+      current = false;
+    };
   }, [profileId]);
 
   const dailyAverage = useMemo(() => {
@@ -205,40 +301,13 @@ export function NutritionApp() {
         mutation.planId,
         mutation.planVersionId,
       );
-      const nutrition = detail.moduleResults.find(
-        ({ module }) => module === "nutrition",
-      );
-      const parsed = NutritionWeekSchema.safeParse(nutrition?.payload);
-      setAck(mutation);
-      if (!parsed.success) {
-        const uncertainty = nutrition?.uncertainties[0] as
-          { code?: string } | undefined;
-        setProvisionalReason(
-          uncertainty?.code ?? "NUTRITION_PLAN_PROVISIONAL_WITHOUT_WEEK",
-        );
-        return;
-      }
-      const uncertainties = [
-        ...(nutrition?.uncertainties ?? []),
-        ...parsed.data.targets.uncertainties,
-      ];
-      setReview({
-        completeness:
-          mutation.completeness === "provisional" ||
-          nutrition?.status === "provisional" ||
-          parsed.data.targets.completeness === "provisional"
-            ? "provisional"
-            : "complete",
-        moduleStatus: nutrition?.status ?? "invalid",
-        safetyFindings: detail.safetyFindings.filter(
-          ({ module }) => module === "nutrition",
-        ),
-        strategies: parsed.data.strategies,
-        uncertainties,
-        validationStatus: detail.validationStatus,
-      });
-      setOriginal(parsed.data);
-      setPlan(parsed.data);
+      const state = readNutritionDetail(detail, mutation);
+      setAck(state.ack);
+      setProvisionalReason(state.provisionalReason);
+      setReview(state.review);
+      setOriginal(state.original);
+      setPlan(state.plan);
+      setRestoreStatus("loaded");
     } catch (generationError) {
       setError(message(generationError));
     } finally {
@@ -335,7 +404,13 @@ export function NutritionApp() {
         </section>
       ) : null}
 
-      {profiles.length && !plan && !provisionalReason ? (
+      {profiles.length > 0 && restoreStatus === "loading" ? (
+        <p role="status">Consultando el plan existente…</p>
+      ) : null}
+      {profiles.length > 0 &&
+      !plan &&
+      !provisionalReason &&
+      restoreStatus === "can_generate" ? (
         <section className="nutrition-empty">
           <p>El plan se crea desde el último cuestionario confirmado.</p>
           <button
@@ -345,6 +420,16 @@ export function NutritionApp() {
           >
             {busy ? "Generando…" : "Generar semana estable"}
           </button>
+        </section>
+      ) : null}
+
+      {profiles.length > 0 && restoreStatus === "blocked" ? (
+        <section className="nutrition-empty">
+          <h2>No se ha podido consultar el plan existente</h2>
+          <p>
+            Recarga para recuperar la versión ya creada. No se ofrece una nueva
+            generación mientras su estado sea incierto.
+          </p>
         </section>
       ) : null}
 

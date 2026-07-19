@@ -14,8 +14,11 @@ import type {
 
 import { accessClient, type ProfileAccessSummary } from "../access/access-client";
 import {
+  isPlanNotFound,
+  mutationAckFromHistory,
   nutritionPlanClient,
   NutritionPlanApiError,
+  selectCurrentVersion,
 } from "../nutrition/nutrition-client";
 import { questionnaireClient } from "../questionnaire/questionnaire-client";
 import {
@@ -115,22 +118,6 @@ const actionOrder: readonly ActionLevel[] = [
   "priority_review",
   "immediate_conservative",
 ];
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function planStorageKey(profileId: string): string {
-  return `health-design:wellness-plan:${profileId}`;
-}
-
-function storedPlanId(profileId: string): string | undefined {
-  const planId = sessionStorage.getItem(planStorageKey(profileId)) ?? undefined;
-  return planId && UUID_PATTERN.test(planId) ? planId : undefined;
-}
-
-function rememberPlan(profileId: string, planId: string): void {
-  sessionStorage.setItem(planStorageKey(profileId), planId);
-}
 
 function errorMessage(error: unknown): string {
   if (error instanceof NutritionPlanApiError) {
@@ -799,53 +786,31 @@ export function WellnessApp() {
       setRestoreStatus("loading");
       return;
     }
-    const planId = storedPlanId(profileId);
-    if (!planId) {
-      setRestoreStatus("can_generate");
-      return;
-    }
     let current = true;
     setRestoreStatus("loading");
+    setBusy(true);
     nutritionPlanClient
-      .listVersions(planId)
+      .getCurrent(profileId)
       .then(async (history) => {
         if (history.profileId !== profileId) throw new Error("plan_profile_mismatch");
-        const version =
-          history.versions.find(({ status }) => status === "draft") ??
-          history.versions.find(({ id }) => id === history.activeVersionId);
+        const version = selectCurrentVersion(history);
         if (!version) throw new Error("plan_version_missing");
-        const detail = await nutritionPlanClient.getVersion(planId, version.id);
+        const detail = await nutritionPlanClient.getVersion(version.planId, version.id);
         if (!current) return;
-        setAck({
-          activatedAt: version.activatedAt,
-          activeVersionId: history.activeVersionId,
-          aggregateVersion: history.aggregateVersion,
-          archivedAt: version.archivedAt,
-          completeness: version.completeness,
-          contextSnapshotId: version.contextSnapshotId,
-          createdAt: version.createdAt,
-          ordinal: version.ordinal,
-          planId,
-          planVersionId: version.id,
-          status: version.status,
-          validationStatus: version.validationStatus,
-        });
+        setAck(mutationAckFromHistory(history, version));
         setModules(readWellnessModules(detail));
         setRestoreStatus("loaded");
       })
       .catch((loadError: unknown) => {
         if (!current) return;
-        if (
-          loadError instanceof NutritionPlanApiError &&
-          loadError.code === "NOT_FOUND"
-        ) {
-          sessionStorage.removeItem(planStorageKey(profileId));
+        if (isPlanNotFound(loadError)) {
           setRestoreStatus("can_generate");
           return;
         }
         setError(errorMessage(loadError));
         setRestoreStatus("blocked");
-      });
+      })
+      .finally(() => current && setBusy(false));
     return () => {
       current = false;
     };
@@ -867,7 +832,6 @@ export function WellnessApp() {
       }
       const context = await nutritionPlanClient.createContext(profileId, draft.version);
       const mutation = await nutritionPlanClient.generate(profileId, context.id);
-      rememberPlan(profileId, mutation.planId);
       const detail = await nutritionPlanClient.getVersion(
         mutation.planId,
         mutation.planVersionId,

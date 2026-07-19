@@ -11,6 +11,7 @@ import {
 const userId = "00000000-0000-4000-8000-000000001201";
 const sessionId = "21000000-0000-4000-8000-000000001201";
 const profileId = "51000000-0000-4000-8000-000000001201";
+const secondProfileId = "51000000-0000-4000-8000-000000001202";
 const draftId = "71000000-0000-4000-8000-000000001201";
 const contextSnapshotId = "52000000-0000-4000-8000-000000001201";
 const planId = "53000000-0000-4000-8000-000000001201";
@@ -128,9 +129,10 @@ async function mockWellnessApi(
   selectedAnswers: QuestionnaireAnswers = answers,
   completeness: "complete" | "provisional" = "complete",
   validationStatus: "valid" | "invalid" = "valid",
+  additionalProfiles: ReadonlyArray<{ alias: string; profileId: string }> = [],
 ) {
   const requests: Array<{ body: unknown; method: string; path: string }> = [];
-  let currentStatus: "active" | "draft" = "draft";
+  let currentStatus: "active" | "draft" | undefined;
   let currentAggregateVersion = 1;
   await page.route("http://127.0.0.1:54321/functions/v1/access/**", (route) =>
     route.fulfill({
@@ -141,6 +143,11 @@ async function mockWellnessApi(
           profileId,
           status: "active",
         },
+        ...additionalProfiles.map((profile) => ({
+          ...profile,
+          accessScope: "owner",
+          status: "active",
+        })),
       ]),
       contentType: "application/json",
       status: 200,
@@ -151,6 +158,54 @@ async function mockWellnessApi(
     const path = new URL(request.url()).pathname;
     const body: unknown = request.postData() ? request.postDataJSON() : null;
     requests.push({ body, method: request.method(), path });
+
+    if (
+      path.endsWith(`/v1/profiles/${profileId}/plans/current`) &&
+      request.method() === "GET"
+    ) {
+      if (!currentStatus) {
+        await route.fulfill({
+          body: JSON.stringify({ error: { code: "NOT_FOUND" } }),
+          contentType: "application/json",
+          status: 404,
+        });
+        return;
+      }
+      await route.fulfill({
+        body: JSON.stringify({
+          activeVersionId: currentStatus === "active" ? planVersionId : null,
+          aggregateVersion: currentAggregateVersion,
+          planId,
+          profileId,
+          versions: [
+            {
+              activatedAt: currentStatus === "active" ? createdAt : null,
+              archivedAt: null,
+              canonicalizationVersion: "canonical-json-v1",
+              completeness,
+              contextSnapshotId,
+              createdAt,
+              engineVersion: "engine-v3",
+              hashAlgorithm: "sha256",
+              id: planVersionId,
+              inputHash: "a".repeat(64),
+              ordinal: 1,
+              outputHash: "b".repeat(64),
+              planId,
+              ruleSetRevisionId: "04edd58c-5fff-4f6b-85ad-472ec538885c",
+              sourceManifestId: "90000000-0000-4000-8000-000000000001",
+              status: currentStatus ?? "draft",
+              validatedAt: createdAt,
+              validation: { status: "valid" },
+              validationStatus,
+            },
+          ],
+        }),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
 
     if (
       path.endsWith(`/v1/profiles/${profileId}/draft`) &&
@@ -239,7 +294,7 @@ async function mockWellnessApi(
               planId,
               ruleSetRevisionId: "04edd58c-5fff-4f6b-85ad-472ec538885c",
               sourceManifestId: "90000000-0000-4000-8000-000000000001",
-              status: currentStatus,
+              status: currentStatus ?? "draft",
               validatedAt: createdAt,
               validation: { status: "valid" },
               validationStatus,
@@ -302,7 +357,7 @@ async function mockWellnessApi(
         ruleSetRevisionId: "04edd58c-5fff-4f6b-85ad-472ec538885c",
         safetyFindings: [],
         sourceManifestId: "90000000-0000-4000-8000-000000000001",
-        status: currentStatus,
+        status: currentStatus ?? "draft",
         validatedAt: createdAt,
         validation: { status: "valid" },
         validationStatus,
@@ -422,7 +477,7 @@ test("recarga la versión activa tras refrescar sin ofrecer otra generación", a
   expect(
     requests.some(
       ({ method, path }) =>
-        method === "GET" && path.endsWith(`/v1/plans/${planId}/versions`),
+        method === "GET" && path.endsWith(`/v1/profiles/${profileId}/plans/current`),
     ),
   ).toBe(true);
 });
@@ -441,6 +496,26 @@ test("recarga el borrador tras refrescar y conserva la activación manual", asyn
   await expect(page.getByText("Agua total de referencia")).toBeVisible();
   await expect(page.getByRole("button", { name: "Activar plan" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Generar bienestar" })).toHaveCount(0);
+});
+
+test("consulta el endpoint remoto al cambiar de perfil", async ({ page }) => {
+  await installSession(page);
+  const requests = await mockWellnessApi(page, answers, "complete", "valid", [
+    { alias: "Segundo perfil", profileId: secondProfileId },
+  ]);
+  await page.goto("/wellness");
+  await expect(page.getByRole("button", { name: "Generar bienestar" })).toBeVisible();
+
+  await page.getByLabel("Perfil").selectOption(secondProfileId);
+
+  await expect(page.getByRole("button", { name: "Generar bienestar" })).toBeVisible();
+  expect(
+    requests.some(
+      ({ method, path }) =>
+        method === "GET" &&
+        path.endsWith(`/v1/profiles/${secondProfileId}/plans/current`),
+    ),
+  ).toBe(true);
 });
 
 test("descarta y bloquea una versión marcada inválida", async ({ page }) => {

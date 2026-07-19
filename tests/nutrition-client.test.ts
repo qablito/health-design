@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createNutritionPlanClient } from "../apps/web/src/features/nutrition/nutrition-client";
+import {
+  createNutritionPlanClient,
+  selectCurrentVersion,
+} from "../apps/web/src/features/nutrition/nutrition-client";
 import type { NutritionPlanApiError } from "../apps/web/src/features/nutrition/nutrition-client";
 
 const profileId = "51000000-0000-4000-8000-000000000010";
@@ -129,6 +132,35 @@ describe("cliente del plan nutricional", () => {
       `https://project.supabase.co/functions/v1/plans/v1/plans/${planId}/versions`,
       expect.objectContaining({ method: "GET" }),
     );
+  });
+
+  it("consulta el plan actual por perfil", async () => {
+    const fetcher = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(JSON.stringify(history), { status: 200 })),
+    );
+
+    await expect(client(fetcher).getCurrent(profileId)).resolves.toEqual(history);
+    expect(fetcher).toHaveBeenCalledWith(
+      `https://project.supabase.co/functions/v1/plans/v1/profiles/${profileId}/plans/current`,
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("prioriza la versión activa aunque exista un borrador más reciente", () => {
+    const newerDraft = {
+      ...history.versions[0],
+      createdAt: "2026-07-20T10:00:00.000Z",
+      id: "54000000-0000-4000-8000-000000000011",
+      ordinal: 2,
+      status: "draft" as const,
+    };
+    const current = {
+      ...history,
+      activeVersionId: planVersionId,
+      versions: [{ ...history.versions[0], status: "active" as const }, newerDraft],
+    };
+
+    expect(selectCurrentVersion(current)?.id).toBe(planVersionId);
   });
 
   it("conserva el código y request_id de un conflicto remoto", async () => {

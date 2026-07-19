@@ -61,6 +61,45 @@ export class NutritionPlanApiError extends Error {
   }
 }
 
+type PlanHistory = ReturnType<typeof PlanHistorySchema.parse>;
+type PlanVersion = PlanHistory["versions"][number];
+
+export function isPlanNotFound(error: unknown): boolean {
+  return error instanceof NutritionPlanApiError && error.status === 404;
+}
+
+export function selectCurrentVersion(history: PlanHistory): PlanVersion | undefined {
+  const active = history.versions.find(({ id }) => id === history.activeVersionId);
+  if (active) return active;
+  const drafts = history.versions
+    .filter(({ status }) => status === "draft")
+    .sort(
+      (left, right) =>
+        right.ordinal - left.ordinal || right.createdAt.localeCompare(left.createdAt),
+    );
+  return drafts[0];
+}
+
+export function mutationAckFromHistory(
+  history: PlanHistory,
+  version: PlanVersion,
+): PlanMutationAck {
+  return {
+    activatedAt: version.activatedAt,
+    activeVersionId: history.activeVersionId,
+    aggregateVersion: history.aggregateVersion,
+    archivedAt: version.archivedAt,
+    completeness: version.completeness,
+    contextSnapshotId: version.contextSnapshotId,
+    createdAt: version.createdAt,
+    ordinal: version.ordinal,
+    planId: version.planId,
+    planVersionId: version.id,
+    status: version.status,
+    validationStatus: version.validationStatus,
+  };
+}
+
 async function json(response: Response): Promise<unknown> {
   return response.json().catch(() => null);
 }
@@ -158,6 +197,13 @@ export function createNutritionPlanClient(dependencies: Dependencies) {
         method: "GET",
         parse: (value) => PlanVersionDetailSchema.parse(value),
         path: `/v1/plans/${planId}/versions/${versionId}`,
+      });
+    },
+    getCurrent(profileId: string) {
+      return request({
+        method: "GET",
+        parse: (value) => PlanHistorySchema.parse(value),
+        path: `/v1/profiles/${profileId}/plans/current`,
       });
     },
     listVersions(planId: string) {
