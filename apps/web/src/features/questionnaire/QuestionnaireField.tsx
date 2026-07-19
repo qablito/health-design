@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { AempsMedicationSearchResult } from "@health-design/contracts";
 
 import { medicationsClient } from "./medications-client";
@@ -650,7 +650,15 @@ function MedicationEntries({
   const [searchStatus, setSearchStatus] = useState<
     "error" | "idle" | "loading" | "success"
   >("idle");
+  const searchVersion = useRef(0);
   const entries = isUnknownArray(value) ? value : [];
+  useEffect(
+    () => () => {
+      searchVersion.current += 1;
+      medicationsClient.cancelPending();
+    },
+    [],
+  );
   return (
     <fieldset className="question-field entity-fieldset">
       <legend>{label}</legend>
@@ -675,6 +683,8 @@ function MedicationEntries({
                   [key]: nextValue,
                 }));
                 if (key === "name") {
+                  searchVersion.current += 1;
+                  medicationsClient.cancelPending();
                   setCanonicalResults([]);
                   setSearchStatus("idle");
                 }
@@ -695,6 +705,7 @@ function MedicationEntries({
             className="secondary-button"
             disabled={entry.name.trim().length < 2 || searchStatus === "loading"}
             onClick={() => {
+              const currentSearch = ++searchVersion.current;
               setSearchStatus("loading");
               void medicationsClient
                 .search(entry.name)
@@ -705,10 +716,17 @@ function MedicationEntries({
                         .results,
                 )
                 .then((results) => {
+                  if (currentSearch !== searchVersion.current) return;
                   setCanonicalResults(results);
                   setSearchStatus("success");
                 })
-                .catch(() => {
+                .catch((error: unknown) => {
+                  if (
+                    currentSearch !== searchVersion.current ||
+                    (error instanceof DOMException && error.name === "AbortError")
+                  ) {
+                    return;
+                  }
                   setCanonicalResults([]);
                   setSearchStatus("error");
                 });

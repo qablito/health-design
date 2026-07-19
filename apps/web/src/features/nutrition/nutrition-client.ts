@@ -2,6 +2,7 @@ import {
   ContextSnapshotAckSchema,
   ContextSnapshotCreateRequestSchema,
   PlanGenerationRequestSchema,
+  PlanHistorySchema,
   PlanMutationAckSchema,
   PlanMutationRequestSchema,
   PlanVersionDetailSchema,
@@ -157,6 +158,13 @@ export function createNutritionPlanClient(dependencies: Dependencies) {
         method: "GET",
         parse: (value) => PlanVersionDetailSchema.parse(value),
         path: `/v1/plans/${planId}/versions/${versionId}`,
+      });
+    },
+    listVersions(planId: string) {
+      return request({
+        method: "GET",
+        parse: (value) => PlanHistorySchema.parse(value),
+        path: `/v1/plans/${planId}/versions`,
       });
     },
   };

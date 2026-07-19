@@ -130,6 +130,8 @@ async function mockWellnessApi(
   validationStatus: "valid" | "invalid" = "valid",
 ) {
   const requests: Array<{ body: unknown; method: string; path: string }> = [];
+  let currentStatus: "active" | "draft" = "draft";
+  let currentAggregateVersion = 1;
   await page.route("http://127.0.0.1:54321/functions/v1/access/**", (route) =>
     route.fulfill({
       body: JSON.stringify([
@@ -204,10 +206,48 @@ async function mockWellnessApi(
       return;
     }
     if (path.endsWith(`/v1/profiles/${profileId}/plans/generate`)) {
+      currentStatus = "draft";
+      currentAggregateVersion = 1;
       await route.fulfill({
         body: JSON.stringify(mutationAck("draft", 1, completeness, validationStatus)),
         contentType: "application/json",
         status: 201,
+      });
+      return;
+    }
+    if (path.endsWith(`/v1/plans/${planId}/versions`) && request.method() === "GET") {
+      await route.fulfill({
+        body: JSON.stringify({
+          activeVersionId: currentStatus === "active" ? planVersionId : null,
+          aggregateVersion: currentAggregateVersion,
+          planId,
+          profileId,
+          versions: [
+            {
+              activatedAt: currentStatus === "active" ? createdAt : null,
+              archivedAt: null,
+              canonicalizationVersion: "canonical-json-v1",
+              completeness,
+              contextSnapshotId,
+              createdAt,
+              engineVersion: "engine-v3",
+              hashAlgorithm: "sha256",
+              id: planVersionId,
+              inputHash: "a".repeat(64),
+              ordinal: 1,
+              outputHash: "b".repeat(64),
+              planId,
+              ruleSetRevisionId: "04edd58c-5fff-4f6b-85ad-472ec538885c",
+              sourceManifestId: "90000000-0000-4000-8000-000000000001",
+              status: currentStatus,
+              validatedAt: createdAt,
+              validation: { status: "valid" },
+              validationStatus,
+            },
+          ],
+        }),
+        contentType: "application/json",
+        status: 200,
       });
       return;
     }
@@ -245,7 +285,7 @@ async function mockWellnessApi(
         },
       ];
       const detail = PlanVersionDetailSchema.parse({
-        activatedAt: null,
+        activatedAt: currentStatus === "active" ? createdAt : null,
         archivedAt: null,
         canonicalizationVersion: "canonical-json-v1",
         completeness,
@@ -262,7 +302,7 @@ async function mockWellnessApi(
         ruleSetRevisionId: "04edd58c-5fff-4f6b-85ad-472ec538885c",
         safetyFindings: [],
         sourceManifestId: "90000000-0000-4000-8000-000000000001",
-        status: "draft",
+        status: currentStatus,
         validatedAt: createdAt,
         validation: { status: "valid" },
         validationStatus,
@@ -275,6 +315,8 @@ async function mockWellnessApi(
       return;
     }
     if (path.endsWith(`/v1/plans/${planId}/versions/${planVersionId}/activate`)) {
+      currentStatus = "active";
+      currentAggregateVersion = 2;
       await route.fulfill({
         body: JSON.stringify(mutationAck("active", 2, completeness, validationStatus)),
         contentType: "application/json",
@@ -360,6 +402,45 @@ test("mantiene un resultado provisional accesible sin inventar una banda", async
   await expect(page.getByRole("button", { name: "Activar plan" })).toBeEnabled();
   await page.keyboard.press("Tab");
   await expect(page.locator(":focus")).toBeVisible();
+});
+
+test("recarga la versión activa tras refrescar sin ofrecer otra generación", async ({
+  page,
+}) => {
+  await installSession(page);
+  const requests = await mockWellnessApi(page);
+  await page.goto("/wellness");
+  await page.getByRole("button", { name: "Generar bienestar" }).click();
+  await page.getByRole("button", { name: "Activar plan" }).click();
+  await expect(page.getByRole("button", { name: "Plan activo" })).toBeVisible();
+
+  await page.reload();
+
+  await expect(page.getByText("Agua total de referencia")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Plan activo" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Generar bienestar" })).toHaveCount(0);
+  expect(
+    requests.some(
+      ({ method, path }) =>
+        method === "GET" && path.endsWith(`/v1/plans/${planId}/versions`),
+    ),
+  ).toBe(true);
+});
+
+test("recarga el borrador tras refrescar y conserva la activación manual", async ({
+  page,
+}) => {
+  await installSession(page);
+  await mockWellnessApi(page);
+  await page.goto("/wellness");
+  await page.getByRole("button", { name: "Generar bienestar" }).click();
+  await expect(page.getByRole("button", { name: "Activar plan" })).toBeEnabled();
+
+  await page.reload();
+
+  await expect(page.getByText("Agua total de referencia")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Activar plan" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Generar bienestar" })).toHaveCount(0);
 });
 
 test("descarta y bloquea una versión marcada inválida", async ({ page }) => {

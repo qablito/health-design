@@ -4,11 +4,13 @@ import {
   NutritionWeekSchema,
   type NutritionWeekContract,
   type PlanMutationAck,
+  type PlanVersionDetail,
 } from "@health-design/contracts";
 import { applyNutritionSubstitution } from "@health-design/engine";
 
 import { accessClient, type ProfileAccessSummary } from "../access/access-client";
 import { questionnaireClient } from "../questionnaire/questionnaire-client";
+import { clinicalFindingLabel } from "../wellness/wellness-view";
 import { NutritionPlanApiError, nutritionPlanClient } from "./nutrition-client";
 
 import "../access/access.css";
@@ -28,6 +30,73 @@ function message(error: unknown): string {
 
 function totalsLabel(totals: NutritionWeekContract["weekTotals"]): string {
   return `${totals.energyKcal} kcal · P ${totals.proteinG} g · C ${totals.carbohydratesG} g · G ${totals.fatG} g · Fibra ${totals.fiberG} g`;
+}
+
+const uncertaintyLabels: Readonly<Record<string, string>> = {
+  AGGRESSIVE_TARGET_REQUIRES_REVIEW:
+    "El objetivo solicitado necesita una etapa intermedia conservadora antes de ajustar la energía.",
+  MEAL_ANCHORS_DEFAULTED:
+    "Los horarios aportados no cubren todas las comidas; se mantienen anclajes flexibles provisionales.",
+  NUTRITION_CLINICAL_CONTEXT_REVIEW:
+    "El contexto clínico declarado mantiene la alimentación en revisión conservadora.",
+  NUTRITION_GLP1_TOLERANCE_REVIEW:
+    "La tolerancia digestiva declarada necesita seguimiento antes de ajustar la pauta.",
+  NUTRITION_SODIUM_NOT_VERIFIED:
+    "El objetivo de sodio aún no está verificado para el contexto declarado.",
+  PHYSIOLOGICAL_SEX_CONSTANT_UNAVAILABLE:
+    "La referencia fisiológica disponible no permite usar una única constante; se conserva una banda provisional.",
+};
+
+const strategyLabels: Readonly<Record<string, string>> = {
+  clinical_context_only: "Mantener la pauta subordinada al contexto clínico declarado.",
+  glp1_tolerance_review:
+    "Revisar tolerancia, saciedad y capacidad de completar las comidas.",
+  planned_satiating_alternatives:
+    "Dejar preparadas alternativas saciantes con la misma función nutricional.",
+  protein_fiber_pairing:
+    "Combinar proteína y fibra para favorecer saciedad y regularidad.",
+  regular_meal_anchors: "Usar anclajes regulares de comida con franjas flexibles.",
+  sodium_target_not_verified:
+    "Mantener el sodio en revisión hasta contar con contexto suficiente.",
+};
+
+const actionLabels = {
+  adjustment: "Ajuste contextual",
+  immediate_conservative: "Enfoque conservador inmediato",
+  information: "Información",
+  priority_review: "Revisión prioritaria",
+} as const;
+
+type NutritionReview = Readonly<{
+  completeness: "complete" | "provisional";
+  moduleStatus: "invalid" | "not_requested" | "provisional" | "valid";
+  safetyFindings: PlanVersionDetail["safetyFindings"];
+  strategies: string[];
+  uncertainties: unknown[];
+  validationStatus: "invalid" | "valid";
+}>;
+
+function codeFrom(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "code" in value) {
+    const code = (value as { code?: unknown }).code;
+    return typeof code === "string" ? code : undefined;
+  }
+  return undefined;
+}
+
+function uncertaintyLabel(value: unknown): string {
+  const code = codeFrom(value);
+  return code && uncertaintyLabels[code]
+    ? uncertaintyLabels[code]
+    : "Falta contexto para confirmar una parte de la pauta; se mantiene una alternativa conservadora.";
+}
+
+function safetyLabel(code: string): string {
+  if (code === "HYPERTENSION_CONTEXT_PARTIAL") {
+    return "La presión arterial declarada exige revisar el objetivo de sodio antes de darlo por confirmado.";
+  }
+  return clinicalFindingLabel(code);
 }
 
 const clinicalNutrientLabels: Readonly<Record<string, string>> = {
@@ -81,6 +150,7 @@ export function NutritionApp() {
   const [profiles, setProfiles] = useState<ProfileAccessSummary[]>([]);
   const [profileId, setProfileId] = useState<string>();
   const [provisionalReason, setProvisionalReason] = useState<string>();
+  const [review, setReview] = useState<NutritionReview>();
 
   useEffect(() => {
     let active = true;
@@ -104,6 +174,7 @@ export function NutritionApp() {
     setPlan(undefined);
     setLocalPreview(false);
     setProvisionalReason(undefined);
+    setReview(undefined);
     setError(undefined);
   }, [profileId]);
 
@@ -147,6 +218,25 @@ export function NutritionApp() {
         );
         return;
       }
+      const uncertainties = [
+        ...(nutrition?.uncertainties ?? []),
+        ...parsed.data.targets.uncertainties,
+      ];
+      setReview({
+        completeness:
+          mutation.completeness === "provisional" ||
+          nutrition?.status === "provisional" ||
+          parsed.data.targets.completeness === "provisional"
+            ? "provisional"
+            : "complete",
+        moduleStatus: nutrition?.status ?? "invalid",
+        safetyFindings: detail.safetyFindings.filter(
+          ({ module }) => module === "nutrition",
+        ),
+        strategies: parsed.data.strategies,
+        uncertainties,
+        validationStatus: detail.validationStatus,
+      });
       setOriginal(parsed.data);
       setPlan(parsed.data);
     } catch (generationError) {
@@ -265,12 +355,93 @@ export function NutritionApp() {
             El resto del plan puede continuar, pero alimentación necesita más contexto o
             cobertura oficial.
           </p>
-          <code>{provisionalReason}</code>
+          <p>
+            El menú no supera el contrato de presentación y no puede activarse en esta
+            versión.
+          </p>
         </section>
       ) : null}
 
       {plan && dailyAverage ? (
         <>
+          {review ? (
+            <section
+              aria-label="Estado y revisión del plan nutricional"
+              className={`nutrition-review ${review.completeness}`}
+            >
+              <header>
+                <div>
+                  <span>
+                    {review.completeness === "complete"
+                      ? "PLAN COMPLETO"
+                      : "PLAN PROVISIONAL"}
+                  </span>
+                  <h2>
+                    {ack?.status === "active"
+                      ? "Versión activa"
+                      : review.validationStatus === "valid"
+                        ? "Borrador validado"
+                        : "Borrador no activable"}
+                  </h2>
+                </div>
+                <strong>
+                  {review.moduleStatus === "provisional"
+                    ? "Alimentación provisional"
+                    : "Alimentación validada"}
+                </strong>
+              </header>
+              {review.completeness === "provisional" &&
+              review.validationStatus === "valid" ? (
+                <p className="provisional-guidance" role="status">
+                  Este borrador conserva incertidumbres visibles y puede activarse
+                  manualmente si prefieres seguir esta alternativa conservadora.
+                </p>
+              ) : null}
+              {review.uncertainties.length > 0 ? (
+                <div>
+                  <h3>Datos pendientes de revisión</h3>
+                  <ul>
+                    {[...new Set(review.uncertainties.map(uncertaintyLabel))].map(
+                      (item) => (
+                        <li key={item}>{item}</li>
+                      ),
+                    )}
+                  </ul>
+                </div>
+              ) : null}
+              {review.safetyFindings.length > 0 ? (
+                <div>
+                  <h3>Revisión de seguridad</h3>
+                  <ul>
+                    {review.safetyFindings.map((finding) => (
+                      <li key={finding.id}>
+                        <strong>{actionLabels[finding.actionLevel]}:</strong>{" "}
+                        {safetyLabel(finding.code)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {review.strategies.length > 0 ? (
+                <div>
+                  <h3>Estrategias del contexto actual</h3>
+                  <ul>
+                    {[
+                      ...new Set(
+                        review.strategies.map(
+                          (strategy) =>
+                            strategyLabels[strategy] ??
+                            "Se aplica una estrategia contextual conservadora.",
+                        ),
+                      ),
+                    ].map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
           <section className="nutrition-targets" aria-label="Objetivos nutricionales">
             <article>
               <span>Energía diaria</span>
@@ -322,7 +493,12 @@ export function NutritionApp() {
               ) : null}
               <button
                 className="primary-button"
-                disabled={busy || localPreview || ack?.status === "active"}
+                disabled={
+                  busy ||
+                  localPreview ||
+                  ack?.status === "active" ||
+                  review?.validationStatus !== "valid"
+                }
                 onClick={() => void activate()}
                 type="button"
               >

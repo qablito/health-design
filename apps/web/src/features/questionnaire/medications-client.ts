@@ -18,7 +18,17 @@ export class MedicationSearchError extends Error {
 }
 
 export function createMedicationsClient(dependencies: Dependencies) {
+  let activeController: AbortController | undefined;
+  let requestVersion = 0;
+
+  function cancelPending() {
+    requestVersion += 1;
+    activeController?.abort();
+    activeController = undefined;
+  }
+
   return {
+    cancelPending,
     async search(
       query: string,
       mode: "active_ingredient" | "name" = "name",
@@ -27,6 +37,10 @@ export function createMedicationsClient(dependencies: Dependencies) {
       if (normalized.length < 2 || normalized.length > 120) {
         throw new Error("invalid_medication_query");
       }
+      cancelPending();
+      const controller = new AbortController();
+      const currentVersion = requestVersion;
+      activeController = controller;
       const token = await dependencies.getAccessToken();
       const url = new URL(`${dependencies.baseUrl}/v1/search`);
       url.searchParams.set("limit", "10");
@@ -40,7 +54,11 @@ export function createMedicationsClient(dependencies: Dependencies) {
         },
         method: "GET",
         referrerPolicy: "no-referrer",
+        signal: controller.signal,
       });
+      if (controller.signal.aborted || currentVersion !== requestVersion) {
+        throw new DOMException("Medication search superseded", "AbortError");
+      }
       if (!response.ok) throw new MedicationSearchError(response.status);
       let body: unknown;
       try {
@@ -50,6 +68,10 @@ export function createMedicationsClient(dependencies: Dependencies) {
       }
       const parsed = AempsMedicationSearchResponseSchema.safeParse(body);
       if (!parsed.success) throw new MedicationSearchError(502);
+      if (controller.signal.aborted || currentVersion !== requestVersion) {
+        throw new DOMException("Medication search superseded", "AbortError");
+      }
+      if (activeController === controller) activeController = undefined;
       return parsed.data;
     },
   };

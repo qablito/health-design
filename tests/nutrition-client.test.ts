@@ -23,6 +23,36 @@ const mutationAck = {
   validationStatus: "valid",
 };
 
+const history = {
+  activeVersionId: null,
+  aggregateVersion: 1,
+  planId,
+  profileId,
+  versions: [
+    {
+      activatedAt: null,
+      archivedAt: null,
+      canonicalizationVersion: "canonical-json-v1",
+      completeness: "complete",
+      contextSnapshotId,
+      createdAt: "2026-07-19T10:00:00.000Z",
+      engineVersion: "engine-v3",
+      hashAlgorithm: "sha256",
+      id: planVersionId,
+      inputHash: "a".repeat(64),
+      ordinal: 1,
+      outputHash: "b".repeat(64),
+      planId,
+      ruleSetRevisionId: "55000000-0000-4000-8000-000000000010",
+      sourceManifestId: "56000000-0000-4000-8000-000000000010",
+      status: "draft",
+      validatedAt: "2026-07-19T10:00:00.000Z",
+      validation: { status: "valid" },
+      validationStatus: "valid",
+    },
+  ],
+} as const;
+
 function client(fetcher: typeof fetch) {
   return createNutritionPlanClient({
     baseUrl: "https://project.supabase.co/functions/v1/plans",
@@ -87,6 +117,18 @@ describe("cliente del plan nutricional", () => {
       expectedVersion: 1,
       schemaVersion: 1,
     });
+  });
+
+  it("consulta el historial existente usando el endpoint de lifecycle", async () => {
+    const fetcher = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(JSON.stringify(history), { status: 200 })),
+    );
+
+    await expect(client(fetcher).listVersions(planId)).resolves.toEqual(history);
+    expect(fetcher).toHaveBeenCalledWith(
+      `https://project.supabase.co/functions/v1/plans/v1/plans/${planId}/versions`,
+      expect.objectContaining({ method: "GET" }),
+    );
   });
 
   it("conserva el código y request_id de un conflicto remoto", async () => {

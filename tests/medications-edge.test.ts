@@ -52,6 +52,27 @@ function dependencies(
 }
 
 describe("búsqueda canónica AEMPS/CIMA", () => {
+  it("autoriza en el preflight los headers reales del cliente web", async () => {
+    const response = await handleMedicationSearch(
+      new Request("http://localhost/functions/v1/medications/v1/search", {
+        headers: {
+          "access-control-request-headers":
+            "authorization, apikey, x-client-info, content-type",
+          "access-control-request-method": "GET",
+          origin: "http://127.0.0.1:5173",
+        },
+        method: "OPTIONS",
+      }),
+      dependencies(),
+    );
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("access-control-allow-headers")).toBe(
+      "authorization, apikey, x-client-info, content-type",
+    );
+    expect(response.headers.get("access-control-allow-methods")).toBe("GET, OPTIONS");
+  });
+
   it("devuelve solo identidad canónica y atributos de selección permitidos", async () => {
     const deps = dependencies();
     const response = await handleMedicationSearch(request("ozempic"), deps);

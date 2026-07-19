@@ -57,6 +57,28 @@ describe("cliente de identidades AEMPS/CIMA", () => {
     expect(url.searchParams.get("mode")).toBe("active_ingredient");
   });
 
+  it("cancela e invalida una respuesta antigua aunque el fetch la entregue tarde", async () => {
+    let resolveResponse: (response: Response) => void = () => undefined;
+    const fetcher = vi.fn<typeof fetch>(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveResponse = resolve;
+        }),
+    );
+    const { client } = setup(fetcher);
+
+    const stale = client.search("Ozempic");
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
+    const call = fetcher.mock.calls[0];
+    if (!call) throw new Error("expected_medication_fetch");
+    const [, init] = call;
+    client.cancelPending();
+    resolveResponse(Response.json(response));
+
+    expect(init?.signal?.aborted).toBe(true);
+    await expect(stale).rejects.toMatchObject({ name: "AbortError" });
+  });
+
   it("rechaza entradas cortas y respuestas con identidad discordante", async () => {
     const invalidIdentity = {
       ...response,

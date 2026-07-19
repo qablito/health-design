@@ -29,6 +29,56 @@
   background: #fffdf6;
 }
 
+.nutrition-review {
+  display: grid;
+  gap: 18px;
+  margin-top: 28px;
+  padding: clamp(22px, 4vw, 36px);
+  border: 1px solid #9fb5a5;
+  border-radius: 16px;
+  background: #f7fbf5;
+}
+
+.nutrition-review.provisional {
+  border-color: #c8a65e;
+  background: #fff8e8;
+}
+
+.nutrition-review > header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.nutrition-review h2,
+.nutrition-review h3 {
+  margin: 0;
+}
+
+.nutrition-review header span {
+  color: #326b46;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+
+.nutrition-review ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.nutrition-review li + li {
+  margin-top: 6px;
+}
+
+.provisional-guidance {
+  margin: 0;
+  padding: 12px 14px;
+  border-left: 3px solid #a6781f;
+  background: #f8edce;
+}
+
 .nutrition-targets {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -224,7 +274,8 @@
 
   .nutrition-toolbar,
   .nutrition-toolbar > div,
-  .nutrition-day > header {
+  .nutrition-day > header,
+  .nutrition-review > header {
     align-items: stretch;
     flex-direction: column;
   }

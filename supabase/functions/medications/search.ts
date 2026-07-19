@@ -219,7 +219,8 @@ export async function handleMedicationSearch(
     return new Response(null, {
       headers: {
         ...headers(cors.headers),
-        "access-control-allow-headers": "authorization, content-type",
+        "access-control-allow-headers":
+          "authorization, apikey, x-client-info, content-type",
         "access-control-allow-methods": "GET, OPTIONS",
       },
       status: 204,

@@ -80,13 +80,17 @@ async function installSession(page: Page) {
   }, browserSession());
 }
 
-function mutationAck(status: "active" | "draft", aggregateVersion: number) {
+function mutationAck(
+  status: "active" | "draft",
+  aggregateVersion: number,
+  completeness: "complete" | "provisional" = "complete",
+) {
   return {
     activatedAt: status === "active" ? "2026-07-19T10:05:00.000Z" : null,
     activeVersionId: status === "active" ? planVersionId : null,
     aggregateVersion,
     archivedAt: null,
-    completeness: "complete",
+    completeness,
     contextSnapshotId,
     createdAt,
     ordinal: 1,
@@ -97,7 +101,28 @@ function mutationAck(status: "active" | "draft", aggregateVersion: number) {
   };
 }
 
-async function mockNutritionApi(page: Page) {
+async function mockNutritionApi(page: Page, options: { provisional?: boolean } = {}) {
+  const completeness = options.provisional ? "provisional" : "complete";
+  const selectedWeek = options.provisional
+    ? {
+        ...nutritionWeek,
+        strategies: [
+          "regular_meal_anchors",
+          "protein_fiber_pairing",
+          "sodium_target_not_verified",
+        ],
+        targets: {
+          ...nutritionWeek.targets,
+          completeness,
+          uncertainties: [
+            {
+              code: "NUTRITION_SODIUM_NOT_VERIFIED",
+              messageKey: "nutrition.private.raw_message_key",
+            },
+          ],
+        },
+      }
+    : nutritionWeek;
   const seenRequests: Array<{ body: unknown; method: string; path: string }> = [];
   await page.route("http://127.0.0.1:54321/functions/v1/access/**", (route) =>
     route.fulfill({
@@ -128,7 +153,7 @@ async function mockNutritionApi(page: Page) {
       await route.fulfill({
         body: JSON.stringify({
           answers,
-          completeness: "complete",
+          completeness,
           confirmedBlockIds: ["core", "goals", "modules", "nutrition"],
           currentBlockId: "summary",
           hardErrors: [],
@@ -149,7 +174,7 @@ async function mockNutritionApi(page: Page) {
       await route.fulfill({
         body: JSON.stringify({
           canonicalizationVersion: "canonical-json-v1",
-          completeness: "complete",
+          completeness,
           createdAt,
           effectiveAt: createdAt,
           id: contextSnapshotId,
@@ -167,7 +192,7 @@ async function mockNutritionApi(page: Page) {
     }
     if (path.endsWith(`/v1/profiles/${profileId}/plans/generate`)) {
       await route.fulfill({
-        body: JSON.stringify(mutationAck("draft", 1)),
+        body: JSON.stringify(mutationAck("draft", 1, completeness)),
         contentType: "application/json",
         status: 201,
       });
@@ -178,7 +203,7 @@ async function mockNutritionApi(page: Page) {
         activatedAt: null,
         archivedAt: null,
         canonicalizationVersion: "canonical-json-v1",
-        completeness: "complete",
+        completeness,
         contextSnapshotId,
         createdAt,
         engineVersion: "engine-v3",
@@ -191,16 +216,35 @@ async function mockNutritionApi(page: Page) {
             createdAt,
             id: "56000000-0000-4000-8000-000000001001",
             module: "nutrition",
-            payload: nutritionWeek,
-            status: "valid",
-            uncertainties: [],
+            payload: selectedWeek,
+            status: options.provisional ? "provisional" : "valid",
+            uncertainties: options.provisional
+              ? [
+                  {
+                    code: "NUTRITION_CLINICAL_CONTEXT_REVIEW",
+                    privateName: "nombre clínico privado",
+                  },
+                ]
+              : [],
           },
         ],
         ordinal: 1,
         outputHash: "b".repeat(64),
         planId,
         ruleSetRevisionId: "04edd58c-5fff-4f6b-85ad-472ec538885c",
-        safetyFindings: [],
+        safetyFindings: options.provisional
+          ? [
+              {
+                actionLevel: "priority_review",
+                code: "HYPERTENSION_CONTEXT_PARTIAL",
+                createdAt,
+                evidenceRef: "private://clinical-source",
+                id: "57000000-0000-4000-8000-000000001001",
+                messageKey: "clinical.private.raw_message_key",
+                module: "nutrition",
+              },
+            ]
+          : [],
         sourceManifestId: "90000000-0000-4000-8000-000000000001",
         status: "draft",
         validatedAt: createdAt,
@@ -216,7 +260,7 @@ async function mockNutritionApi(page: Page) {
     }
     if (path.endsWith(`/v1/plans/${planId}/versions/${planVersionId}/activate`)) {
       await route.fulfill({
-        body: JSON.stringify(mutationAck("active", 2)),
+        body: JSON.stringify(mutationAck("active", 2, completeness)),
         contentType: "application/json",
         status: 200,
       });
@@ -270,4 +314,30 @@ test("genera, recalcula una sustitución y activa solo el borrador original", as
   expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain(
     "Pechuga de pollo",
   );
+});
+
+test("presenta y activa un plan provisional validado sin exponer códigos internos", async ({
+  page,
+}) => {
+  await installSession(page);
+  await mockNutritionApi(page, { provisional: true });
+  await page.goto("/nutrition");
+  await page.getByRole("button", { name: "Generar semana estable" }).click();
+
+  await expect(page.getByText("PLAN PROVISIONAL", { exact: true })).toBeVisible();
+  await expect(page.getByText(/puede activarse manualmente/i)).toBeVisible();
+  await expect(
+    page.getByText(/objetivo de sodio aún no está verificado/i),
+  ).toBeVisible();
+  await expect(page.getByText(/anclajes regulares de comida/i)).toBeVisible();
+  await expect(page.getByText(/proteína y fibra/i)).toBeVisible();
+  await expect(page.getByText(/presión arterial/i)).toBeVisible();
+
+  const visible = await page.locator("body").innerText();
+  expect(visible).not.toContain("NUTRITION_SODIUM_NOT_VERIFIED");
+  expect(visible).not.toContain("HYPERTENSION_CONTEXT_PARTIAL");
+  expect(visible).not.toContain("nombre clínico privado");
+  expect(visible).not.toContain("private://clinical-source");
+  await page.getByRole("button", { name: "Activar plan" }).click();
+  await expect(page.getByRole("button", { name: "Plan activo" })).toBeVisible();
 });

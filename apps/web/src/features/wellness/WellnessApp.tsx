@@ -116,6 +116,22 @@ const actionOrder: readonly ActionLevel[] = [
   "immediate_conservative",
 ];
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function planStorageKey(profileId: string): string {
+  return `health-design:wellness-plan:${profileId}`;
+}
+
+function storedPlanId(profileId: string): string | undefined {
+  const planId = sessionStorage.getItem(planStorageKey(profileId)) ?? undefined;
+  return planId && UUID_PATTERN.test(planId) ? planId : undefined;
+}
+
+function rememberPlan(profileId: string, planId: string): void {
+  sessionStorage.setItem(planStorageKey(profileId), planId);
+}
+
 function errorMessage(error: unknown): string {
   if (error instanceof NutritionPlanApiError) {
     if (error.code === "DRAFT_NOT_SUBMITTED") {
@@ -754,6 +770,9 @@ export function WellnessApp() {
   const [modules, setModules] = useState<WellnessModules>();
   const [profiles, setProfiles] = useState<ProfileAccessSummary[]>([]);
   const [profileId, setProfileId] = useState<string>();
+  const [restoreStatus, setRestoreStatus] = useState<
+    "blocked" | "can_generate" | "loaded" | "loading"
+  >("loading");
   const resultHeading = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -776,6 +795,60 @@ export function WellnessApp() {
     setAck(undefined);
     setModules(undefined);
     setError(undefined);
+    if (!profileId) {
+      setRestoreStatus("loading");
+      return;
+    }
+    const planId = storedPlanId(profileId);
+    if (!planId) {
+      setRestoreStatus("can_generate");
+      return;
+    }
+    let current = true;
+    setRestoreStatus("loading");
+    nutritionPlanClient
+      .listVersions(planId)
+      .then(async (history) => {
+        if (history.profileId !== profileId) throw new Error("plan_profile_mismatch");
+        const version =
+          history.versions.find(({ status }) => status === "draft") ??
+          history.versions.find(({ id }) => id === history.activeVersionId);
+        if (!version) throw new Error("plan_version_missing");
+        const detail = await nutritionPlanClient.getVersion(planId, version.id);
+        if (!current) return;
+        setAck({
+          activatedAt: version.activatedAt,
+          activeVersionId: history.activeVersionId,
+          aggregateVersion: history.aggregateVersion,
+          archivedAt: version.archivedAt,
+          completeness: version.completeness,
+          contextSnapshotId: version.contextSnapshotId,
+          createdAt: version.createdAt,
+          ordinal: version.ordinal,
+          planId,
+          planVersionId: version.id,
+          status: version.status,
+          validationStatus: version.validationStatus,
+        });
+        setModules(readWellnessModules(detail));
+        setRestoreStatus("loaded");
+      })
+      .catch((loadError: unknown) => {
+        if (!current) return;
+        if (
+          loadError instanceof NutritionPlanApiError &&
+          loadError.code === "NOT_FOUND"
+        ) {
+          sessionStorage.removeItem(planStorageKey(profileId));
+          setRestoreStatus("can_generate");
+          return;
+        }
+        setError(errorMessage(loadError));
+        setRestoreStatus("blocked");
+      });
+    return () => {
+      current = false;
+    };
   }, [profileId]);
 
   useEffect(() => {
@@ -794,12 +867,14 @@ export function WellnessApp() {
       }
       const context = await nutritionPlanClient.createContext(profileId, draft.version);
       const mutation = await nutritionPlanClient.generate(profileId, context.id);
+      rememberPlan(profileId, mutation.planId);
       const detail = await nutritionPlanClient.getVersion(
         mutation.planId,
         mutation.planVersionId,
       );
       setAck(mutation);
       setModules(readWellnessModules(detail));
+      setRestoreStatus("loaded");
     } catch (generationError) {
       setError(errorMessage(generationError));
     } finally {
@@ -848,7 +923,7 @@ export function WellnessApp() {
         <div className="wellness-profile">
           <label htmlFor="wellness-profile">Perfil</label>
           <select
-            disabled={busy}
+            disabled={busy || restoreStatus === "loading"}
             id="wellness-profile"
             onChange={(event) => setProfileId(event.target.value)}
             value={profileId}
@@ -877,6 +952,9 @@ export function WellnessApp() {
         </div>
       ) : null}
       {busy && profiles.length === 0 ? <p role="status">Cargando perfiles…</p> : null}
+      {profiles.length > 0 && restoreStatus === "loading" ? (
+        <p role="status">Consultando el plan existente…</p>
+      ) : null}
       {!profiles.length && !busy ? (
         <section className="wellness-empty">
           <h2>Necesitas un perfil vinculado</h2>
@@ -885,7 +963,7 @@ export function WellnessApp() {
           </a>
         </section>
       ) : null}
-      {profiles.length > 0 && !modules ? (
+      {profiles.length > 0 && !modules && restoreStatus === "can_generate" ? (
         <section className="wellness-empty">
           <span>ÚLTIMO CUESTIONARIO CONFIRMADO</span>
           <h2>Prepara tus módulos de bienestar</h2>
@@ -901,6 +979,15 @@ export function WellnessApp() {
           >
             {busy ? "Generando…" : "Generar bienestar"}
           </button>
+        </section>
+      ) : null}
+      {profiles.length > 0 && !modules && restoreStatus === "blocked" ? (
+        <section className="wellness-empty">
+          <h2>No se ha podido consultar el plan existente</h2>
+          <p>
+            Recarga para recuperar la versión ya creada. No se ofrece una nueva
+            generación mientras su estado sea incierto.
+          </p>
         </section>
       ) : null}
 
