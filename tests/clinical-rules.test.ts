@@ -17,6 +17,8 @@ describe("reglas clínicas selectivas", () => {
   it("detecta restricción explícita y condiciones de volumen como cobertura parcial", () => {
     const result = detectClinicalContext({
       hydrationFluidRestriction: true,
+      hasConditions: true,
+      hasMedications: false,
       conditions: [{ name: "Enfermedad renal" }, { name: "Hiponatremia" }],
     });
 
@@ -40,6 +42,8 @@ describe("reglas clínicas selectivas", () => {
 
   it("no confunde subcadenas sensibles con entidades clínicas", () => {
     const result = detectClinicalContext({
+      hasConditions: false,
+      hasMedications: false,
       conditions: [{ name: "renalina" }, { name: "suprarrenal" }],
       medications: [{ name: "Semaglutidares" }, { name: "SARMiento" }],
     });
@@ -50,6 +54,8 @@ describe("reglas clínicas selectivas", () => {
 
   it("conserva frases válidas dentro de nombres descriptivos", () => {
     const result = detectClinicalContext({
+      hasConditions: true,
+      hasMedications: false,
       conditions: [{ name: "Antecedente de enfermedad renal crónica" }],
     });
     expect(result.detected.renal).toBe(true);
@@ -57,6 +63,8 @@ describe("reglas clínicas selectivas", () => {
 
   it("marca GLP-1 y diuréticos como parciales sin usar dosis", () => {
     const result = detectClinicalContext({
+      hasConditions: false,
+      hasMedications: true,
       medications: [
         { name: "Semaglutida", dose: "999 mg", frequency: "cada hora" },
         { name: "Furosemida", dose: "1 mg", frequency: "nunca" },
@@ -73,10 +81,60 @@ describe("reglas clínicas selectivas", () => {
   });
 
   it("solo desplaza el contexto anabólico al extremo alto y no recomienda su uso", () => {
-    const result = detectClinicalContext({ medications: [{ name: "Testosterona" }] });
+    const result = detectClinicalContext({
+      hasConditions: false,
+      hasMedications: true,
+      medications: [{ name: "Testosterona" }],
+    });
 
     expect(result.detected.anabolic).toBe(true);
     expect(result.strategies).toContain("high_side_only");
     expect(JSON.stringify(result)).not.toMatch(/recomendar|ajustar|dosis/i);
+  });
+
+  it("marca como no modelado el estado clínico sin confirmar", () => {
+    const result = detectClinicalContext({});
+
+    expect(result.coverage).toBe("unmodeled");
+    expect(result.uncertainties.map(({ code }) => code)).toEqual(
+      expect.arrayContaining([
+        "CONDITIONS_CONFIRMATION_MISSING",
+        "MEDICATIONS_CONFIRMATION_MISSING",
+      ]),
+    );
+  });
+
+  it("mantiene cobertura modelada cuando ambas confirmaciones son negativas", () => {
+    const result = detectClinicalContext({
+      hasConditions: false,
+      hasMedications: false,
+    });
+
+    expect(result.coverage).toBe("modeled");
+    expect(result.uncertainties).toEqual([]);
+  });
+
+  it("marca detalle pendiente cuando una condición o medicación se declara sin lista", () => {
+    const conditions = detectClinicalContext({
+      hasConditions: true,
+      hasMedications: false,
+    });
+    const medications = detectClinicalContext({
+      hasConditions: false,
+      hasMedications: true,
+    });
+
+    expect(conditions.coverage).toBe("partial");
+    expect(conditions.uncertainties).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "CONDITIONS_DETAILS_MISSING" }),
+      ]),
+    );
+    expect(medications.coverage).toBe("partial");
+    expect(medications.uncertainties).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "MEDICATIONS_DETAILS_MISSING" }),
+      ]),
+    );
   });
 });

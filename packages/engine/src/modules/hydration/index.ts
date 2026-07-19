@@ -8,6 +8,7 @@ import { detectClinicalContext } from "../../clinical/index.ts";
 import { resolveChoice, type ChoiceRule } from "../../index.ts";
 
 type Answers = Partial<QuestionnaireAnswers> & Record<string, unknown>;
+type RestrictionStatus = "none" | "declared" | "unknown";
 
 export type HydrationEngineInput = Readonly<{
   answers: Answers | QuestionnaireAnswers;
@@ -45,6 +46,12 @@ function round50(value: number): number {
 
 function fixedRange(value: number) {
   return { center: value, maximum: value, minimum: value } as const;
+}
+
+function normalizeRestrictionStatus(value: unknown): RestrictionStatus {
+  if (value === true || value === "declared") return "declared";
+  if (value === false || value === "none") return "none";
+  return "unknown";
 }
 
 function rangeFor(answers: Answers) {
@@ -146,9 +153,10 @@ export function generateHydrationPlan(
   const alcoholRecorded = declaredBeverages.some(isAlcohol);
   const { anchors, anchorSource } = anchorsFor(answers);
   const uncertainties = [...clinical.uncertainties];
-  const restrictionStatus = answers.hydrationFluidRestriction;
-  const restrictionUnknown =
-    restrictionStatus === undefined || restrictionStatus === "unknown";
+  const restrictionStatus = normalizeRestrictionStatus(
+    answers.hydrationFluidRestriction,
+  );
+  const restrictionUnknown = restrictionStatus === "unknown";
   if (restrictionUnknown) {
     uncertainties.push({
       code: "FLUID_RESTRICTION_STATUS_UNKNOWN",
@@ -176,6 +184,17 @@ export function generateHydrationPlan(
     uncertainties.push({
       code: "SEX_REFERENCE_UNAVAILABLE",
       messageKey: "hydration.uncertainty.sex_reference_unavailable",
+    });
+  }
+  if (
+    (answers.physiologicalSex === "female" ||
+      answers.physiologicalSex === "intersex") &&
+    (answers.pregnancyLactation === undefined ||
+      answers.pregnancyLactation === "unknown")
+  ) {
+    uncertainties.push({
+      code: "PREGNANCY_LACTATION_STATUS_UNKNOWN",
+      messageKey: "hydration.uncertainty.pregnancy_lactation_status_unknown",
     });
   }
 

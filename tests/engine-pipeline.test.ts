@@ -275,6 +275,23 @@ describe("pipeline determinista T8", () => {
     ).toHaveLength(4);
   });
 
+  it("propaga un contexto provisional sin convertir módulos no solicitados", async () => {
+    const result = await runDeterministicEngine({
+      baseContext: null,
+      baseModuleResults: null,
+      change: null,
+      context: { ...context, completeness: "provisional" },
+    });
+
+    expect(result.completeness).toBe("provisional");
+    expect(result.validation.provisionalReasons).toContain(
+      "context_snapshot_provisional",
+    );
+    expect(
+      result.moduleResults.find(({ module }) => module === "training"),
+    ).toMatchObject({ status: "not_requested" });
+  });
+
   it("produce hashes idénticos para Unicode equivalente y excluye timestamps volátiles", async () => {
     const first = await runDeterministicEngine({
       baseContext: null,

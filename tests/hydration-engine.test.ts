@@ -9,6 +9,8 @@ import { runDeterministicEngine } from "../packages/engine/src/index";
 
 const base = {
   activeModules: ["hydration" as const],
+  hasConditions: false,
+  hasMedications: false,
   hydrationFluidRestriction: "none" as const,
   hydrationClimate: "temperate" as const,
   hydrationSweat: "low" as const,
@@ -65,6 +67,45 @@ describe("motor de hidratación", () => {
     },
   );
 
+  it("marca embarazo o lactancia sin confirmar como provisional sin alterar la referencia femenina", () => {
+    const plan = generateHydrationPlan({
+      answers: { ...base, physiologicalSex: "female" },
+    });
+
+    expect(plan.totalReferenceMl).toEqual({
+      center: 2000,
+      maximum: 2000,
+      minimum: 2000,
+    });
+    expect(plan.completeness).toBe("provisional");
+    expect(plan.uncertainties).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "PREGNANCY_LACTATION_STATUS_UNKNOWN" }),
+      ]),
+    );
+  });
+
+  it("marca embarazo o lactancia desconocido en intersex sin cambiar el rango", () => {
+    const plan = generateHydrationPlan({
+      answers: {
+        ...base,
+        physiologicalSex: "intersex",
+        pregnancyLactation: "unknown",
+      },
+    });
+
+    expect(plan.totalReferenceMl).toEqual({
+      center: 2250,
+      maximum: 2500,
+      minimum: 2000,
+    });
+    expect(plan.uncertainties).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "PREGNANCY_LACTATION_STATUS_UNKNOWN" }),
+      ]),
+    );
+  });
+
   it("estima bebidas al 70–80 %, centro 75 %, redondeadas a 50 ml", () => {
     const plan = generateHydrationPlan({
       answers: { ...base, physiologicalSex: "female" },
@@ -115,6 +156,28 @@ describe("motor de hidratación", () => {
     expect(renal.completeness).toBe("provisional");
   });
 
+  it("normaliza los booleanos legados de restricción hídrica", () => {
+    const unrestricted = generateHydrationPlan({
+      answers: {
+        ...base,
+        physiologicalSex: "female",
+        pregnancyLactation: "none",
+        hydrationFluidRestriction: false,
+      },
+    });
+    const restricted = generateHydrationPlan({
+      answers: {
+        ...base,
+        physiologicalSex: "female",
+        pregnancyLactation: "none",
+        hydrationFluidRestriction: true,
+      },
+    });
+
+    expect(unrestricted.beverageBandMl).not.toBeNull();
+    expect(restricted.beverageBandMl).toBeNull();
+  });
+
   it("mantiene la banda con agua habitual ausente y marca F49", () => {
     const plan = generateHydrationPlan({
       answers: {
@@ -140,6 +203,7 @@ describe("motor de hidratación", () => {
         answers: {
           ...base,
           physiologicalSex: "female",
+          hasConditions: true,
           conditions: [{ name: condition }],
         },
       });
@@ -218,6 +282,7 @@ describe("motor de hidratación", () => {
       answers: {
         ...base,
         physiologicalSex: "female",
+        pregnancyLactation: "none",
         habitualWaterMl: 1500,
         hydrationFluidRestriction: "none",
         hydrationSweat: "low",

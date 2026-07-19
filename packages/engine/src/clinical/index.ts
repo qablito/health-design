@@ -95,6 +95,12 @@ export function detectClinicalContext(input: ClinicalContextInput): ClinicalResu
   const answers = unwrapAnswers(input);
   const conditionTexts = entries(answers, "conditions").map(normalizeClinicalText);
   const medicationTexts = entries(answers, "medications").map(normalizeClinicalText);
+  const conditionsConfirmed = answers.hasConditions;
+  const medicationsConfirmed = answers.hasMedications;
+  const conditionsDetailsMissing =
+    conditionsConfirmed === true && conditionTexts.length === 0;
+  const medicationsDetailsMissing =
+    medicationsConfirmed === true && medicationTexts.length === 0;
   const allTexts = [...conditionTexts, ...medicationTexts];
   const fluidRestriction =
     answers.hydrationFluidRestriction === true ||
@@ -162,6 +168,21 @@ export function detectClinicalContext(input: ClinicalContextInput): ClinicalResu
     strategies.push("high_side_only");
   }
 
+  if (conditionsConfirmed === undefined) {
+    pushUnique(uncertainties, uncertainty("CONDITIONS_CONFIRMATION_MISSING"));
+    strategies.push("clinical_conditions_confirmation_required");
+  } else if (conditionsDetailsMissing) {
+    pushUnique(uncertainties, uncertainty("CONDITIONS_DETAILS_MISSING"));
+    strategies.push("clinical_conditions_details_required");
+  }
+  if (medicationsConfirmed === undefined) {
+    pushUnique(uncertainties, uncertainty("MEDICATIONS_CONFIRMATION_MISSING"));
+    strategies.push("clinical_medications_confirmation_required");
+  } else if (medicationsDetailsMissing) {
+    pushUnique(uncertainties, uncertainty("MEDICATIONS_DETAILS_MISSING"));
+    strategies.push("clinical_medications_details_required");
+  }
+
   const knownTexts = CLINICAL_CATALOG.flatMap(({ aliases }) => aliases).map(
     normalizeClinicalText,
   );
@@ -182,11 +203,18 @@ export function detectClinicalContext(input: ClinicalContextInput): ClinicalResu
     pushUnique(uncertainties, uncertainty("CLINICAL_CONTEXT_UNMODELED"));
   }
 
-  const coverage = hasUnknownContext
-    ? "unmodeled"
-    : safetyFindings.length > 0
-      ? "partial"
-      : "modeled";
+  const contextCoverage =
+    conditionsConfirmed === undefined || medicationsConfirmed === undefined
+      ? "unmodeled"
+      : conditionsDetailsMissing || medicationsDetailsMissing
+        ? "partial"
+        : "modeled";
+  const coverage =
+    hasUnknownContext || contextCoverage === "unmodeled"
+      ? "unmodeled"
+      : contextCoverage === "partial" || safetyFindings.length > 0
+        ? "partial"
+        : "modeled";
   if (safetyFindings.length === 0) strategies.push("no_selective_clinical_override");
 
   return {

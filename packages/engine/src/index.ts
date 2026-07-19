@@ -954,9 +954,11 @@ export async function runDeterministicEngine(
     : ["modules_required"];
   const validationStatus: "invalid" | "valid" =
     errors.length === 0 ? "valid" : "invalid";
-  const completeness = moduleResults.some(({ status }) => status === "provisional")
-    ? ("provisional" as const)
-    : ("complete" as const);
+  const completeness =
+    input.context.completeness === "provisional" ||
+    moduleResults.some(({ status }) => status === "provisional")
+      ? ("provisional" as const)
+      : ("complete" as const);
   const provisionalReasons = [
     ...new Set(
       moduleResults.flatMap(({ uncertainties }) =>
@@ -974,6 +976,9 @@ export async function runDeterministicEngine(
       ),
     ),
   ];
+  if (input.context.completeness === "provisional") {
+    provisionalReasons.push("context_snapshot_provisional");
+  }
   const validation = {
     checks: [
       "canonical_input",
