@@ -180,6 +180,20 @@ describe("motor de hidratación", () => {
     expect(plan.proposedBeverages).not.toContain("cerveza");
   });
 
+  it("normaliza puntuación al clasificar alcohol sin confundir ginger", () => {
+    const plan = generateHydrationPlan({
+      answers: {
+        ...base,
+        physiologicalSex: "male",
+        habitualBeverages: ["Cerveza,", "vino.", "ginger"],
+      },
+    });
+    expect(plan.alcoholRecorded).toBe(true);
+    expect(plan.countedBeverages).toContain("ginger");
+    expect(plan.countedBeverages).not.toContain("Cerveza,");
+    expect(plan.countedBeverages).not.toContain("vino.");
+  });
+
   it("mantiene recordatorios apagados y anclajes flexibles", () => {
     const plan = generateHydrationPlan({ answers: base });
     expect(plan.reminders).toBe(false);
@@ -191,6 +205,11 @@ describe("motor de hidratación", () => {
     const plan = generateHydrationPlan({ answers: { activeModules: ["nutrition"] } });
     expect(plan.status).toBe("not_requested");
     expect(plan.anchors).toEqual([]);
+    expect(plan.totalReferenceMl).toEqual({
+      center: 2250,
+      maximum: 2500,
+      minimum: 2000,
+    });
     expect(HydrationPlanSchema.parse(plan)).toEqual(plan);
   });
 
@@ -220,6 +239,25 @@ describe("motor de hidratación", () => {
         ...valid,
         status: "not_requested",
         beverageBandMl: null,
+      }),
+    ).toThrow();
+  });
+
+  it("rechaza un not_requested con contexto operativo o contextual", () => {
+    const plan = generateHydrationPlan({ answers: { activeModules: ["nutrition"] } });
+    expect(() =>
+      HydrationPlanSchema.parse({ ...plan, habitualWaterMl: 1200 }),
+    ).toThrow();
+    expect(() =>
+      HydrationPlanSchema.parse({ ...plan, alcoholRecorded: true }),
+    ).toThrow();
+    expect(() =>
+      HydrationPlanSchema.parse({ ...plan, clinicalCoverage: "partial" }),
+    ).toThrow();
+    expect(() =>
+      HydrationPlanSchema.parse({
+        ...plan,
+        totalReferenceMl: { center: 2000, maximum: 2000, minimum: 2000 },
       }),
     ).toThrow();
   });

@@ -35,6 +35,7 @@ function normalize(value: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLocaleLowerCase("es-ES")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 }
 
@@ -117,7 +118,7 @@ function emptyNotRequested(): HydrationPlanContract {
     status: "not_requested",
     strategies: [],
     strictestActionLevel: "information",
-    totalReferenceMl: fixedRange(2250),
+    totalReferenceMl: { center: 2250, maximum: 2500, minimum: 2000 },
     uncertainties: [],
   };
 }

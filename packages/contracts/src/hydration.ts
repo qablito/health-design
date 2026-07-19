@@ -50,7 +50,15 @@ export const HydrationPlanSchema = z
   .strict()
   .superRefine((plan, context) => {
     if (plan.status === "valid") {
-      if (plan.completeness !== "complete" || plan.uncertainties.length > 0) {
+      if (
+        plan.completeness !== "complete" ||
+        plan.uncertainties.length > 0 ||
+        plan.beverageBandMl === null ||
+        plan.anchors.length === 0 ||
+        plan.proposedBeverages.length === 0 ||
+        plan.safetyFindings.length > 0 ||
+        plan.habitualWaterMl === null
+      ) {
         context.addIssue({
           code: "custom",
           message: "hydration_valid_requires_complete",
@@ -74,6 +82,16 @@ export const HydrationPlanSchema = z
       plan.uncertainties.length > 0 ||
       plan.beverageBandMl !== null ||
       plan.anchors.length > 0 ||
+      plan.habitualWaterMl !== null ||
+      plan.alcoholRecorded ||
+      plan.clinicalCoverage !== "modeled" ||
+      plan.anchorSource !== "default" ||
+      plan.totalReferenceMl.center !== 2250 ||
+      plan.totalReferenceMl.maximum !== 2500 ||
+      plan.totalReferenceMl.minimum !== 2000 ||
+      plan.foodWaterEstimate.center !== 0.25 ||
+      plan.foodWaterEstimate.maximum !== 0.3 ||
+      plan.foodWaterEstimate.minimum !== 0.2 ||
       plan.countedBeverages.length > 0 ||
       plan.proposedBeverages.length > 0 ||
       plan.strategies.length > 0 ||
