@@ -567,7 +567,7 @@ export function generateSupplementsPlan(input: Input): SupplementsPlanContract {
         action: recommendations.length === 0 ? "trial_candidate" : "review_later",
         confidence: lowB12 ? "medium" : "high",
         contraindications: [
-          "Si existe déficit confirmado, revisar la corrección con un profesional.",
+          "Si existe déficit confirmado, la corrección queda subordinada a su causa, absorción, medicación y analítica; T12 no automatiza la dosis.",
         ],
         doseReference: null,
         duration: null,
@@ -580,8 +580,7 @@ export function generateSupplementsPlan(input: Input): SupplementsPlanContract {
         interactions: [
           "Revisar absorción, medicación y analítica si el déficit está confirmado.",
         ],
-        metric:
-          "Analítica B12 cuando exista rango y seguimiento de síntomas por profesional.",
+        metric: "Valor actual de B12 con rango aportado y síntomas relevantes declarados.",
         purpose: "Prevención o revisión de carencia asociada a veganismo o valor bajo.",
         risks: ["No se automatiza dosis."],
         stopCondition:

@@ -132,6 +132,7 @@ describe("núcleo determinista de suplementos T12", () => {
       tier: "deficiency",
     });
     expect(result.recommendations[0]?.form).toContain("fortificados");
+    expect(JSON.stringify(result)).not.toMatch(/profesional/i);
   });
 
   it("incluye ácido fólico periconcepcional con 400 µg y nunca 5 mg", () => {
