@@ -109,6 +109,7 @@ type QuestionnaireAnswerValues = {
   habitualWaterMl?: number;
   hydrationAnchors?: string[];
   hydrationClimate?: "temperate" | "hot" | "cold" | "variable";
+  hydrationFluidRestriction?: boolean | "none" | "declared" | "unknown";
   hydrationReminders?: boolean;
   hydrationSweat?: "low" | "medium" | "high" | "unknown";
   labValues?: LabValueEntry[];

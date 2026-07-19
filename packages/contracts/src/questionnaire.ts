@@ -146,6 +146,9 @@ const QuestionnaireAnswersObjectSchema = z
       .optional(),
     hydrationAnchors: StringListSchema.optional(),
     hydrationClimate: z.enum(["temperate", "hot", "cold", "variable"]).optional(),
+    hydrationFluidRestriction: z
+      .union([z.boolean(), z.enum(["none", "declared", "unknown"])])
+      .optional(),
     hydrationReminders: z.boolean().optional(),
     hydrationSweat: z.enum(["low", "medium", "high", "unknown"]).optional(),
     labValues: z.array(LabValueEntrySchema).max(50).optional(),
@@ -851,6 +854,12 @@ const questions: PublicQuestion[] = [
     id: "hydrationClimate",
     kind: "single",
     label: "Clima habitual",
+  },
+  {
+    blockId: "hydration",
+    id: "hydrationFluidRestriction",
+    kind: "boolean",
+    label: "Tienes una restricción explícita de líquidos",
   },
   {
     blockId: "hydration",

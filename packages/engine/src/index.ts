@@ -1,4 +1,5 @@
 import {
+  HydrationPlanSchema,
   MobilityPlanSchema,
   TrainingPlanSchema,
   type ContextSnapshotInternal,
@@ -23,6 +24,8 @@ import {
 } from "./decimal.ts";
 import { generateMobilityPlan } from "./modules/mobility/index.ts";
 import { generateNutritionWeek } from "./modules/nutrition/index.ts";
+import { generateHydrationPlan } from "./modules/hydration/index.ts";
+import { detectClinicalContext } from "./clinical/index.ts";
 import type { GeneratedTrainingLoad } from "./modules/nutrition/index.ts";
 import { generateTrainingPlan } from "./modules/training/index.ts";
 
@@ -302,8 +305,11 @@ export async function sha256CanonicalJson(value: unknown): Promise<string> {
     .join("");
 }
 
-export const ENGINE_VERSION = "engine-v3" as const;
-export const SOURCE_MANIFEST_ID = "cb644399-1275-47de-86b6-195711946f66" as const;
+export const HISTORICAL_ENGINE_VERSION = "engine-v3" as const;
+export const ENGINE_VERSION = "engine-v4" as const;
+export const HISTORICAL_SOURCE_MANIFEST_ID =
+  "cb644399-1275-47de-86b6-195711946f66" as const;
+export const SOURCE_MANIFEST_ID = "f187e4cc-3149-4a55-8b80-e260f8d6d84f" as const;
 
 export type RuleRevision = Readonly<{
   evidenceRefs: readonly string[];
@@ -340,6 +346,8 @@ const ACSM_RESISTANCE_TRAINING_SOURCE_ID =
   "source:acsm-resistance-training-position-2026@1.0.0" as const;
 const INGRAM_STATIC_STRETCHING_SOURCE_ID =
   "source:ingram-static-stretching-meta-analysis-2025@1.0.0" as const;
+const EFSA_WATER_SOURCE_ID =
+  "source:efsa-dietary-reference-values-water-2010@1.0.0" as const;
 
 export const CORE_SOURCE_REVISIONS = [
   {
@@ -400,6 +408,25 @@ export const CORE_SOURCE_REVISIONS = [
     reviewedAt: "2026-07-19",
     status: "active",
     url: "https://doi.org/10.1007/s40279-024-02143-9",
+  },
+  {
+    applicability: [
+      "Valores de referencia de agua total para personas adultas, embarazo y lactancia; no sustituyen límites clínicos individuales.",
+    ],
+    citation:
+      "EFSA Panel on Dietetic Products, Nutrition, and Allergies. Scientific Opinion on Dietary Reference Values for water. EFSA Journal. 2010;8(3):1459.",
+    confidence: "moderate_high",
+    evidenceType: "public_health_guideline",
+    exclusions: [
+      "No establece límites de líquidos para enfermedad renal, cardiaca o hiponatremia.",
+      "No determina una pauta individual de bebidas ni electrolitos.",
+    ],
+    hierarchy: "guideline",
+    id: EFSA_WATER_SOURCE_ID,
+    population: "Personas adultas, embarazo y lactancia.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://doi.org/10.2903/j.efsa.2010.1459",
   },
 ] as const satisfies readonly ScientificSourceRevision[];
 
@@ -481,20 +508,46 @@ export const CORE_RULE_REVISIONS = [
     status: "active",
     version: "1.0.0",
   },
+  {
+    evidenceRefs: ["contract:t12-hydration-reference-v1", EFSA_WATER_SOURCE_ID],
+    id: "rule.hydration-reference@1.0.0",
+    kind: "mandatory",
+    reviewedAt: "2026-07-19",
+    ruleId: "rule.hydration-reference",
+    scope: ["hydration"],
+    status: "active",
+    version: "1.0.0",
+  },
+  {
+    evidenceRefs: ["contract:t12-clinical-selective-v1"],
+    id: "rule.clinical-selective@1.0.0",
+    kind: "conditional",
+    reviewedAt: "2026-07-19",
+    ruleId: "rule.clinical-selective",
+    scope: ["hydration", "nutrition", "training", "mobility", "supplements"],
+    status: "active",
+    version: "1.0.0",
+  },
 ] as const satisfies readonly RuleRevision[];
 
-export const CORE_RULE_SET_REVISION = {
+export const HISTORICAL_RULE_SET_REVISION = {
   id: "04edd58c-5fff-4f6b-85ad-472ec538885c",
-  ruleRevisionIds: CORE_RULE_REVISIONS.map(({ id }) => id),
+  ruleRevisionIds: CORE_RULE_REVISIONS.slice(0, -2).map(({ id }) => id),
   status: "active",
   version: "3.0.0",
+} as const;
+export const CORE_RULE_SET_REVISION = {
+  id: "d1bd58fd-54dc-4358-9242-43b1fdf20dc4",
+  ruleRevisionIds: CORE_RULE_REVISIONS.map(({ id }) => id),
+  status: "active",
+  version: "4.0.0",
 } as const;
 export const RULE_SET_REVISION_ID = CORE_RULE_SET_REVISION.id;
 
 export const CORE_SOURCE_MANIFEST = {
   id: SOURCE_MANIFEST_ID,
   sourceRevisionIds: CORE_SOURCE_REVISIONS.map(({ id }) => id),
-  version: "core-with-training-mobility-v1",
+  version: "core-with-training-mobility-hydration-v1",
 } as const;
 
 const ACTION_LEVELS = [
@@ -620,6 +673,37 @@ function provisionalModuleResult(
   generatedTrainingLoad: GeneratedTrainingLoad | null | undefined,
 ): PlanModuleResultInput {
   if (moduleChoice(module, context) === "requested") {
+    if (module === "hydration") {
+      try {
+        const plan = HydrationPlanSchema.parse(
+          generateHydrationPlan({ answers: context.answers }),
+        );
+        return {
+          confidence: plan.completeness === "complete" ? "high" : "medium",
+          module,
+          payload: { ...plan },
+          status: plan.completeness === "complete" ? "valid" : "provisional",
+          uncertainties: plan.uncertainties.map((uncertainty) => ({
+            ...uncertainty,
+            module,
+          })),
+        };
+      } catch {
+        return {
+          confidence: "unknown",
+          module,
+          payload: { requested: true, stage: "hydration_engine" },
+          status: "provisional",
+          uncertainties: [
+            {
+              code: "HYDRATION_ENGINE_UNAVAILABLE",
+              messageKey: "hydration.uncertainty.engine_unavailable",
+              module,
+            },
+          ],
+        };
+      }
+    }
     if (module === "nutrition" && nutritionCatalog !== undefined) {
       try {
         const week = generateNutritionWeek({
@@ -900,6 +984,29 @@ export async function runDeterministicEngine(
     },
     context: normativeContext(input.context),
   });
+  const hydrationResult = moduleResults.find(({ module }) => module === "hydration");
+  const clinical =
+    hydrationResult?.status === "not_requested"
+      ? null
+      : detectClinicalContext(input.context.answers);
+  const safetyFindings = clinical
+    ? [
+        ...new Map(
+          clinical.safetyFindings.map(
+            ({ actionLevel, code, evidenceRef, messageKey }) => [
+              code,
+              {
+                actionLevel,
+                code,
+                evidenceRef,
+                messageKey,
+                module: "hydration" as const,
+              },
+            ],
+          ),
+        ).values(),
+      ]
+    : [];
   const normativeOutput = {
     canonicalizationVersion: CONTEXT_CANONICALIZATION_VERSION,
     completeness,
@@ -907,7 +1014,7 @@ export async function runDeterministicEngine(
     inputHash,
     moduleResults,
     ruleSetRevisionId: RULE_SET_REVISION_ID,
-    safetyFindings: [],
+    safetyFindings,
     sourceManifestId: SOURCE_MANIFEST_ID,
     validation,
     validationStatus,
@@ -920,5 +1027,6 @@ export async function runDeterministicEngine(
 }
 
 export * from "./modules/nutrition/index.ts";
+export * from "./modules/hydration/index.ts";
 export * from "./modules/mobility/index.ts";
 export * from "./modules/training/index.ts";

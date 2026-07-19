@@ -51,6 +51,7 @@ describe("reconciliación de reglas", () => {
       "source:who-physical-activity-guidelines-2020@1.0.0",
       "source:acsm-resistance-training-position-2026@1.0.0",
       "source:ingram-static-stretching-meta-analysis-2025@1.0.0",
+      "source:efsa-dietary-reference-values-water-2010@1.0.0",
     ];
 
     expect(CORE_SOURCE_REVISIONS.map(({ id }) => id)).toEqual(expectedSourceIds);
@@ -121,11 +122,11 @@ describe("reconciliación de reglas", () => {
   });
 
   it("versiona el conjunto activo y exige evidencia trazable por revisión", () => {
-    expect(ENGINE_VERSION).toBe("engine-v3");
+    expect(ENGINE_VERSION).toBe("engine-v4");
     expect(CORE_RULE_SET_REVISION).toMatchObject({
-      id: "04edd58c-5fff-4f6b-85ad-472ec538885c",
+      id: "d1bd58fd-54dc-4358-9242-43b1fdf20dc4",
       status: "active",
-      version: "3.0.0",
+      version: "4.0.0",
     });
     expect(CORE_RULE_SET_REVISION.ruleRevisionIds).toEqual(
       CORE_RULE_REVISIONS.map(({ id }) => id),
@@ -231,7 +232,7 @@ describe("pipeline determinista T8", () => {
     ).toMatchObject({ confidence: "unknown", status: "provisional" });
     expect(
       result.moduleResults.find(({ module }) => module === "hydration"),
-    ).toMatchObject({ confidence: "unknown", status: "provisional" });
+    ).toMatchObject({ confidence: "high", status: "valid" });
     expect(
       result.moduleResults.find(({ module }) => module === "training"),
     ).toMatchObject({
