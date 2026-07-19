@@ -87,12 +87,13 @@ describe("núcleo determinista de suplementos T12", () => {
     for (const pmid of ["40056718", "34559859"]) {
       const source = sourceFor(pmid);
       expect(source).toMatchObject({
-        evidenceType: "systematic_review_meta_analysis_meta_regression",
+        evidenceType: "systematic_review_meta_analysis",
         hierarchy: "systematic_review_meta_analysis",
       });
       expect(
         `${source?.applicability.join(" ")} ${source?.citation} ${source?.population}`,
       ).toMatch(/sueño|sleep/i);
+      expect(source?.citation).toMatch(/meta-analysis/i);
     }
   });
 

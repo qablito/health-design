@@ -336,6 +336,7 @@ export type ScientificSourceRevision = Readonly<{
     | "position_stand_overview_of_reviews"
     | "public_health_guideline"
     | "systematic_review"
+    | "systematic_review_meta_analysis"
     | "systematic_review_meta_analysis_meta_regression";
   exclusions: readonly string[];
   hierarchy: "guideline" | "systematic_review" | "systematic_review_meta_analysis";
@@ -641,9 +642,10 @@ export const CORE_SOURCE_REVISIONS = [
     applicability: [
       "Opciones experimentales de L-teanina para calidad y funcionamiento del sueño.",
     ],
-    citation: "PubMed-indexed systematic review of L-theanine and sleep outcomes.",
+    citation:
+      "PubMed-indexed systematic review and meta-analysis of L-theanine and sleep outcomes.",
     confidence: "low",
-    evidenceType: "systematic_review_meta_analysis_meta_regression",
+    evidenceType: "systematic_review_meta_analysis",
     exclusions: ["No pauta automática; beneficio pequeño e incierto."],
     hierarchy: "systematic_review_meta_analysis",
     id: PUBMED_THEANINE_SOURCE_ID,
@@ -657,9 +659,9 @@ export const CORE_SOURCE_REVISIONS = [
       "Opciones experimentales de ashwagandha para calidad y funcionamiento del sueño.",
     ],
     citation:
-      "PubMed-indexed systematic review of Withania somnifera and sleep outcomes.",
+      "PubMed-indexed systematic review and meta-analysis of Withania somnifera and sleep outcomes.",
     confidence: "low",
-    evidenceType: "systematic_review_meta_analysis_meta_regression",
+    evidenceType: "systematic_review_meta_analysis",
     exclusions: [
       "No pauta automática; beneficio pequeño e incierto y posibles riesgos clínicos.",
     ],
