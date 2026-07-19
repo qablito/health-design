@@ -137,6 +137,7 @@ incertidumbre y permite snapshot provisional.
 | Operación | Propósito | Resultado |
 |---|---|---|
 | `POST /v1/profiles/{id}/plans/generate` | ejecuta pipeline determinista | crea `PlanVersion:draft` y validación |
+| `GET /v1/profiles/{id}/plans/current` | descubre el plan único del perfil | devuelve historial versionado; `404` solo cuando el perfil accesible todavía no tiene plan |
 | `GET /v1/plans/{plan_id}/versions` | historial | incluye estado y completitud |
 | `GET /v1/plans/{plan_id}/versions/{version_id}` | consulta activa, borrador o archivada | panel por día/módulo |
 | `POST /v1/plans/{plan_id}/versions/{version_id}/activate` | activa el primer borrador válido | activación inicial atómica |
