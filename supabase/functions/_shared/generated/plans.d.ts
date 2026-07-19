@@ -118,6 +118,7 @@ export declare const ContextSnapshotInternalSchema: z.ZodObject<{
         currentSupplements: z.ZodOptional<z.ZodArray<z.ZodObject<{
             name: z.ZodString;
             note: z.ZodOptional<z.ZodString>;
+            aempsId: z.ZodOptional<z.ZodString>;
             dose: z.ZodOptional<z.ZodString>;
             frequency: z.ZodOptional<z.ZodString>;
             route: z.ZodOptional<z.ZodString>;
@@ -211,6 +212,7 @@ export declare const ContextSnapshotInternalSchema: z.ZodObject<{
         medications: z.ZodOptional<z.ZodArray<z.ZodObject<{
             name: z.ZodString;
             note: z.ZodOptional<z.ZodString>;
+            aempsId: z.ZodOptional<z.ZodString>;
             dose: z.ZodOptional<z.ZodString>;
             frequency: z.ZodOptional<z.ZodString>;
             route: z.ZodOptional<z.ZodString>;

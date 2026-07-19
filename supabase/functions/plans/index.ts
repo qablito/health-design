@@ -1,11 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
-import { runDeterministicEngine } from "@health-design/engine";
+import { runDeterministicEngine, sha256CanonicalJson } from "@health-design/engine";
 
 import {
   handleQuestionnaire,
   type QuestionnaireDependencies,
 } from "./questionnaire.ts";
 import { handlePlanLifecycle, type PlanLifecycleDependencies } from "./lifecycle.ts";
+import { hydrateActiveClinicalCatalog } from "./clinical-catalog.ts";
+import { hydrateCanonicalMedicationIdentities } from "./medication-identities.ts";
 import { hydrateEffectiveNutritionCatalog } from "./nutrition-catalog.ts";
 
 function secret(name: string, fallback?: string): string {
@@ -70,17 +72,43 @@ function dependencies(): QuestionnaireDependencies & PlanLifecycleDependencies {
       return { data, error };
     },
     runEngine: async (input) => {
-      const result: unknown = await serviceClient.rpc(
-        "internal_nutrition_effective_generator_catalog" as never,
+      const requestedAempsIds = new Set(
+        (input.context.answers.medications ?? []).flatMap(({ aempsId }) =>
+          aempsId ? [aempsId] : [],
+        ),
       );
-      const { data, error } = result as {
-        data: unknown;
-        error: { code?: string; message?: string } | null;
+      const rpcData = async (
+        name: string,
+        args?: Record<string, unknown>,
+      ): Promise<unknown> => {
+        const result: unknown = await serviceClient.rpc(name as never, args as never);
+        const { data, error } = result as {
+          data: unknown;
+          error: { code?: string; message?: string } | null;
+        };
+        if (error) throw new Error(`${name}_unavailable`);
+        return data;
       };
-      if (error) throw new Error("effective_nutrition_catalog_unavailable");
+      const [nutritionData, clinicalData, medicationData] = await Promise.all([
+        rpcData("internal_nutrition_effective_generator_catalog"),
+        rpcData("internal_clinical_rule_catalog_active"),
+        requestedAempsIds.size === 0
+          ? Promise.resolve([])
+          : rpcData("internal_clinical_medication_identities_resolve", {
+              p_aemps_ids: [...requestedAempsIds],
+            }),
+      ]);
       return runDeterministicEngine({
         ...input,
-        nutritionCatalog: hydrateEffectiveNutritionCatalog(data),
+        canonicalMedicationIdentities: hydrateCanonicalMedicationIdentities(
+          medicationData,
+          requestedAempsIds,
+        ),
+        clinicalCatalogDescriptor: await hydrateActiveClinicalCatalog(
+          clinicalData,
+          sha256CanonicalJson,
+        ),
+        nutritionCatalog: hydrateEffectiveNutritionCatalog(nutritionData),
       });
     },
   };

@@ -26,6 +26,9 @@ export interface NutritionCatalogDependencies {
 }
 
 type Route =
+  | { kind: "clinical-revision-activate"; revisionId: string }
+  | { kind: "clinical-revision-stage" }
+  | { kind: "clinical-revision-validate"; revisionId: string }
   | { kind: "imports-stage" }
   | { kind: "review-open" }
   | { kind: "reviews-list" }
@@ -96,6 +99,29 @@ function errorResponse(
 
 function parseRoute(url: URL, method: string): Route | null {
   if (url.search || url.hash) return null;
+  const clinicalMarker = "/v1/admin/clinical/";
+  const clinicalMarkerIndex = url.pathname.lastIndexOf(clinicalMarker);
+  if (clinicalMarkerIndex >= 0) {
+    const path = url.pathname.slice(clinicalMarkerIndex);
+    if (path === "/v1/admin/clinical/revisions" && method === "POST") {
+      return { kind: "clinical-revision-stage" };
+    }
+    const revision =
+      /^\/v1\/admin\/clinical\/revisions\/([0-9a-f-]{36})\/(validate|activate)$/i.exec(
+        path,
+      );
+    if (
+      revision?.[1] &&
+      revision[2] &&
+      UUID_PATTERN.test(revision[1]) &&
+      method === "POST"
+    ) {
+      return revision[2] === "validate"
+        ? { kind: "clinical-revision-validate", revisionId: revision[1] }
+        : { kind: "clinical-revision-activate", revisionId: revision[1] };
+    }
+    return null;
+  }
   const marker = "/v1/admin/nutrition/";
   const markerIndex = url.pathname.lastIndexOf(marker);
   if (markerIndex < 0) return null;
@@ -258,7 +284,7 @@ function mapRpcError(error: { code?: string; message?: string }): CatalogHttpErr
   if (error.message === "nutrition_review_open") {
     return new CatalogHttpError("REVIEW_OPEN", 409);
   }
-  if (error.message === "idempotency_key_reused") {
+  if (error.message === "idempotency_key_reused" || error.code === "23505") {
     return new CatalogHttpError("DOMAIN_CONSTRAINT", 409);
   }
   if (error.code === "22023" || error.code === "55000" || error.code === "PT409") {
@@ -341,6 +367,57 @@ export async function handleNutritionCatalog(
 
     const requestId = mutationRequestId(request);
     const payload = await readJson(request);
+    if (route.kind === "clinical-revision-stage") {
+      const body = object(payload);
+      if (
+        Object.keys(body).length !== 3 ||
+        typeof body.clinicalCatalogVersion !== "string" ||
+        !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(body.clinicalCatalogVersion)
+      ) {
+        throw new CatalogHttpError("INVALID_INPUT", 422);
+      }
+      const data = await callRpc(dependencies, "internal_clinical_rule_catalog_stage", {
+        ...authArgs,
+        p_clinical_catalog_version: body.clinicalCatalogVersion,
+        p_request_id: requestId,
+        p_rule_set_revision_id: uuid(body.ruleSetRevisionId),
+        p_source_manifest_id: uuid(body.sourceManifestId),
+      });
+      return jsonResponse(data, 201, cors.headers);
+    }
+    if (route.kind === "clinical-revision-validate") {
+      const body = object(payload);
+      if (Object.keys(body).length !== 1) {
+        throw new CatalogHttpError("INVALID_INPUT", 422);
+      }
+      const data = await callRpc(
+        dependencies,
+        "internal_clinical_rule_catalog_validate",
+        {
+          ...authArgs,
+          p_justification: boundedText(body.justification, 2_000),
+          p_request_id: requestId,
+          p_revision_id: route.revisionId,
+        },
+      );
+      return jsonResponse(data, 200, cors.headers);
+    }
+    if (route.kind === "clinical-revision-activate") {
+      const body = object(payload);
+      if (Object.keys(body).length !== 0) {
+        throw new CatalogHttpError("INVALID_INPUT", 422);
+      }
+      const data = await callRpc(
+        dependencies,
+        "internal_clinical_rule_catalog_activate",
+        {
+          ...authArgs,
+          p_request_id: requestId,
+          p_revision_id: route.revisionId,
+        },
+      );
+      return jsonResponse(data, 200, cors.headers);
+    }
     if (route.kind === "imports-stage") {
       const data = await callRpc(dependencies, "internal_nutrition_stage_batch", {
         ...authArgs,
