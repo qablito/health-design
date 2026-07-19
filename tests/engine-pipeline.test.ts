@@ -86,6 +86,21 @@ describe("reconciliación de reglas", () => {
       version: "core-with-contextual-wellness-v1",
     });
     expect(CORE_SOURCE_MANIFEST.sourceRevisionIds).toEqual(expectedSourceIds);
+
+    const sleepSource = CORE_SOURCE_REVISIONS.find(
+      ({ id }) => id === "source:aasm-srs-adult-sleep-duration-consensus-2015@1.0.0",
+    );
+    expect(sleepSource).toMatchObject({
+      population:
+        "Personas adultas: AASM/SRS cubre 18–60 años y National Sleep Foundation diferencia 18–64 y 65 o más.",
+      url: "https://www.sleephealthjournal.org/article/S2352-7218(15)00160-6/fulltext",
+    });
+    expect(sleepSource?.applicability).toEqual([
+      "AASM/SRS: al menos 7 horas con regularidad para personas adultas de 18 a 60 años.",
+      "National Sleep Foundation: 7–9 horas entre 18 y 64 años, 7–8 desde 65 y 9 horas todavía apropiadas en ciertos contextos.",
+    ]);
+    expect(sleepSource?.citation).toContain("National Sleep Foundation");
+
     expect(
       CORE_SOURCE_REVISIONS.every(
         ({

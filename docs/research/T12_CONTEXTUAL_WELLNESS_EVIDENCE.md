@@ -27,7 +27,7 @@ El orden de uso es:
 | Área | Fuente principal | Tipo | Decisión permitida |
 |---|---|---|---|
 | Agua total | EFSA 2010[^efsa-water] | opinión científica de referencia poblacional | referencias de agua total de 2,0 L/día para mujeres, 2,5 L/día para hombres, 2,3 L/día en embarazo y 2,7 L/día en lactancia |
-| Sueño | AASM/SRS 2015[^aasm] | consenso multidisciplinar | ventana orientativa de 7–9 horas, sin declarar patológica una duración mayor por sí sola |
+| Sueño | AASM/SRS 2015 y NSF 2015/2023[^aasm][^nsf-sleep] | consensos multidisciplinares | al menos 7 horas entre 18–60 años; 7–9 horas recomendadas entre 18–64 y 7–8 a partir de 65, con 9 horas todavía apropiadas en ciertos contextos |
 | B12, magnesio y omega-3 | NIH ODS[^b12][^magnesium][^omega3] | fichas técnicas públicas con revisión de evidencia e interacciones | food-first, carencia/contexto, riesgos e interacciones; ninguna dosis automática por un único dato |
 | Ácido fólico | CDC 2025[^folate] | recomendación de salud pública | 400 µg/día en contexto preconcepcional general, sin escalar automáticamente a dosis altas |
 | Cafeína | EFSA 2015[^caffeine] | opinión científica de seguridad | límite contextual para adulto sano; nunca compensar sueño pobre ni usar polvo puro |
@@ -77,12 +77,18 @@ segura; no afirma corregir hematocrito ni viscosidad sanguínea.
 
 ## 4. Sueño y descanso
 
-El consenso AASM/SRS considera apropiadas 7–9 horas para la salud adulta y
-recomienda al menos 7 horas con regularidad. No fijó un límite superior
-universal: dormir más de 9 horas puede ser apropiado en ciertos contextos y no
-se trata como patología por sí solo.[^aasm]
+El consenso AASM/SRS recomienda al menos 7 horas con regularidad para personas
+adultas de 18–60 años y no fijó un límite superior universal: dormir más de 9
+horas puede ser apropiado en ciertos contextos y no se trata como patología por
+sí solo.[^aasm] El panel de la National Sleep Foundation recomienda 7–9 horas
+entre 18–64 años y 7–8 a partir de 65; su actualización mantiene que 9 horas
+pueden ser apropiadas en algunas personas mayores.[^nsf-sleep]
 
-T12 usa 7–9 horas como ventana orientativa y mantiene como datos críticos:
+T12 usa 7–9 horas como ventana operativa orientativa común, no como
+diagnóstico. La base interna conserva la distinción de que, a partir de 65
+años, la recomendación específica es 7–8 y 9 horas pueden ser apropiadas según
+el contexto; la salida no convierte ninguno de esos límites poblacionales en
+una conclusión clínica individual. Se mantienen como datos críticos:
 
 - promedio de horas;
 - calidad percibida;
@@ -193,6 +199,12 @@ medicación, testosterona, anabolizantes recreativos, SARMs o péptidos.
     for a Healthy Adult: A Joint Consensus Statement of the AASM and SRS*.
     2015. [Consenso](https://aasm.org/resources/pdf/adultsleepdurationconsensus.pdf)
     y [metodología](https://aasm.org/resources/pdf/adultsleepdurationmethods.pdf).
+
+[^nsf-sleep]: Hirshkowitz M, Whiton K, Albert SM, et al. *National Sleep
+    Foundation's updated sleep duration recommendations: final report*. Sleep
+    Health. 2015;1(4):233–243. DOI `10.1016/j.sleh.2015.10.004`.
+    [Artículo](https://www.sleephealthjournal.org/article/S2352-7218(15)00160-6/fulltext)
+    y [actualización para personas mayores](https://www.sleephealthjournal.org/article/S2352-7218(23)00196-1/fulltext).
 
 [^b12]: NIH Office of Dietary Supplements. *Vitamin B12 Fact Sheet for Health
     Professionals*. [Ficha oficial](https://ods.od.nih.gov/factsheets/VitaminB12-HealthProfessional/).

@@ -471,10 +471,11 @@ export const CORE_SOURCE_REVISIONS = [
   },
   {
     applicability: [
-      "Ventana poblacional de sueño para personas adultas y su interpretación contextual.",
+      "AASM/SRS: al menos 7 horas con regularidad para personas adultas de 18 a 60 años.",
+      "National Sleep Foundation: 7–9 horas entre 18 y 64 años, 7–8 desde 65 y 9 horas todavía apropiadas en ciertos contextos.",
     ],
     citation:
-      "Watson NF, Badr MS, Belenky G, et al. Recommended Amount of Sleep for a Healthy Adult: A Joint Consensus Statement of the American Academy of Sleep Medicine and Sleep Research Society. Sleep. 2015;38(6):843-844.",
+      "Watson NF, Badr MS, Belenky G, et al. Recommended Amount of Sleep for a Healthy Adult. Sleep. 2015;38(6):843-844; Hirshkowitz M, Whiton K, Albert SM, et al. National Sleep Foundation's updated sleep duration recommendations. Sleep Health. 2015;1(4):233-243.",
     confidence: "moderate_high",
     evidenceType: "consensus_statement",
     exclusions: [
@@ -483,10 +484,11 @@ export const CORE_SOURCE_REVISIONS = [
     ],
     hierarchy: "guideline",
     id: AASM_SRS_SLEEP_SOURCE_ID,
-    population: "Personas adultas sanas; consenso AASM/SRS.",
+    population:
+      "Personas adultas: AASM/SRS cubre 18–60 años y National Sleep Foundation diferencia 18–64 y 65 o más.",
     reviewedAt: "2026-07-19",
     status: "active",
-    url: "https://aasm.org/resources/pdf/pressroom/adult-sleep-duration-consensus.pdf",
+    url: "https://www.sleephealthjournal.org/article/S2352-7218(15)00160-6/fulltext",
   },
   {
     applicability: [
