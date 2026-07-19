@@ -16,7 +16,12 @@ import {
 } from "@health-design/domain";
 
 import { accessClient, type ProfileAccessSummary } from "../access/access-client";
-import { QuestionnaireField, type QuestionnaireQuestion } from "./QuestionnaireField";
+import {
+  QuestionnaireField,
+  normalizeQuestionnaireMultiAnswer,
+  validateNumericAnswer,
+  type QuestionnaireQuestion,
+} from "./QuestionnaireField";
 import { QuestionnaireApiError, questionnaireClient } from "./questionnaire-client";
 
 import "../access/access.css";
@@ -29,6 +34,9 @@ const blockTitles = Object.fromEntries(
 ) as Record<QuestionnaireBlockId, string>;
 
 function friendlyError(error: unknown): string {
+  if (error instanceof Error && error.name === "ZodError") {
+    return "Hay una combinación de respuestas incompatible. Revisa el módulo, el modo de entrenamiento y sus opciones antes de continuar.";
+  }
   if (error instanceof QuestionnaireApiError) {
     if (error.code === "VERSION_CONFLICT") {
       return "El borrador cambió en otro dispositivo. Recarga antes de continuar.";
@@ -81,6 +89,19 @@ function displayValue(value: unknown, question: QuestionnaireQuestion): string {
   return option?.label ?? String(value);
 }
 
+function normalizeAnswers(answers: QuestionnaireAnswers): QuestionnaireAnswers {
+  const next = { ...answers } as Record<string, unknown>;
+  for (const id of [
+    "generatedTrainingEquipment",
+    "generatedTrainingStyles",
+    "ownTrainingAnchors",
+    "ownTrainingTypes",
+  ]) {
+    if (id in next) next[id] = normalizeQuestionnaireMultiAnswer(id, next[id]);
+  }
+  return next;
+}
+
 export function QuestionnaireApp() {
   const [answers, setAnswers] = useState<QuestionnaireAnswers>({ country: "ES" });
   const [busy, setBusy] = useState(true);
@@ -92,6 +113,7 @@ export function QuestionnaireApp() {
   );
   const [currentBlockId, setCurrentBlockId] = useState<QuestionnaireBlockId>("core");
   const [error, setError] = useState<string>();
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [profiles, setProfiles] = useState<ProfileAccessSummary[]>([]);
   const [profileId, setProfileId] = useState<string>();
   const [savedAt, setSavedAt] = useState<string>();
@@ -145,13 +167,15 @@ export function QuestionnaireApp() {
     setVersion(0);
     setBusy(true);
     setError(undefined);
+    setFieldErrors({});
     questionnaireClient
       .getDraft(profileId)
       .then((draft) => {
         if (!active) return;
         if (draft) {
-          persistedAnswers.current = draft.answers;
-          setAnswers(draft.answers);
+          const normalizedAnswers = normalizeAnswers(draft.answers);
+          persistedAnswers.current = normalizedAnswers;
+          setAnswers(normalizedAnswers);
           setCompleteness(draft.completeness);
           setConfirmedBlockIds(draft.confirmedBlockIds);
           setCurrentBlockId(draft.currentBlockId);
@@ -197,6 +221,14 @@ export function QuestionnaireApp() {
 
   function updateAnswer(id: string, value: unknown) {
     pendingKey.current = undefined;
+    const fieldError = validateNumericAnswer(id, value);
+    setFieldErrors((current) => {
+      if (!fieldError && !(id in current)) return current;
+      const next = { ...current };
+      if (fieldError) next[id] = fieldError;
+      else delete next[id];
+      return next;
+    });
     setAnswers((current) => {
       const next = { ...current } as Record<string, unknown>;
       if (value === undefined) delete next[id];
@@ -219,6 +251,13 @@ export function QuestionnaireApp() {
 
   async function saveAndContinue() {
     if (!profileId) return;
+    const visibleFieldErrors = Object.keys(fieldErrors).filter((id) =>
+      visibleQuestionIds.has(id),
+    );
+    if (visibleFieldErrors.length) {
+      setError("Corrige los campos marcados antes de continuar.");
+      return;
+    }
     setBusy(true);
     setError(undefined);
     const nextBlockId =
@@ -236,7 +275,10 @@ export function QuestionnaireApp() {
       )) {
         const value = answers[question.id as keyof QuestionnaireAnswers];
         if (visibleQuestionIds.has(question.id) && value !== undefined) {
-          nextAnswers[question.id] = value;
+          nextAnswers[question.id] = normalizeQuestionnaireMultiAnswer(
+            question.id,
+            value,
+          );
         } else {
           delete nextAnswers[question.id];
         }
@@ -368,11 +410,18 @@ export function QuestionnaireApp() {
       {status === "submitted" ? (
         <div className="message success-message" role="status">
           Contexto confirmado como{" "}
-          {completeness === "complete" ? "completo" : "provisional"}. La generación del
-          plan ya puede generarse desde alimentación.
+          {completeness === "complete" ? "completo" : "provisional"}. Ya puedes generar
+          los módulos seleccionados.
           <a className="text-button" href="/nutrition">
             Abrir alimentación
           </a>
+          {answers.activeModules?.some(
+            (module) => module === "training" || module === "mobility",
+          ) ? (
+            <a className="text-button" href="/training">
+              Abrir movimiento
+            </a>
+          ) : null}
         </div>
       ) : null}
 
@@ -403,6 +452,7 @@ export function QuestionnaireApp() {
               <div className="question-grid">
                 {questions.map((question) => (
                   <QuestionnaireField
+                    error={fieldErrors[question.id]}
                     key={`${profileId}:${question.id}`}
                     onChange={(value) => updateAnswer(question.id, value)}
                     question={question}

@@ -4,6 +4,8 @@ import type { ContextSnapshotInternal } from "@health-design/contracts";
 import {
   CORE_RULE_REVISIONS,
   CORE_RULE_SET_REVISION,
+  CORE_SOURCE_MANIFEST,
+  CORE_SOURCE_REVISIONS,
   ENGINE_VERSION,
   resolveChoice,
   runDeterministicEngine,
@@ -44,11 +46,86 @@ const context: ContextSnapshotInternal = {
 };
 
 describe("reconciliación de reglas", () => {
+  it("versiona las fuentes científicas T11 y solo referencia revisiones registradas", () => {
+    const expectedSourceIds = [
+      "source:who-physical-activity-guidelines-2020@1.0.0",
+      "source:acsm-resistance-training-position-2026@1.0.0",
+      "source:ingram-static-stretching-meta-analysis-2025@1.0.0",
+    ];
+
+    expect(CORE_SOURCE_REVISIONS.map(({ id }) => id)).toEqual(expectedSourceIds);
+    expect(CORE_SOURCE_MANIFEST.sourceRevisionIds).toEqual(expectedSourceIds);
+    expect(
+      CORE_SOURCE_REVISIONS.every(
+        ({
+          applicability,
+          citation,
+          exclusions,
+          evidenceType,
+          hierarchy,
+          population,
+          reviewedAt,
+          status,
+          url,
+        }) =>
+          applicability.length > 0 &&
+          citation.length > 0 &&
+          exclusions.length > 0 &&
+          evidenceType.length > 0 &&
+          hierarchy.length > 0 &&
+          population.length > 0 &&
+          reviewedAt === "2026-07-19" &&
+          status === "active" &&
+          URL.canParse(url),
+      ),
+    ).toBe(true);
+
+    const registeredSourceIds = new Set(expectedSourceIds);
+    const t11Rules = CORE_RULE_REVISIONS.filter(({ ruleId }) =>
+      [
+        "rule.training-generated-block",
+        "rule.training-declared-limitations",
+        "rule.mobility-modular-duration",
+      ].includes(ruleId),
+    );
+    expect(
+      t11Rules
+        .flatMap(({ evidenceRefs }) => evidenceRefs)
+        .filter((reference) => reference.startsWith("source:"))
+        .every((reference) => registeredSourceIds.has(reference)),
+    ).toBe(true);
+
+    expect(
+      t11Rules.find(({ ruleId }) => ruleId === "rule.training-generated-block")
+        ?.evidenceRefs,
+    ).toEqual(
+      expect.arrayContaining([
+        "contract:t11-generated-four-week-block-v1",
+        expectedSourceIds[0],
+        expectedSourceIds[1],
+      ]),
+    );
+    expect(
+      t11Rules.find(({ ruleId }) => ruleId === "rule.training-declared-limitations")
+        ?.evidenceRefs,
+    ).toEqual(["contract:t11-declared-limitations-v1"]);
+    expect(
+      t11Rules.find(({ ruleId }) => ruleId === "rule.mobility-modular-duration")
+        ?.evidenceRefs,
+    ).toEqual(
+      expect.arrayContaining([
+        "contract:t11-mobility-modular-duration-v1",
+        expectedSourceIds[2],
+      ]),
+    );
+  });
+
   it("versiona el conjunto activo y exige evidencia trazable por revisión", () => {
+    expect(ENGINE_VERSION).toBe("engine-v3");
     expect(CORE_RULE_SET_REVISION).toMatchObject({
-      id: "8f1d57b0-0dc2-4cd2-aef9-2dc0b31bc922",
+      id: "04edd58c-5fff-4f6b-85ad-472ec538885c",
       status: "active",
-      version: "2.0.0",
+      version: "3.0.0",
     });
     expect(CORE_RULE_SET_REVISION.ruleRevisionIds).toEqual(
       CORE_RULE_REVISIONS.map(({ id }) => id),
@@ -62,6 +139,13 @@ describe("reconciliación de reglas", () => {
           version === "1.0.0",
       ),
     ).toBe(true);
+    expect(CORE_RULE_SET_REVISION.ruleRevisionIds).toEqual(
+      expect.arrayContaining([
+        "rule.training-generated-block@1.0.0",
+        "rule.training-declared-limitations@1.0.0",
+        "rule.mobility-modular-duration@1.0.0",
+      ]),
+    );
   });
 
   it("una preferencia no puede reabrir una opción excluida por una obligatoria", () => {

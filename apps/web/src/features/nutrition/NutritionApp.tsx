@@ -221,6 +221,9 @@ export function NutritionApp() {
           <a className="text-button" href="/questionnaire">
             Revisar cuestionario
           </a>
+          <a className="text-button" href="/training">
+            Ver movimiento
+          </a>
         </div>
       </header>
 

@@ -114,6 +114,26 @@ async function mockQuestionnaire(page: Page) {
   return { failNextSave: () => (failNextSave = true) };
 }
 
+async function openTrainingSection(page: Page) {
+  await installSession(page);
+  await mockQuestionnaire(page);
+  await page.goto("/questionnaire");
+  await page.getByLabel("Edad").fill("35");
+  await page.getByLabel("Sexo fisiológico").selectOption("male");
+  await page.getByLabel("Altura (cm)").fill("175");
+  await page.getByLabel("Peso (kg)").fill("80");
+  await page.getByLabel("Actividad cotidiana").selectOption("moderate");
+  await page.getByLabel("Horario habitual").selectOption("regular");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByLabel("Objetivo principal").selectOption("performance_strength");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByLabel("Entrenamiento").check();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page
+    .getByLabel("Relación actual con el entrenamiento")
+    .selectOption("generated");
+}
+
 test("reanuda, ramifica, edita el resumen y no persiste respuestas clínicas", async ({
   page,
 }) => {
@@ -196,6 +216,44 @@ test("reanuda, ramifica, edita el resumen y no persiste respuestas clínicas", a
     return { cacheNames, databases, local, url: location.href };
   });
   expect(JSON.stringify(leaked)).not.toContain("alimento-secreto-e2e");
+});
+
+test("mantiene excluyentes las opciones sin material y sin preferencia", async ({
+  page,
+}) => {
+  await openTrainingSection(page);
+
+  await page.getByLabel("Sin material").check();
+  await page.getByLabel("Bandas o mancuernas").check();
+  await expect(page.getByLabel("Sin material")).not.toBeChecked();
+  await expect(page.getByLabel("Bandas o mancuernas")).toBeChecked();
+
+  await page.getByLabel("Sin preferencia").check();
+  await page.getByLabel("Pesas orientadas a fuerza").check();
+  await expect(page.getByLabel("Sin preferencia")).not.toBeChecked();
+  await expect(page.getByLabel("Pesas orientadas a fuerza")).toBeChecked();
+});
+
+test("valida los números en el campo y antes de guardar", async ({ page }) => {
+  await installSession(page);
+  await mockQuestionnaire(page);
+  await page.goto("/questionnaire");
+
+  const age = page.getByLabel("Edad");
+  await expect(age).toHaveAttribute("min", "18");
+  await expect(age).toHaveAttribute("max", "120");
+  await expect(age).toHaveAttribute("step", "1");
+  await age.fill("17");
+  await expect(age).toHaveAttribute("aria-invalid", "true");
+  const describedBy = await age.getAttribute("aria-describedby");
+  expect(describedBy).toBeTruthy();
+  await expect(page.locator(`#${describedBy}`)).toContainText("entre 18 y 120");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await expect(page.getByRole("heading", { name: "Objetivos" })).toHaveCount(0);
+
+  await age.fill("35");
+  await expect(age).toHaveAttribute("aria-invalid", "false");
+  await expect(age).not.toHaveAttribute("aria-describedby");
 });
 
 test("un fallo de red conserva el cambio solo en memoria y recarga lo remoto", async ({

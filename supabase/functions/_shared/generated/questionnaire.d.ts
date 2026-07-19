@@ -80,9 +80,31 @@ export declare const QuestionnaireAnswersSchema: z.ZodObject<{
     }>>;
     excludedFoods: z.ZodOptional<z.ZodArray<z.ZodString>>;
     generatedTrainingDaysPerWeek: z.ZodOptional<z.ZodNumber>;
-    generatedTrainingEquipment: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    generatedTrainingEquipment: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+        none: "none";
+        home_basic: "home_basic";
+        full_gym: "full_gym";
+    }>>>;
+    generatedTrainingExperience: z.ZodOptional<z.ZodEnum<{
+        advanced: "advanced";
+        beginner: "beginner";
+        intermediate: "intermediate";
+    }>>;
+    generatedTrainingOtherStyle: z.ZodOptional<z.ZodString>;
     generatedTrainingSessionMinutes: z.ZodOptional<z.ZodNumber>;
-    generatedTrainingStyles: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    generatedTrainingStyles: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+        other: "other";
+        bodyweight: "bodyweight";
+        endurance: "endurance";
+        functional_hiit: "functional_hiit";
+        pilates: "pilates";
+        sport_preparation: "sport_preparation";
+        hypertrophy: "hypertrophy";
+        strength: "strength";
+        yoga: "yoga";
+        strength_hypertrophy: "strength_hypertrophy";
+        no_preference: "no_preference";
+    }>>>;
     hasConditions: z.ZodOptional<z.ZodBoolean>;
     hasCurrentSupplements: z.ZodOptional<z.ZodBoolean>;
     hasLabValues: z.ZodOptional<z.ZodBoolean>;
@@ -140,7 +162,21 @@ export declare const QuestionnaireAnswersSchema: z.ZodObject<{
         peri: "peri";
         post: "post";
     }>>;
-    mobilityAreas: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    mobilityAreas: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+        hips: "hips";
+        knees: "knees";
+        ankles: "ankles";
+        shoulders: "shoulders";
+        neck: "neck";
+        spine: "spine";
+    }>>>;
+    mobilityAnchors: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+        evening: "evening";
+        after_training: "after_training";
+        before_training: "before_training";
+        daily_break: "daily_break";
+        morning: "morning";
+    }>>>;
     mobilityDiscomfortDetails: z.ZodOptional<z.ZodArray<z.ZodString>>;
     mobilityDiscomfortStatus: z.ZodOptional<z.ZodEnum<{
         unknown: "unknown";
@@ -193,6 +229,14 @@ export declare const QuestionnaireAnswersSchema: z.ZodObject<{
         balanced: "balanced";
     }>>;
     ownTrainingDaysPerWeek: z.ZodOptional<z.ZodNumber>;
+    ownTrainingAnchors: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+        midday: "midday";
+        afternoon: "afternoon";
+        evening: "evening";
+        variable: "variable";
+        morning: "morning";
+        early_morning: "early_morning";
+    }>>>;
     ownTrainingIntensity: z.ZodOptional<z.ZodEnum<{
         moderate: "moderate";
         high: "high";
@@ -200,7 +244,19 @@ export declare const QuestionnaireAnswersSchema: z.ZodObject<{
         low: "low";
     }>>;
     ownTrainingSessionMinutes: z.ZodOptional<z.ZodNumber>;
-    ownTrainingTypes: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    ownTrainingTypes: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+        other: "other";
+        bodyweight: "bodyweight";
+        endurance: "endurance";
+        functional_hiit: "functional_hiit";
+        pilates: "pilates";
+        sport_preparation: "sport_preparation";
+        hypertrophy: "hypertrophy";
+        strength: "strength";
+        yoga: "yoga";
+        strength_hypertrophy: "strength_hypertrophy";
+        no_preference: "no_preference";
+    }>>>;
     physiologicalSex: z.ZodOptional<z.ZodEnum<{
         prefer_not_to_say: "prefer_not_to_say";
         female: "female";
@@ -379,9 +435,31 @@ export declare const QuestionnaireDraftSaveRequestSchema: z.ZodObject<{
         }>>;
         excludedFoods: z.ZodOptional<z.ZodArray<z.ZodString>>;
         generatedTrainingDaysPerWeek: z.ZodOptional<z.ZodNumber>;
-        generatedTrainingEquipment: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        generatedTrainingEquipment: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+            none: "none";
+            home_basic: "home_basic";
+            full_gym: "full_gym";
+        }>>>;
+        generatedTrainingExperience: z.ZodOptional<z.ZodEnum<{
+            advanced: "advanced";
+            beginner: "beginner";
+            intermediate: "intermediate";
+        }>>;
+        generatedTrainingOtherStyle: z.ZodOptional<z.ZodString>;
         generatedTrainingSessionMinutes: z.ZodOptional<z.ZodNumber>;
-        generatedTrainingStyles: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        generatedTrainingStyles: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+            other: "other";
+            bodyweight: "bodyweight";
+            endurance: "endurance";
+            functional_hiit: "functional_hiit";
+            pilates: "pilates";
+            sport_preparation: "sport_preparation";
+            hypertrophy: "hypertrophy";
+            strength: "strength";
+            yoga: "yoga";
+            strength_hypertrophy: "strength_hypertrophy";
+            no_preference: "no_preference";
+        }>>>;
         hasConditions: z.ZodOptional<z.ZodBoolean>;
         hasCurrentSupplements: z.ZodOptional<z.ZodBoolean>;
         hasLabValues: z.ZodOptional<z.ZodBoolean>;
@@ -439,7 +517,21 @@ export declare const QuestionnaireDraftSaveRequestSchema: z.ZodObject<{
             peri: "peri";
             post: "post";
         }>>;
-        mobilityAreas: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        mobilityAreas: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+            hips: "hips";
+            knees: "knees";
+            ankles: "ankles";
+            shoulders: "shoulders";
+            neck: "neck";
+            spine: "spine";
+        }>>>;
+        mobilityAnchors: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+            evening: "evening";
+            after_training: "after_training";
+            before_training: "before_training";
+            daily_break: "daily_break";
+            morning: "morning";
+        }>>>;
         mobilityDiscomfortDetails: z.ZodOptional<z.ZodArray<z.ZodString>>;
         mobilityDiscomfortStatus: z.ZodOptional<z.ZodEnum<{
             unknown: "unknown";
@@ -492,6 +584,14 @@ export declare const QuestionnaireDraftSaveRequestSchema: z.ZodObject<{
             balanced: "balanced";
         }>>;
         ownTrainingDaysPerWeek: z.ZodOptional<z.ZodNumber>;
+        ownTrainingAnchors: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+            midday: "midday";
+            afternoon: "afternoon";
+            evening: "evening";
+            variable: "variable";
+            morning: "morning";
+            early_morning: "early_morning";
+        }>>>;
         ownTrainingIntensity: z.ZodOptional<z.ZodEnum<{
             moderate: "moderate";
             high: "high";
@@ -499,7 +599,19 @@ export declare const QuestionnaireDraftSaveRequestSchema: z.ZodObject<{
             low: "low";
         }>>;
         ownTrainingSessionMinutes: z.ZodOptional<z.ZodNumber>;
-        ownTrainingTypes: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        ownTrainingTypes: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+            other: "other";
+            bodyweight: "bodyweight";
+            endurance: "endurance";
+            functional_hiit: "functional_hiit";
+            pilates: "pilates";
+            sport_preparation: "sport_preparation";
+            hypertrophy: "hypertrophy";
+            strength: "strength";
+            yoga: "yoga";
+            strength_hypertrophy: "strength_hypertrophy";
+            no_preference: "no_preference";
+        }>>>;
         physiologicalSex: z.ZodOptional<z.ZodEnum<{
             prefer_not_to_say: "prefer_not_to_say";
             female: "female";
@@ -826,9 +938,31 @@ export declare const QuestionnaireDraftSchema: z.ZodObject<{
         }>>;
         excludedFoods: z.ZodOptional<z.ZodArray<z.ZodString>>;
         generatedTrainingDaysPerWeek: z.ZodOptional<z.ZodNumber>;
-        generatedTrainingEquipment: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        generatedTrainingEquipment: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+            none: "none";
+            home_basic: "home_basic";
+            full_gym: "full_gym";
+        }>>>;
+        generatedTrainingExperience: z.ZodOptional<z.ZodEnum<{
+            advanced: "advanced";
+            beginner: "beginner";
+            intermediate: "intermediate";
+        }>>;
+        generatedTrainingOtherStyle: z.ZodOptional<z.ZodString>;
         generatedTrainingSessionMinutes: z.ZodOptional<z.ZodNumber>;
-        generatedTrainingStyles: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        generatedTrainingStyles: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+            other: "other";
+            bodyweight: "bodyweight";
+            endurance: "endurance";
+            functional_hiit: "functional_hiit";
+            pilates: "pilates";
+            sport_preparation: "sport_preparation";
+            hypertrophy: "hypertrophy";
+            strength: "strength";
+            yoga: "yoga";
+            strength_hypertrophy: "strength_hypertrophy";
+            no_preference: "no_preference";
+        }>>>;
         hasConditions: z.ZodOptional<z.ZodBoolean>;
         hasCurrentSupplements: z.ZodOptional<z.ZodBoolean>;
         hasLabValues: z.ZodOptional<z.ZodBoolean>;
@@ -886,7 +1020,21 @@ export declare const QuestionnaireDraftSchema: z.ZodObject<{
             peri: "peri";
             post: "post";
         }>>;
-        mobilityAreas: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        mobilityAreas: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+            hips: "hips";
+            knees: "knees";
+            ankles: "ankles";
+            shoulders: "shoulders";
+            neck: "neck";
+            spine: "spine";
+        }>>>;
+        mobilityAnchors: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+            evening: "evening";
+            after_training: "after_training";
+            before_training: "before_training";
+            daily_break: "daily_break";
+            morning: "morning";
+        }>>>;
         mobilityDiscomfortDetails: z.ZodOptional<z.ZodArray<z.ZodString>>;
         mobilityDiscomfortStatus: z.ZodOptional<z.ZodEnum<{
             unknown: "unknown";
@@ -939,6 +1087,14 @@ export declare const QuestionnaireDraftSchema: z.ZodObject<{
             balanced: "balanced";
         }>>;
         ownTrainingDaysPerWeek: z.ZodOptional<z.ZodNumber>;
+        ownTrainingAnchors: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+            midday: "midday";
+            afternoon: "afternoon";
+            evening: "evening";
+            variable: "variable";
+            morning: "morning";
+            early_morning: "early_morning";
+        }>>>;
         ownTrainingIntensity: z.ZodOptional<z.ZodEnum<{
             moderate: "moderate";
             high: "high";
@@ -946,7 +1102,19 @@ export declare const QuestionnaireDraftSchema: z.ZodObject<{
             low: "low";
         }>>;
         ownTrainingSessionMinutes: z.ZodOptional<z.ZodNumber>;
-        ownTrainingTypes: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        ownTrainingTypes: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+            other: "other";
+            bodyweight: "bodyweight";
+            endurance: "endurance";
+            functional_hiit: "functional_hiit";
+            pilates: "pilates";
+            sport_preparation: "sport_preparation";
+            hypertrophy: "hypertrophy";
+            strength: "strength";
+            yoga: "yoga";
+            strength_hypertrophy: "strength_hypertrophy";
+            no_preference: "no_preference";
+        }>>>;
         physiologicalSex: z.ZodOptional<z.ZodEnum<{
             prefer_not_to_say: "prefer_not_to_say";
             female: "female";
@@ -1148,11 +1316,11 @@ export declare const QuestionnairePublicSchemaResponseSchema: z.ZodObject<{
             number: "number";
             boolean: "boolean";
             date: "date";
+            time: "time";
             entities: "entities";
             multi: "multi";
             single: "single";
             text: "text";
-            time: "time";
         }>;
         label: z.ZodString;
         options: z.ZodOptional<z.ZodArray<z.ZodObject<{

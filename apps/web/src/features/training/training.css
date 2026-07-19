@@ -1,0 +1,689 @@
+.training-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 42px 0 104px;
+}
+
+.training-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 40px;
+  align-items: start;
+  padding-bottom: 30px;
+  border-bottom: 1px solid #b9b7ad;
+}
+
+.training-header h1 {
+  max-width: 860px;
+  font-size: clamp(2.8rem, 7vw, 5.5rem);
+}
+
+.training-profile {
+  display: grid;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.training-profile .text-button {
+  min-height: 32px;
+}
+
+.movement-empty,
+.movement-state {
+  display: grid;
+  justify-items: start;
+  gap: 14px;
+  margin-top: 28px;
+  padding: clamp(26px, 5vw, 52px);
+  border: 1px solid #b9b7ad;
+  border-radius: 16px;
+  background: #fffdf6;
+}
+
+.movement-empty > span,
+.movement-state > span,
+.section-heading span,
+.movement-toolbar span,
+.movement-uncertainties span,
+.mobility-block > header span,
+.exercise-copy header span,
+.mobility-item > div > span {
+  color: #326b46;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.movement-empty h2,
+.movement-state h2,
+.section-heading h2,
+.mobility-block h3 {
+  margin-bottom: 0;
+}
+
+.movement-empty p,
+.movement-state > p {
+  max-width: 720px;
+  margin-bottom: 8px;
+  color: #556158;
+  font-size: 1.03rem;
+  line-height: 1.6;
+}
+
+.movement-state.quiet {
+  background: #ece9df;
+}
+
+.movement-message {
+  margin-top: 24px;
+}
+
+.movement-toolbar {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 26px 0 38px;
+  padding: 14px 0;
+  border-bottom: 1px solid #b9b7ad;
+  background: #f4f1e8;
+}
+
+.movement-toolbar > div {
+  display: grid;
+  gap: 3px;
+}
+
+.movement-toolbar h2 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.25rem;
+  font-weight: 400;
+}
+
+.movement-toolbar h2:focus-visible {
+  border-radius: 3px;
+  outline: 3px solid #173b36;
+  outline-offset: 4px;
+}
+
+.movement-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.section-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.7fr);
+  gap: 32px;
+  align-items: end;
+  margin-bottom: 24px;
+}
+
+.section-heading p {
+  margin: 0;
+  color: #556158;
+  line-height: 1.55;
+}
+
+.movement-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  margin-bottom: 24px;
+  border: 1px solid #b9b7ad;
+  border-radius: 14px;
+  background: #b9b7ad;
+}
+
+.movement-metrics article {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 20px;
+  background: #fffdf6;
+}
+
+.movement-metrics span {
+  color: #5b665f;
+  font-size: 0.78rem;
+}
+
+.movement-metrics strong {
+  overflow-wrap: anywhere;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.45rem;
+  font-weight: 400;
+}
+
+.movement-uncertainties {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.45fr) 1fr;
+  gap: 24px;
+  margin: 20px 0;
+  padding: 20px;
+  border-left: 5px solid #b57918;
+  border-radius: 0 10px 10px 0;
+  background: #f4e7c3;
+}
+
+.movement-uncertainties h3 {
+  margin: 4px 0 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.5rem;
+  font-weight: 400;
+}
+
+.movement-uncertainties ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.45;
+}
+
+.week-list {
+  display: grid;
+  gap: 14px;
+}
+
+.training-week {
+  overflow: hidden;
+  border: 1px solid #aaa99f;
+  border-radius: 16px;
+  background: #fffdf6;
+}
+
+.training-week > summary,
+.training-session > summary {
+  display: grid;
+  cursor: pointer;
+  list-style: none;
+}
+
+.training-week > summary::-webkit-details-marker,
+.training-session > summary::-webkit-details-marker {
+  display: none;
+}
+
+.training-week > summary {
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 22px 24px;
+}
+
+.training-week > summary::after,
+.training-session > summary::after {
+  content: "+";
+  grid-column: -1;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-size: 1.5rem;
+}
+
+.training-week[open] > summary::after,
+.training-session[open] > summary::after {
+  content: "−";
+}
+
+.training-week > summary > span {
+  grid-row: 1 / span 2;
+  color: #326b46;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 2.6rem;
+}
+
+.training-week > summary > h3 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.65rem;
+  font-weight: 400;
+}
+
+.training-week > summary > small,
+.training-session > summary > small {
+  color: #606b63;
+}
+
+.training-week > summary:focus-visible,
+.training-session > summary:focus-visible,
+.exercise-details > summary:focus-visible,
+.mobility-duration button:focus-visible {
+  outline: 3px solid #173b36;
+  outline-offset: 3px;
+}
+
+.mobility-duration button:focus-visible {
+  outline-color: #f9d65c;
+}
+
+.session-listing {
+  display: grid;
+  gap: 12px;
+  padding: 0 18px 18px;
+}
+
+.training-session {
+  overflow: hidden;
+  border: 1px solid #d1cfc5;
+  border-radius: 12px;
+  background: #f8f5ec;
+}
+
+.training-session > summary {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 20px;
+  padding: 18px 20px;
+}
+
+.training-session > summary > span {
+  color: #326b46;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.training-session > summary > h4 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.3rem;
+  font-weight: 400;
+}
+
+.session-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
+.session-progression {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: #e4efdf;
+  line-height: 1.5;
+}
+
+.session-recovery {
+  margin: 0;
+  padding: 10px 14px;
+  border-left: 4px solid #326b46;
+  background: #f0eee4;
+  color: #33483b;
+  line-height: 1.45;
+}
+
+.exercise-card {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.42fr) 1fr;
+  gap: 20px;
+  overflow: hidden;
+  padding: 14px;
+  border: 1px solid #d7d4ca;
+  border-radius: 10px;
+  background: #fffdf6;
+}
+
+.exercise-visual,
+.exercise-visual-fallback {
+  width: 100%;
+  min-height: 190px;
+  aspect-ratio: 4 / 3;
+  border: 1px solid #d8d4c8;
+  border-radius: 8px;
+  background: #f0eee4;
+  object-fit: contain;
+}
+
+.exercise-visual-fallback {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 18px;
+  color: #59635c;
+  text-align: center;
+}
+
+.exercise-copy {
+  min-width: 0;
+}
+
+.exercise-copy header h5,
+.mobility-item h4 {
+  margin: 4px 0 12px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.55rem;
+  font-weight: 400;
+}
+
+.exercise-dose {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 14px;
+}
+
+.exercise-dose > div {
+  min-width: 96px;
+  padding: 8px 10px;
+  border: 1px solid #d1cfc6;
+  border-radius: 7px;
+  background: #f7f4eb;
+}
+
+.exercise-dose dt {
+  color: #657068;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.exercise-dose dd {
+  margin: 3px 0 0;
+  font-weight: 750;
+}
+
+.technique-cue {
+  margin-bottom: 10px;
+  line-height: 1.55;
+}
+
+.exercise-steps {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding-left: 22px;
+  line-height: 1.5;
+}
+
+.exercise-alternatives {
+  margin-bottom: 12px;
+  color: #4f5b53;
+  font-size: 0.9rem;
+}
+
+.exercise-details {
+  border-top: 1px solid #ddd9cf;
+  padding-top: 10px;
+}
+
+.exercise-details > summary {
+  width: fit-content;
+  cursor: pointer;
+  color: #1f5b36;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.exercise-details p {
+  margin: 10px 0;
+  line-height: 1.5;
+}
+
+.exercise-details dl {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.exercise-details dl > div {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 10px;
+}
+
+.exercise-details dd {
+  margin: 0;
+}
+
+.own-context {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 10px 0;
+  border: 1px solid #cbc9bf;
+  border-radius: 10px;
+  background: #cbc9bf;
+  overflow: hidden;
+}
+
+.own-context > div {
+  padding: 16px;
+  background: #f7f4eb;
+}
+
+.own-context dt {
+  color: #657068;
+  font-size: 0.75rem;
+}
+
+.own-context dd {
+  margin: 5px 0 0;
+  font-weight: 750;
+}
+
+.adaptation-list {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0;
+  margin: 4px 0 0;
+  list-style: none;
+}
+
+.adaptation-list li {
+  display: grid;
+  gap: 5px;
+  padding: 16px;
+  border: 1px solid #d1cfc6;
+  border-radius: 9px;
+}
+
+.adaptation-list span {
+  color: #556158;
+  line-height: 1.45;
+}
+
+.mobility-routine {
+  margin-top: 72px;
+  padding-top: 34px;
+  border-top: 1px solid #b9b7ad;
+}
+
+.mobility-duration {
+  border: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 22px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #1f3527;
+  color: #fffdf6;
+}
+
+.mobility-duration > legend {
+  font-weight: 750;
+}
+
+.mobility-duration > div {
+  display: flex;
+  gap: 8px;
+}
+
+.mobility-duration button {
+  min-width: 72px;
+  min-height: 42px;
+  padding: 7px 12px;
+  border: 1px solid rgb(255 255 255 / 38%);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-weight: 750;
+}
+
+.mobility-duration button[aria-pressed="true"] {
+  border-color: #fffdf6;
+  background: #fffdf6;
+  color: #1f3527;
+}
+
+.mobility-block {
+  margin-top: 16px;
+  padding: 20px;
+  border: 1px solid #c3c1b7;
+  border-radius: 14px;
+  background: #fffdf6;
+}
+
+.mobility-block.extension {
+  border-style: dashed;
+}
+
+.mobility-block > header {
+  margin-bottom: 16px;
+}
+
+.mobility-block h3 {
+  margin-top: 4px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.7rem;
+  font-weight: 400;
+}
+
+.mobility-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mobility-item {
+  overflow: hidden;
+  border: 1px solid #d4d1c7;
+  border-radius: 10px;
+  background: #f8f5ec;
+}
+
+.mobility-item .exercise-visual,
+.mobility-item .exercise-visual-fallback {
+  min-height: 160px;
+  border: 0;
+  border-bottom: 1px solid #d4d1c7;
+  border-radius: 0;
+}
+
+.mobility-item > div {
+  padding: 16px;
+}
+
+.mobility-item ol {
+  display: grid;
+  gap: 7px;
+  padding-left: 20px;
+  line-height: 1.45;
+}
+
+.mobility-item p,
+.mobility-item small {
+  color: #556158;
+  line-height: 1.45;
+}
+
+.mobility-anchors {
+  margin: 16px 0 0;
+  padding: 16px;
+  border-radius: 9px;
+  background: #e4efdf;
+}
+
+@media (max-width: 900px) {
+  .movement-metrics,
+  .own-context {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mobility-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .training-header,
+  .section-heading,
+  .movement-uncertainties,
+  .exercise-card {
+    grid-template-columns: 1fr;
+  }
+
+  .training-profile {
+    min-width: 0;
+  }
+
+  .movement-toolbar,
+  .mobility-duration {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .movement-toolbar .primary-button {
+    width: 100%;
+  }
+
+  .training-week > summary {
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+    padding: 18px;
+  }
+
+  .training-week > summary > span {
+    font-size: 2rem;
+  }
+
+  .mobility-grid,
+  .adaptation-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .movement-metrics,
+  .own-context {
+    grid-template-columns: 1fr;
+  }
+
+  .training-session > summary {
+    grid-template-columns: 1fr auto;
+  }
+
+  .mobility-duration > div {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .mobility-duration button {
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .training-shell *,
+  .training-shell *::before,
+  .training-shell *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

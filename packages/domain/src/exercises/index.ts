@@ -1,0 +1,638 @@
+import {
+  EXERCISE_PUBLICATION_LEDGER,
+  type ExercisePublication,
+} from "./publication-ledger.ts";
+
+export { EXERCISE_PUBLICATION_LEDGER } from "./publication-ledger.ts";
+
+export type ExercisePhase = "cooldown" | "main" | "mobility" | "warmup";
+export type TrainingExperience = "advanced" | "beginner" | "intermediate";
+
+export type ExerciseCatalogEntry = Readonly<{
+  alternativeIds: readonly string[];
+  areas: readonly string[];
+  defaultDurationSeconds?: number;
+  defaultRepetitions?: string;
+  difficulty: 1 | 2 | 3;
+  equipment: readonly string[];
+  id: string;
+  levels: readonly TrainingExperience[];
+  limitationAreas: readonly string[];
+  lowImpact: boolean;
+  name: string;
+  phases: readonly ExercisePhase[];
+  publication: ExercisePublication;
+  steps: readonly string[];
+  styles: readonly string[];
+  technique: string;
+  tempo: string;
+  visual: Readonly<{
+    alt: string;
+    kind: "sequential_static";
+    src: string;
+  }>;
+}>;
+
+const publicationByExerciseId: ReadonlyMap<string, ExercisePublication> = new Map(
+  EXERCISE_PUBLICATION_LEDGER.map(({ exerciseId, publication }) => [
+    exerciseId,
+    publication,
+  ]),
+);
+
+function exercise(
+  input: Omit<ExerciseCatalogEntry, "publication">,
+): ExerciseCatalogEntry {
+  const publication = publicationByExerciseId.get(input.id);
+  if (!publication) throw new Error(`exercise_publication_missing_${input.id}`);
+  return {
+    ...input,
+    publication,
+  };
+}
+
+const everyLevel = ["beginner", "intermediate", "advanced"] as const;
+
+export const EXERCISE_CATALOG = [
+  exercise({
+    alternativeIds: ["lateral-step"],
+    areas: ["hips", "knees", "ankles"],
+    defaultDurationSeconds: 45,
+    difficulty: 1,
+    equipment: ["none", "home_basic", "full_gym"],
+    id: "march-in-place",
+    levels: everyLevel,
+    limitationAreas: ["knees", "ankles"],
+    lowImpact: true,
+    name: "Marcha en el sitio",
+    phases: ["warmup", "main"],
+    steps: [
+      "Colócate alto, con los pies al ancho de las caderas.",
+      "Eleva una rodilla sin inclinar el tronco y alterna con control.",
+    ],
+    styles: [
+      "bodyweight",
+      "endurance",
+      "functional_hiit",
+      "pilates",
+      "sport_preparation",
+    ],
+    technique: "Mantén el tronco estable y apoya cada pie de forma silenciosa.",
+    tempo: "Ritmo continuo y cómodo",
+    visual: {
+      alt: "Secuencia de dos posiciones de marcha en el sitio, alternando la rodilla elevada.",
+      kind: "sequential_static",
+      src: "/assets/exercises/march-in-place.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["march-in-place"],
+    areas: ["hips", "knees", "ankles"],
+    defaultDurationSeconds: 40,
+    difficulty: 1,
+    equipment: ["none", "home_basic", "full_gym"],
+    id: "lateral-step",
+    levels: everyLevel,
+    limitationAreas: ["knees", "ankles"],
+    lowImpact: true,
+    name: "Paso lateral",
+    phases: ["warmup", "main", "cooldown"],
+    steps: [
+      "Parte con pies juntos y rodillas suaves.",
+      "Da un paso lateral, acerca el otro pie y cambia de dirección.",
+    ],
+    styles: [
+      "bodyweight",
+      "endurance",
+      "functional_hiit",
+      "pilates",
+      "sport_preparation",
+    ],
+    technique: "Mira al frente y evita que las rodillas colapsen hacia dentro.",
+    tempo: "Dos segundos por paso",
+    visual: {
+      alt: "Secuencia de un paso lateral con rodillas ligeramente flexionadas.",
+      kind: "sequential_static",
+      src: "/assets/exercises/lateral-step.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["cat-cow"],
+    areas: ["shoulders"],
+    defaultDurationSeconds: 30,
+    difficulty: 1,
+    equipment: ["none", "home_basic", "full_gym"],
+    id: "shoulder-circles",
+    levels: everyLevel,
+    limitationAreas: ["shoulders"],
+    lowImpact: true,
+    name: "Círculos de hombros",
+    phases: ["warmup", "cooldown", "mobility"],
+    steps: [
+      "Deja los brazos relajados y alarga la columna.",
+      "Dibuja círculos pequeños con los hombros y amplíalos sin dolor.",
+    ],
+    styles: ["bodyweight", "endurance", "hypertrophy", "pilates", "strength", "yoga"],
+    technique: "Muévete dentro de un rango cómodo, sin encoger el cuello.",
+    tempo: "Lento y continuo",
+    visual: {
+      alt: "Secuencia de hombros relajados y movimiento circular hacia atrás.",
+      kind: "sequential_static",
+      src: "/assets/exercises/shoulder-circles.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["supported-squat", "glute-bridge"],
+    areas: ["hips", "knees"],
+    defaultRepetitions: "8-12",
+    difficulty: 2,
+    equipment: ["none", "home_basic", "full_gym"],
+    id: "bodyweight-squat",
+    levels: everyLevel,
+    limitationAreas: ["knees", "hips", "back"],
+    lowImpact: false,
+    name: "Sentadilla con peso corporal",
+    phases: ["main"],
+    steps: [
+      "Separa los pies a una anchura cómoda y reparte el peso.",
+      "Lleva la cadera atrás y abajo, manteniendo rodillas y pies alineados.",
+      "Empuja el suelo para volver a ponerte de pie.",
+    ],
+    styles: [
+      "bodyweight",
+      "endurance",
+      "functional_hiit",
+      "hypertrophy",
+      "sport_preparation",
+      "strength",
+      "yoga",
+    ],
+    technique: "Baja solo hasta donde mantengas el tronco estable y no aparezca dolor.",
+    tempo: "3-1-1: baja 3 s, pausa 1 s y sube 1 s",
+    visual: {
+      alt: "Secuencia de sentadilla: posición erguida, descenso de cadera y regreso de pie.",
+      kind: "sequential_static",
+      src: "/assets/exercises/bodyweight-squat.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["glute-bridge", "bodyweight-squat"],
+    areas: ["hips", "knees"],
+    defaultRepetitions: "8-10",
+    difficulty: 1,
+    equipment: ["none", "home_basic", "full_gym"],
+    id: "supported-squat",
+    levels: everyLevel,
+    limitationAreas: ["knees", "hips"],
+    lowImpact: true,
+    name: "Sentadilla asistida a silla",
+    phases: ["main"],
+    steps: [
+      "Sitúate delante de una silla estable y extiende los brazos.",
+      "Toca la silla con la cadera sin dejarte caer.",
+      "Presiona el suelo y vuelve a la posición inicial.",
+    ],
+    styles: [
+      "bodyweight",
+      "endurance",
+      "functional_hiit",
+      "hypertrophy",
+      "pilates",
+      "sport_preparation",
+      "strength",
+      "yoga",
+    ],
+    technique: "Usa una silla inmóvil y conserva el peso repartido en todo el pie.",
+    tempo: "3-1-1: descenso controlado, toque suave y subida estable",
+    visual: {
+      alt: "Secuencia de sentadilla asistida con una silla como referencia posterior.",
+      kind: "sequential_static",
+      src: "/assets/exercises/supported-squat.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["wall-push-up"],
+    areas: ["chest", "shoulders", "arms"],
+    defaultRepetitions: "6-12",
+    difficulty: 2,
+    equipment: ["none", "home_basic", "full_gym"],
+    id: "incline-push-up",
+    levels: everyLevel,
+    limitationAreas: ["shoulders", "wrists"],
+    lowImpact: false,
+    name: "Flexión inclinada",
+    phases: ["main"],
+    steps: [
+      "Apoya las manos en una superficie alta, firme y estable.",
+      "Acerca el pecho manteniendo cabeza, tronco y cadera alineados.",
+      "Empuja la superficie hasta extender los brazos sin bloquearlos.",
+    ],
+    styles: ["bodyweight", "hypertrophy", "strength"],
+    technique:
+      "Mantén los codos en diagonal y el abdomen activo durante todo el recorrido.",
+    tempo: "2-1-1: baja 2 s, pausa 1 s y empuja 1 s",
+    visual: {
+      alt: "Secuencia lateral de flexión inclinada sobre una superficie estable.",
+      kind: "sequential_static",
+      src: "/assets/exercises/incline-push-up.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["incline-push-up"],
+    areas: ["chest", "shoulders", "arms"],
+    defaultRepetitions: "8-12",
+    difficulty: 1,
+    equipment: ["none", "home_basic", "full_gym"],
+    id: "wall-push-up",
+    levels: everyLevel,
+    limitationAreas: ["shoulders", "wrists"],
+    lowImpact: true,
+    name: "Flexión en pared",
+    phases: ["main"],
+    steps: [
+      "Apoya las manos en la pared a la altura del pecho.",
+      "Flexiona los codos y acerca el cuerpo como una sola línea.",
+      "Empuja la pared para regresar con control.",
+    ],
+    styles: ["bodyweight", "pilates", "strength"],
+    technique: "Aleja los hombros de las orejas y no dejes caer la cadera.",
+    tempo: "2-1-1: acercamiento lento, pausa y empuje",
+    visual: {
+      alt: "Secuencia lateral de flexión de brazos apoyada en una pared.",
+      kind: "sequential_static",
+      src: "/assets/exercises/wall-push-up.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["glute-bridge"],
+    areas: ["hips", "back"],
+    defaultRepetitions: "8-12",
+    difficulty: 1,
+    equipment: ["none", "home_basic", "full_gym"],
+    id: "hip-hinge",
+    levels: everyLevel,
+    limitationAreas: ["back", "hips"],
+    lowImpact: true,
+    name: "Bisagra de cadera",
+    phases: ["main"],
+    steps: [
+      "Apoya las manos en las caderas y suaviza las rodillas.",
+      "Lleva la cadera atrás manteniendo la espalda larga.",
+      "Aprieta los glúteos para recuperar la posición erguida.",
+    ],
+    styles: [
+      "bodyweight",
+      "endurance",
+      "functional_hiit",
+      "hypertrophy",
+      "pilates",
+      "sport_preparation",
+      "strength",
+      "yoga",
+    ],
+    technique: "El movimiento nace en la cadera; evita redondear o arquear la espalda.",
+    tempo: "3-1-1: cadera atrás 3 s, pausa y regreso",
+    visual: {
+      alt: "Secuencia lateral de bisagra de cadera con espalda neutra.",
+      kind: "sequential_static",
+      src: "/assets/exercises/hip-hinge.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["hip-hinge", "dead-bug"],
+    areas: ["hips", "back"],
+    defaultRepetitions: "10-15",
+    difficulty: 1,
+    equipment: ["none", "home_basic", "full_gym"],
+    id: "glute-bridge",
+    levels: everyLevel,
+    limitationAreas: ["back", "hips"],
+    lowImpact: true,
+    name: "Puente de glúteos",
+    phases: ["warmup", "main", "cooldown"],
+    steps: [
+      "Túmbate con rodillas flexionadas y pies apoyados.",
+      "Eleva la cadera hasta alinear hombros, cadera y rodillas.",
+      "Desciende vértebra a vértebra sin perder el control.",
+    ],
+    styles: [
+      "bodyweight",
+      "functional_hiit",
+      "hypertrophy",
+      "pilates",
+      "sport_preparation",
+      "strength",
+      "yoga",
+    ],
+    technique: "Empuja con toda la planta del pie y evita arquear la zona lumbar.",
+    tempo: "2-1-2: sube 2 s, pausa 1 s y baja 2 s",
+    visual: {
+      alt: "Secuencia lateral de puente de glúteos desde el suelo hasta la cadera elevada.",
+      kind: "sequential_static",
+      src: "/assets/exercises/glute-bridge.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["glute-bridge"],
+    areas: ["core", "hips"],
+    defaultRepetitions: "6-10 por lado",
+    difficulty: 2,
+    equipment: ["none", "home_basic", "full_gym"],
+    id: "dead-bug",
+    levels: everyLevel,
+    limitationAreas: ["back", "hips"],
+    lowImpact: true,
+    name: "Dead bug alterno",
+    phases: ["main", "cooldown"],
+    steps: [
+      "Túmbate con brazos arriba y caderas y rodillas flexionadas.",
+      "Aleja lentamente brazo y pierna contrarios sin despegar la espalda.",
+      "Regresa al centro y alterna el lado.",
+    ],
+    styles: [
+      "bodyweight",
+      "functional_hiit",
+      "pilates",
+      "sport_preparation",
+      "strength",
+      "yoga",
+    ],
+    technique:
+      "Reduce el recorrido si la zona lumbar pierde contacto estable con el suelo.",
+    tempo: "3-1-3: extiende 3 s, pausa y regresa 3 s",
+    visual: {
+      alt: "Secuencia boca arriba del dead bug, extendiendo brazo y pierna contrarios.",
+      kind: "sequential_static",
+      src: "/assets/exercises/dead-bug.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["shoulder-circles"],
+    areas: ["neck"],
+    defaultDurationSeconds: 30,
+    difficulty: 1,
+    equipment: ["none", "home_basic", "full_gym"],
+    id: "neck-nod",
+    levels: everyLevel,
+    limitationAreas: ["neck"],
+    lowImpact: true,
+    name: "Asentimiento cervical suave",
+    phases: ["mobility", "cooldown"],
+    steps: [
+      "Crece desde la coronilla con hombros relajados.",
+      "Recoge ligeramente la barbilla sin bajar toda la cabeza.",
+      "Regresa al centro sin forzar el final del recorrido.",
+    ],
+    styles: ["bodyweight", "pilates", "yoga"],
+    technique: "El movimiento es pequeño y no debe producir mareo, dolor ni hormigueo.",
+    tempo: "Tres segundos de ida y tres de vuelta",
+    visual: {
+      alt: "Secuencia lateral de una retracción suave de barbilla con el cuello largo.",
+      kind: "sequential_static",
+      src: "/assets/exercises/neck-nod.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["thoracic-rotation"],
+    areas: ["spine", "shoulders", "hips"],
+    defaultDurationSeconds: 40,
+    difficulty: 1,
+    equipment: ["none", "home_basic", "full_gym"],
+    id: "cat-cow",
+    levels: everyLevel,
+    limitationAreas: ["wrists", "back", "neck"],
+    lowImpact: true,
+    name: "Gato y vaca",
+    phases: ["mobility", "warmup", "cooldown"],
+    steps: [
+      "Apoya manos y rodillas con la columna en posición neutra.",
+      "Redondea suavemente la espalda mientras sueltas el aire.",
+      "Abre el pecho sin colapsar la zona lumbar al inspirar.",
+    ],
+    styles: ["bodyweight", "pilates", "yoga"],
+    technique: "Reparte el movimiento por toda la columna y conserva los codos suaves.",
+    tempo: "Una respiración lenta por posición",
+    visual: {
+      alt: "Secuencia en cuadrupedia con la espalda redondeada y después extendida suavemente.",
+      kind: "sequential_static",
+      src: "/assets/exercises/cat-cow.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["cat-cow"],
+    areas: ["spine", "shoulders"],
+    defaultDurationSeconds: 40,
+    difficulty: 1,
+    equipment: ["none", "home_basic", "full_gym"],
+    id: "thoracic-rotation",
+    levels: everyLevel,
+    limitationAreas: ["back", "shoulders"],
+    lowImpact: true,
+    name: "Rotación torácica sentada",
+    phases: ["mobility", "cooldown"],
+    steps: [
+      "Siéntate alto con brazos cruzados sobre el pecho.",
+      "Gira el pecho a un lado manteniendo la pelvis estable.",
+      "Vuelve al centro y repite hacia el otro lado.",
+    ],
+    styles: ["bodyweight", "pilates", "yoga"],
+    technique: "Rota desde la parte media de la espalda y no fuerces el cuello.",
+    tempo: "Tres segundos por giro",
+    visual: {
+      alt: "Secuencia sentada de rotación del pecho con la pelvis estable.",
+      kind: "sequential_static",
+      src: "/assets/exercises/thoracic-rotation.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["glute-bridge"],
+    areas: ["hips"],
+    defaultDurationSeconds: 40,
+    difficulty: 1,
+    equipment: ["none", "home_basic", "full_gym"],
+    id: "hip-90-90",
+    levels: everyLevel,
+    limitationAreas: ["hips", "knees"],
+    lowImpact: true,
+    name: "Cambios de cadera 90/90",
+    phases: ["mobility", "cooldown"],
+    steps: [
+      "Siéntate con ambas rodillas flexionadas y pies apoyados.",
+      "Deja caer las rodillas juntas hacia un lado sin despegar los pies.",
+      "Cruza el centro y cambia al otro lado dentro de un rango cómodo.",
+    ],
+    styles: ["bodyweight", "pilates", "yoga"],
+    technique: "Apoya las manos detrás si lo necesitas y evita empujar las rodillas.",
+    tempo: "Cuatro segundos por cambio",
+    visual: {
+      alt: "Secuencia sentada de cambio de ambas rodillas entre posiciones 90/90.",
+      kind: "sequential_static",
+      src: "/assets/exercises/hip-90-90.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["ankle-rock"],
+    areas: ["knees"],
+    defaultDurationSeconds: 35,
+    difficulty: 1,
+    equipment: ["none", "home_basic", "full_gym"],
+    id: "knee-extension",
+    levels: everyLevel,
+    limitationAreas: ["knees"],
+    lowImpact: true,
+    name: "Extensión de rodilla sentada",
+    phases: ["mobility", "warmup"],
+    steps: [
+      "Siéntate con ambos pies apoyados y el tronco estable.",
+      "Extiende una rodilla sin bloquearla con fuerza.",
+      "Baja el pie con control y alterna la pierna.",
+    ],
+    styles: ["bodyweight", "pilates"],
+    technique: "Reduce el recorrido ante dolor y evita balancear el tronco.",
+    tempo: "Dos segundos al extender y dos al bajar",
+    visual: {
+      alt: "Secuencia sentada de extensión controlada de una rodilla.",
+      kind: "sequential_static",
+      src: "/assets/exercises/knee-extension.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["knee-extension"],
+    areas: ["ankles", "knees"],
+    defaultDurationSeconds: 35,
+    difficulty: 1,
+    equipment: ["none", "home_basic", "full_gym"],
+    id: "ankle-rock",
+    levels: everyLevel,
+    limitationAreas: ["ankles"],
+    lowImpact: true,
+    name: "Avance de tobillo apoyado",
+    phases: ["mobility", "warmup", "cooldown"],
+    steps: [
+      "Adelanta un pie y mantén el talón completamente apoyado.",
+      "Lleva la rodilla hacia delante siguiendo la dirección de los dedos.",
+      "Regresa sin perder el apoyo del talón y cambia de lado.",
+    ],
+    styles: ["bodyweight", "endurance", "pilates", "yoga"],
+    technique:
+      "Usa un apoyo estable y detén el avance antes de que el talón se levante.",
+    tempo: "Tres segundos hacia delante y tres de vuelta",
+    visual: {
+      alt: "Secuencia de avance de rodilla sobre el pie manteniendo el talón apoyado.",
+      kind: "sequential_static",
+      src: "/assets/exercises/ankle-rock.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["supported-squat", "bodyweight-squat"],
+    areas: ["hips", "knees", "core"],
+    defaultRepetitions: "6-10",
+    difficulty: 2,
+    equipment: ["home_basic", "full_gym"],
+    id: "dumbbell-goblet-squat",
+    levels: everyLevel,
+    limitationAreas: ["knees", "hips", "back", "wrists"],
+    lowImpact: false,
+    name: "Sentadilla goblet con mancuerna",
+    phases: ["main"],
+    steps: [
+      "Sujeta una mancuerna pegada al pecho con ambas manos.",
+      "Lleva la cadera atrás y abajo manteniendo rodillas y pies alineados.",
+      "Empuja el suelo y vuelve de pie sin separar la carga del cuerpo.",
+    ],
+    styles: ["hypertrophy", "sport_preparation", "strength"],
+    technique:
+      "Elige una carga que permita conservar el tronco estable y terminar con el margen indicado.",
+    tempo: "3-1-1: baja 3 s, pausa 1 s y sube 1 s",
+    visual: {
+      alt: "Secuencia de sentadilla goblet sujetando una mancuerna junto al pecho.",
+      kind: "sequential_static",
+      src: "/assets/exercises/dumbbell-goblet-squat.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["dumbbell-row"],
+    areas: ["back", "arms", "shoulders"],
+    defaultRepetitions: "8-12",
+    difficulty: 1,
+    equipment: ["home_basic", "full_gym"],
+    id: "resistance-band-row",
+    levels: everyLevel,
+    limitationAreas: ["shoulders", "back", "elbows", "wrists"],
+    lowImpact: true,
+    name: "Remo con banda elástica",
+    phases: ["main"],
+    steps: [
+      "Fija la banda a un punto estable y comprueba el anclaje antes de tirar.",
+      "Lleva los codos atrás sin elevar los hombros ni arquear la espalda.",
+      "Regresa despacio hasta extender los brazos conservando tensión suave.",
+    ],
+    styles: ["hypertrophy", "pilates", "sport_preparation", "strength"],
+    technique:
+      "Mantén las muñecas neutras y detén la serie si el anclaje o la banda pierden estabilidad.",
+    tempo: "2-1-2: tira 2 s, pausa 1 s y vuelve 2 s",
+    visual: {
+      alt: "Secuencia de remo de pie con una banda elástica fijada delante.",
+      kind: "sequential_static",
+      src: "/assets/exercises/resistance-band-row.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["resistance-band-row"],
+    areas: ["back", "arms", "shoulders"],
+    defaultRepetitions: "6-10 por lado",
+    difficulty: 2,
+    equipment: ["home_basic", "full_gym"],
+    id: "dumbbell-row",
+    levels: everyLevel,
+    limitationAreas: ["shoulders", "back", "elbows", "wrists"],
+    lowImpact: true,
+    name: "Remo con mancuerna apoyado",
+    phases: ["main"],
+    steps: [
+      "Apoya una mano en una superficie estable y alarga la espalda.",
+      "Acerca la mancuerna hacia la cadera llevando el codo atrás.",
+      "Desciende la carga con control y completa el otro lado.",
+    ],
+    styles: ["hypertrophy", "sport_preparation", "strength"],
+    technique:
+      "Evita girar el tronco; usa una carga que no cambie la posición de cuello y espalda.",
+    tempo: "2-1-2: sube 2 s, pausa 1 s y baja 2 s",
+    visual: {
+      alt: "Secuencia de remo unilateral con mancuerna y una mano apoyada.",
+      kind: "sequential_static",
+      src: "/assets/exercises/dumbbell-row.svg",
+    },
+  }),
+  exercise({
+    alternativeIds: ["incline-push-up", "wall-push-up"],
+    areas: ["chest", "shoulders", "arms"],
+    defaultRepetitions: "6-10",
+    difficulty: 2,
+    equipment: ["home_basic", "full_gym"],
+    id: "dumbbell-floor-press",
+    levels: everyLevel,
+    limitationAreas: ["shoulders", "elbows", "wrists"],
+    lowImpact: true,
+    name: "Press de pecho con mancuernas en el suelo",
+    phases: ["main"],
+    steps: [
+      "Túmbate con rodillas flexionadas y una mancuerna segura en cada mano.",
+      "Baja los brazos hasta apoyar suavemente la parte posterior del brazo.",
+      "Empuja las mancuernas hacia arriba sin bloquear los codos.",
+    ],
+    styles: ["hypertrophy", "strength"],
+    technique:
+      "Mantén las muñecas sobre los codos y evita que los hombros se eleven hacia las orejas.",
+    tempo: "2-1-1: baja 2 s, pausa suave y empuja 1 s",
+    visual: {
+      alt: "Secuencia boca arriba de press de pecho con dos mancuernas.",
+      kind: "sequential_static",
+      src: "/assets/exercises/dumbbell-floor-press.svg",
+    },
+  }),
+] as const satisfies readonly ExerciseCatalogEntry[];
+
+export const EXERCISE_BY_ID = new Map(
+  EXERCISE_CATALOG.map((entry) => [entry.id, entry]),
+);

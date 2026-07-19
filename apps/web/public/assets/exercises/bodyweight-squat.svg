@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" role="img" aria-labelledby="title desc">
+  <title id="title">Sentadilla con peso corporal</title>
+  <desc id="desc">Tres pasos muestran la postura alta, el descenso de la cadera y el regreso estable.</desc>
+  <style>.panel{fill:#fff;stroke:#d9dfd7;stroke-width:2}.body{fill:none;stroke:#173b36;stroke-width:8;stroke-linecap:round;stroke-linejoin:round}.head{fill:#b9d8cd;stroke:#173b36;stroke-width:4}.move{fill:none;stroke:#e46d51;stroke-width:5;stroke-linecap:round}.label{fill:#173b36;font:700 17px sans-serif}.ground{stroke:#9fb1ac;stroke-width:3}</style>
+  <rect width="900" height="360" rx="28" fill="#f6f4ed"/>
+  <g data-step="1" transform="translate(24 38)"><rect class="panel" width="268" height="282" rx="20"/><text class="label" x="20" y="34">1 · Colócate</text><line class="ground" x1="45" y1="246" x2="223" y2="246"/><circle class="head" cx="134" cy="70" r="22"/><path class="body" d="M134 94v82M134 117l-45 35M134 117l45 35M134 176l-42 66M134 176l42 66"/></g>
+  <g data-step="2" transform="translate(316 38)"><rect class="panel" width="268" height="282" rx="20"/><text class="label" x="20" y="34">2 · Cadera atrás</text><line class="ground" x1="35" y1="246" x2="233" y2="246"/><circle class="head" cx="155" cy="103" r="22"/><path class="body" d="M143 125l-42 64M124 154l-68-5M124 154l62 15M101 189l-47 53M101 189l80 10 34 43"/><path class="move" d="M219 85c13 30 3 65-25 83"/><path fill="#e46d51" d="m186 173 20-3-11-16z"/></g>
+  <g data-step="3" transform="translate(608 38)"><rect class="panel" width="268" height="282" rx="20"/><text class="label" x="20" y="34">3 · Empuja el suelo</text><line class="ground" x1="45" y1="246" x2="223" y2="246"/><circle class="head" cx="134" cy="70" r="22"/><path class="body" d="M134 94v82M134 117l-45 35M134 117l45 35M134 176l-42 66M134 176l42 66"/><path class="move" d="M210 218V142"/><path fill="#e46d51" d="m210 131-11 18h22z"/></g>
+</svg>

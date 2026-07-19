@@ -1,8 +1,10 @@
-import type {
-  ContextSnapshotInternal,
-  PlanContextChange,
-  PlanEngineResult,
-  PlanModuleResultInput,
+import {
+  MobilityPlanSchema,
+  TrainingPlanSchema,
+  type ContextSnapshotInternal,
+  type PlanContextChange,
+  type PlanEngineResult,
+  type PlanModuleResultInput,
 } from "@health-design/contracts";
 import {
   CONTEXT_CANONICALIZATION_VERSION,
@@ -19,7 +21,10 @@ import {
   subtractDecimals,
   sumDecimals,
 } from "./decimal.ts";
+import { generateMobilityPlan } from "./modules/mobility/index.ts";
 import { generateNutritionWeek } from "./modules/nutrition/index.ts";
+import type { GeneratedTrainingLoad } from "./modules/nutrition/index.ts";
+import { generateTrainingPlan } from "./modules/training/index.ts";
 
 export * from "./decimal.ts";
 
@@ -297,8 +302,8 @@ export async function sha256CanonicalJson(value: unknown): Promise<string> {
     .join("");
 }
 
-export const ENGINE_VERSION = "engine-v2" as const;
-export const SOURCE_MANIFEST_ID = "50ee50a1-f142-4d59-a957-b7a32538a937" as const;
+export const ENGINE_VERSION = "engine-v3" as const;
+export const SOURCE_MANIFEST_ID = "cb644399-1275-47de-86b6-195711946f66" as const;
 
 export type RuleRevision = Readonly<{
   evidenceRefs: readonly string[];
@@ -310,6 +315,93 @@ export type RuleRevision = Readonly<{
   status: "active" | "inactive";
   version: string;
 }>;
+
+export type ScientificSourceRevision = Readonly<{
+  applicability: readonly string[];
+  citation: string;
+  confidence: "low" | "moderate" | "moderate_high" | "high";
+  doi?: string;
+  evidenceType:
+    | "position_stand_overview_of_reviews"
+    | "public_health_guideline"
+    | "systematic_review_meta_analysis_meta_regression";
+  exclusions: readonly string[];
+  hierarchy: "guideline" | "systematic_review_meta_analysis";
+  id: string;
+  population: string;
+  reviewedAt: string;
+  status: "active" | "inactive";
+  url: string;
+}>;
+
+const WHO_PHYSICAL_ACTIVITY_SOURCE_ID =
+  "source:who-physical-activity-guidelines-2020@1.0.0" as const;
+const ACSM_RESISTANCE_TRAINING_SOURCE_ID =
+  "source:acsm-resistance-training-position-2026@1.0.0" as const;
+const INGRAM_STATIC_STRETCHING_SOURCE_ID =
+  "source:ingram-static-stretching-meta-analysis-2025@1.0.0" as const;
+
+export const CORE_SOURCE_REVISIONS = [
+  {
+    applicability: [
+      "Recomendaciones poblacionales de actividad física, fuerza semanal y progresión gradual.",
+    ],
+    citation:
+      "World Health Organization. WHO guidelines on physical activity and sedentary behaviour. 2020. ISBN 9789240015128.",
+    confidence: "moderate",
+    evidenceType: "public_health_guideline",
+    exclusions: [
+      "No demuestra que una semana generada por T11 alcance toda la actividad aeróbica semanal recomendada.",
+      "No sustituye reglas clínicas individualizadas para subpoblaciones específicas.",
+    ],
+    hierarchy: "guideline",
+    id: WHO_PHYSICAL_ACTIVITY_SOURCE_ID,
+    population: "Personas adultas, mayores y subpoblaciones específicas.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://www.who.int/publications/i/item/9789240015128",
+  },
+  {
+    applicability: [
+      "Frecuencia, esfuerzo, volumen básico, progresión y diferencias por objetivo en entrenamiento de fuerza general.",
+    ],
+    citation:
+      "Currier BS, D'Souza AC, Fiatarone Singh MA, et al. American College of Sports Medicine Position Stand. Resistance Training Prescription for Muscle Function, Hypertrophy, and Physical Performance in Healthy Adults: An Overview of Reviews. Med Sci Sports Exerc. 2026;58(4):851-872.",
+    confidence: "moderate_high",
+    doi: "10.1249/MSS.0000000000003897",
+    evidenceType: "position_stand_overview_of_reviews",
+    exclusions: [
+      "Personas con condiciones clínicas que requieren adaptación individualizada.",
+      "No valida como óptima una pauta sin cuantificar carga o volumen efectivo por grupo muscular.",
+    ],
+    hierarchy: "systematic_review_meta_analysis",
+    id: ACSM_RESISTANCE_TRAINING_SOURCE_ID,
+    population: "Personas adultas sanas en programas de entrenamiento de fuerza.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://doi.org/10.1249/MSS.0000000000003897",
+  },
+  {
+    applicability: [
+      "Efecto y volumen acumulado del estiramiento estático para mejorar la flexibilidad.",
+    ],
+    citation:
+      "Ingram LA, Tomkinson GR, d'Unienville NMA, et al. Optimising the Dose of Static Stretching to Improve Flexibility: A Systematic Review, Meta-analysis and Multivariate Meta-regression. Sports Med. 2025;55(3):597-617.",
+    confidence: "moderate",
+    doi: "10.1007/s40279-024-02143-9",
+    evidenceType: "systematic_review_meta_analysis_meta_regression",
+    exclusions: [
+      "No valida como óptimos los bloques mixtos de movilidad de 5, 10 o 15 minutos.",
+      "No estudia tratamiento del dolor, rehabilitación, prevención de lesiones ni seguridad clínica individual.",
+    ],
+    hierarchy: "systematic_review_meta_analysis",
+    id: INGRAM_STATIC_STRETCHING_SOURCE_ID,
+    population: "Personas adultas; edad media de 26,8 años en los estudios incluidos.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://doi.org/10.1007/s40279-024-02143-9",
+  },
+] as const satisfies readonly ScientificSourceRevision[];
 
 export const CORE_RULE_REVISIONS = [
   {
@@ -352,20 +444,57 @@ export const CORE_RULE_REVISIONS = [
     status: "active",
     version: "1.0.0",
   },
+  {
+    evidenceRefs: [
+      "contract:t11-generated-four-week-block-v1",
+      WHO_PHYSICAL_ACTIVITY_SOURCE_ID,
+      ACSM_RESISTANCE_TRAINING_SOURCE_ID,
+    ],
+    id: "rule.training-generated-block@1.0.0",
+    kind: "mandatory",
+    reviewedAt: "2026-07-19",
+    ruleId: "rule.training-generated-block",
+    scope: ["training"],
+    status: "active",
+    version: "1.0.0",
+  },
+  {
+    evidenceRefs: ["contract:t11-declared-limitations-v1"],
+    id: "rule.training-declared-limitations@1.0.0",
+    kind: "conditional",
+    reviewedAt: "2026-07-19",
+    ruleId: "rule.training-declared-limitations",
+    scope: ["training", "mobility"],
+    status: "active",
+    version: "1.0.0",
+  },
+  {
+    evidenceRefs: [
+      "contract:t11-mobility-modular-duration-v1",
+      INGRAM_STATIC_STRETCHING_SOURCE_ID,
+    ],
+    id: "rule.mobility-modular-duration@1.0.0",
+    kind: "mandatory",
+    reviewedAt: "2026-07-19",
+    ruleId: "rule.mobility-modular-duration",
+    scope: ["mobility"],
+    status: "active",
+    version: "1.0.0",
+  },
 ] as const satisfies readonly RuleRevision[];
 
 export const CORE_RULE_SET_REVISION = {
-  id: "8f1d57b0-0dc2-4cd2-aef9-2dc0b31bc922",
+  id: "04edd58c-5fff-4f6b-85ad-472ec538885c",
   ruleRevisionIds: CORE_RULE_REVISIONS.map(({ id }) => id),
   status: "active",
-  version: "2.0.0",
+  version: "3.0.0",
 } as const;
 export const RULE_SET_REVISION_ID = CORE_RULE_SET_REVISION.id;
 
 export const CORE_SOURCE_MANIFEST = {
   id: SOURCE_MANIFEST_ID,
-  sourceRevisionIds: [],
-  version: "core-with-effective-nutrition-v1",
+  sourceRevisionIds: CORE_SOURCE_REVISIONS.map(({ id }) => id),
+  version: "core-with-training-mobility-v1",
 } as const;
 
 const ACTION_LEVELS = [
@@ -488,6 +617,7 @@ function provisionalModuleResult(
   module: QuestionnaireModule,
   context: ContextSnapshotInternal,
   nutritionCatalog: readonly EffectiveNutritionFood[] | undefined,
+  generatedTrainingLoad: GeneratedTrainingLoad | null | undefined,
 ): PlanModuleResultInput {
   if (moduleChoice(module, context) === "requested") {
     if (module === "nutrition" && nutritionCatalog !== undefined) {
@@ -495,6 +625,7 @@ function provisionalModuleResult(
         const week = generateNutritionWeek({
           answers: context.answers,
           catalog: nutritionCatalog,
+          ...(generatedTrainingLoad === undefined ? {} : { generatedTrainingLoad }),
         });
         return {
           confidence: week.targets.completeness === "complete" ? "high" : "medium",
@@ -523,6 +654,100 @@ function provisionalModuleResult(
             {
               code,
               messageKey: `nutrition.uncertainty.${code.toLowerCase()}`,
+              module,
+            },
+          ],
+        };
+      }
+    }
+    if (module === "training") {
+      try {
+        const plan = TrainingPlanSchema.parse(generateTrainingPlan(context.answers));
+        if (plan.mode === "none") throw new Error("training_mode_none_unreachable");
+        return {
+          confidence: plan.completeness === "complete" ? "high" : "medium",
+          module,
+          payload: { ...plan },
+          status: plan.completeness === "complete" ? "valid" : "provisional",
+          uncertainties: plan.uncertainties.map((uncertainty) => ({
+            ...uncertainty,
+            module,
+          })),
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "";
+        const code =
+          errorMessage === "training_limitation_details_missing"
+            ? "TRAINING_LIMITATION_DETAILS_MISSING"
+            : errorMessage === "training_limitation_unmapped"
+              ? "TRAINING_LIMITATION_UNMAPPED"
+              : errorMessage.startsWith("training_catalog_coverage_insufficient") ||
+                  errorMessage.startsWith("training_alternative_coverage_insufficient")
+                ? "TRAINING_CATALOG_COVERAGE_INSUFFICIENT"
+                : "TRAINING_ENGINE_UNAVAILABLE";
+        return {
+          confidence: "unknown",
+          module,
+          payload: { requested: true, stage: "training_engine" },
+          status: "provisional",
+          uncertainties: [
+            {
+              code,
+              messageKey:
+                code === "TRAINING_CATALOG_COVERAGE_INSUFFICIENT"
+                  ? "training.uncertainty.catalog_coverage_insufficient"
+                  : code === "TRAINING_ENGINE_UNAVAILABLE"
+                    ? "training.uncertainty.engine_unavailable"
+                    : `training.uncertainty.${code.toLowerCase()}`,
+              module,
+            },
+          ],
+        };
+      }
+    }
+    if (module === "mobility") {
+      try {
+        const plan = MobilityPlanSchema.parse(generateMobilityPlan(context.answers));
+        return {
+          confidence: plan.completeness === "complete" ? "high" : "medium",
+          module,
+          payload: { ...plan },
+          status: plan.completeness === "complete" ? "valid" : "provisional",
+          uncertainties: plan.uncertainties.map((uncertainty) => ({
+            ...uncertainty,
+            module,
+          })),
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "";
+        const movementCode = {
+          mobility_discomfort_details_missing: "MOBILITY_DISCOMFORT_DETAILS_MISSING",
+          mobility_discomfort_unmapped: "MOBILITY_DISCOMFORT_UNMAPPED",
+          mobility_training_limitation_details_missing:
+            "MOBILITY_TRAINING_LIMITATION_DETAILS_MISSING",
+          mobility_training_limitation_unmapped:
+            "MOBILITY_TRAINING_LIMITATION_UNMAPPED",
+        }[errorMessage];
+        const code = movementCode
+          ? movementCode
+          : errorMessage.startsWith("mobility_catalog_") ||
+              errorMessage.startsWith("mobility_alternative_missing_")
+            ? "MOBILITY_CATALOG_COVERAGE_INSUFFICIENT"
+            : "MOBILITY_ENGINE_UNAVAILABLE";
+        return {
+          confidence: "unknown",
+          module,
+          payload: { requested: true, stage: "mobility_engine" },
+          status: "provisional",
+          uncertainties: [
+            {
+              code,
+              messageKey:
+                code === "MOBILITY_CATALOG_COVERAGE_INSUFFICIENT"
+                  ? "mobility.uncertainty.catalog_coverage_insufficient"
+                  : code === "MOBILITY_ENGINE_UNAVAILABLE"
+                    ? "mobility.uncertainty.engine_unavailable"
+                    : `mobility.uncertainty.${code.toLowerCase()}`,
               module,
             },
           ],
@@ -579,6 +804,26 @@ export async function runDeterministicEngine(
   );
   const preservedModules: QuestionnaireModule[] = [];
   const recalculatedModules: QuestionnaireModule[] = [];
+  let generatedTrainingLoad: GeneratedTrainingLoad | null | undefined;
+  if (input.context.answers.trainingMode === "generated") {
+    generatedTrainingLoad = null;
+    if (moduleChoice("training", input.context) === "requested") {
+      try {
+        const trainingPlan = TrainingPlanSchema.parse(
+          generateTrainingPlan(input.context.answers),
+        );
+        if (trainingPlan.mode === "generated") {
+          generatedTrainingLoad = {
+            daysPerWeek: trainingPlan.availability.daysPerWeek,
+            experience: trainingPlan.availability.level,
+            sessionMinutes: trainingPlan.availability.sessionMinutes,
+          };
+        }
+      } catch {
+        generatedTrainingLoad = null;
+      }
+    }
+  }
   const moduleResults = QUESTIONNAIRE_MODULES.map((module) => {
     const baseResult = baseResults.get(module);
     if (
@@ -591,7 +836,12 @@ export async function runDeterministicEngine(
       return baseResult;
     }
     recalculatedModules.push(module);
-    return provisionalModuleResult(module, input.context, input.nutritionCatalog);
+    return provisionalModuleResult(
+      module,
+      input.context,
+      input.nutritionCatalog,
+      generatedTrainingLoad,
+    );
   });
   const errors = input.context.answers.activeModules?.length
     ? []
@@ -670,3 +920,5 @@ export async function runDeterministicEngine(
 }
 
 export * from "./modules/nutrition/index.ts";
+export * from "./modules/mobility/index.ts";
+export * from "./modules/training/index.ts";

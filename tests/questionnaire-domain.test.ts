@@ -58,7 +58,57 @@ describe("cuestionario adaptativo V2", () => {
     expect(visible).toContain("trainingMode");
     expect(visible).not.toContain("generatedTrainingStyles");
     expect(visible).not.toContain("generatedTrainingDaysPerWeek");
+    expect(visible).not.toContain("generatedTrainingExperience");
+    expect(visible).not.toContain("generatedTrainingOtherStyle");
     expect(visible).not.toContain("generatedTrainingEquipment");
+  });
+
+  it("abre una descripción breve solo al elegir otra modalidad", () => {
+    const answers: QuestionnaireAnswers = {
+      ...baseAnswers,
+      activeModules: ["training"],
+      generatedTrainingDaysPerWeek: 3,
+      generatedTrainingEquipment: ["none"],
+      generatedTrainingExperience: "beginner",
+      generatedTrainingSessionMinutes: 30,
+      generatedTrainingStyles: ["other"],
+      trainingLimitationsStatus: "none",
+      trainingMode: "generated",
+    };
+
+    expect(getVisibleQuestionIds(answers)).toContain("generatedTrainingOtherStyle");
+    expect(evaluateQuestionnaire(answers).uncertainties).toContainEqual({
+      affectedModules: ["training"],
+      answerId: "generatedTrainingOtherStyle",
+      blockId: "training",
+      reason: "questionnaire.missing.generatedTrainingOtherStyle",
+    });
+    expect(
+      getVisibleQuestionIds({
+        ...answers,
+        generatedTrainingStyles: ["strength"],
+      }),
+    ).not.toContain("generatedTrainingOtherStyle");
+  });
+
+  it("pide el nivel de experiencia solo para una rutina generada y no lo infiere", () => {
+    const answers: QuestionnaireAnswers = {
+      ...baseAnswers,
+      activeModules: ["training"],
+      generatedTrainingDaysPerWeek: 3,
+      generatedTrainingEquipment: ["none"],
+      generatedTrainingSessionMinutes: 35,
+      generatedTrainingStyles: ["bodyweight"],
+      trainingMode: "generated",
+    };
+
+    expect(getVisibleQuestionIds(answers)).toContain("generatedTrainingExperience");
+    expect(evaluateQuestionnaire(answers).uncertainties).toContainEqual({
+      affectedModules: ["training"],
+      answerId: "generatedTrainingExperience",
+      blockId: "training",
+      reason: "questionnaire.missing.generatedTrainingExperience",
+    });
   });
 
   it("activa únicamente el detalle clínico o farmacológico declarado", () => {

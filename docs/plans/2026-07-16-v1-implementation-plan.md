@@ -746,6 +746,16 @@ pnpm test:e2e -- nutrition-plan.spec.ts
 
 ## Tarea 11 — Entrenamiento, movilidad y activos visuales
 
+> **Estado 2026-07-19:** `T11_COMPLETE_LOCAL_PASS`. Entrenamiento opcional,
+> movilidad modular, 20 ilustraciones SVG secuenciales y superficie web
+> implementados y verificados localmente en la rama
+> `codex/task-11-training-mobility`. No hubo despliegue ni validación remota,
+> cambios de base de datos, animaciones o certificación clínica. T12 conserva
+> la adaptación clínica/hidratación/sueño/suplementos; T13, seguimiento y
+> F47/F48; T15, PDF/impresión; y T19, la puerta AA final. El catálogo CIQUAL
+> completo sigue diferido como T10.1 y no bloquea T11. Véase
+> [`TASK_11_VERIFICATION.md`](../quality/TASK_11_VERIFICATION.md).
+
 **Resultado:** entrenamiento verdaderamente opcional y sesiones ejecutables con
 explicación sencilla e ilustración secuencial.
 
@@ -755,34 +765,38 @@ explicación sencilla e ilustración secuencial.
 - `packages/engine/src/modules/mobility/`
 - `packages/domain/src/exercises/`
 - `apps/web/src/features/training/`
-- `apps/web/public/exercises/`
+- `apps/web/public/assets/exercises/`
 - `scripts/validate-exercise-assets.mjs`
 - `docs/runbooks/exercise-assets.md`
 
 **Prueba primero**
 
 - Estado `none` no genera sesiones ni carga oculta.
-- Estado `own` adapta nutrición/hidratación sin prescribir una rutina.
+- Estado `own` adapta el contexto nutricional sin prescribir una rutina; la
+  hidratación permanece en T12.
 - Estado `generated` incluye todos los campos de sesión requeridos.
 - La progresión respeta disponibilidad, equipo, nivel y restricciones.
 - El núcleo de movilidad dura cinco minutos y las extensiones son opcionales.
 - El catálogo publicable tiene 100 % de activos, alt text, licencia/procedencia
-  y revisión anatómica.
+  y revisión visual técnica y anatómica simplificada, sin certificación.
 
 **Implementación**
 
-- Crear catálogo de ejercicios, técnicas, alternativas y contraindicaciones.
+- Crear catálogo de ejercicios, técnicas, alternativas y limitaciones
+  no clínicas.
 - Generar bloques de cuatro semanas y sesiones detalladas.
 - Diseñar activos propios o reutilizables con licencia compatible; no publicar
   una animación no revisada.
-- Ofrecer alternativa estática y respetar `prefers-reduced-motion`.
+- Ofrecer alternativa textual accesible cuando falle un activo y respetar
+  `prefers-reduced-motion`.
 
 **Verificación**
 
 ```bash
-pnpm test --filter training
+CI=true pnpm vitest run tests/training-engine.test.ts tests/mobility-engine.test.ts tests/exercise-assets.test.ts
 node scripts/validate-exercise-assets.mjs
-pnpm test:a11y -- training
+CI=true pnpm test:a11y
+CI=true pnpm exec playwright test tests/e2e/training-plan.spec.ts
 ```
 
 **Commit sugerido:** `feat: add optional training and mobility modules`

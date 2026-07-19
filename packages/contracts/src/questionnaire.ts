@@ -24,6 +24,44 @@ const SearchTextSchema = limitedText(120);
 const BriefTextSchema = limitedText(500);
 const ClockTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
 const StringListSchema = z.array(SearchTextSchema).max(50);
+const TrainingStyleSchema = z.enum([
+  "strength",
+  "hypertrophy",
+  "strength_hypertrophy",
+  "bodyweight",
+  "endurance",
+  "pilates",
+  "yoga",
+  "functional_hiit",
+  "sport_preparation",
+  "no_preference",
+  "other",
+]);
+const TrainingEquipmentSchema = z.enum(["none", "home_basic", "full_gym"]);
+const MobilityAreaSchema = z.enum([
+  "ankles",
+  "hips",
+  "knees",
+  "neck",
+  "shoulders",
+  "spine",
+]);
+const MobilityAnchorSchema = z.enum([
+  "morning",
+  "daily_break",
+  "before_training",
+  "after_training",
+  "evening",
+]);
+const OwnTrainingAnchorSchema = z.enum([
+  "early_morning",
+  "morning",
+  "midday",
+  "afternoon",
+  "evening",
+  "variable",
+]);
+const uniqueValues = <T>(values: T[]) => new Set(values).size === values.length;
 
 const NamedEntrySchema = z
   .object({
@@ -78,9 +116,21 @@ const QuestionnaireAnswersObjectSchema = z
     dietaryPattern: z.enum(DIETARY_PATTERNS).optional(),
     excludedFoods: StringListSchema.optional(),
     generatedTrainingDaysPerWeek: z.number().int().min(1).max(7).optional(),
-    generatedTrainingEquipment: StringListSchema.optional(),
+    generatedTrainingEquipment: z
+      .array(TrainingEquipmentSchema)
+      .max(3)
+      .refine(uniqueValues, "duplicate_training_equipment")
+      .optional(),
+    generatedTrainingExperience: z
+      .enum(["beginner", "intermediate", "advanced"])
+      .optional(),
+    generatedTrainingOtherStyle: SearchTextSchema.optional(),
     generatedTrainingSessionMinutes: z.number().int().min(10).max(240).optional(),
-    generatedTrainingStyles: StringListSchema.optional(),
+    generatedTrainingStyles: z
+      .array(TrainingStyleSchema)
+      .max(11)
+      .refine(uniqueValues, "duplicate_training_style")
+      .optional(),
     hasConditions: z.boolean().optional(),
     hasCurrentSupplements: z.boolean().optional(),
     hasLabValues: z.boolean().optional(),
@@ -104,7 +154,16 @@ const QuestionnaireAnswersObjectSchema = z
     menopauseStage: z
       .enum(["not_applicable", "pre", "peri", "post", "unknown"])
       .optional(),
-    mobilityAreas: StringListSchema.optional(),
+    mobilityAreas: z
+      .array(MobilityAreaSchema)
+      .max(6)
+      .refine(uniqueValues, "duplicate_mobility_area")
+      .optional(),
+    mobilityAnchors: z
+      .array(MobilityAnchorSchema)
+      .max(5)
+      .refine(uniqueValues, "duplicate_mobility_anchor")
+      .optional(),
     mobilityDiscomfortDetails: StringListSchema.optional(),
     mobilityDiscomfortStatus: z.enum(["none", "declared", "unknown"]).optional(),
     mobilityMinutes: z.union([z.literal(5), z.literal(10), z.literal(15)]).optional(),
@@ -123,9 +182,18 @@ const QuestionnaireAnswersObjectSchema = z
       .optional(),
     nutritionMode: z.enum(NUTRITION_MODES).optional(),
     ownTrainingDaysPerWeek: z.number().int().min(1).max(7).optional(),
+    ownTrainingAnchors: z
+      .array(OwnTrainingAnchorSchema)
+      .max(6)
+      .refine(uniqueValues, "duplicate_own_training_anchor")
+      .optional(),
     ownTrainingIntensity: z.enum(["low", "moderate", "high", "variable"]).optional(),
     ownTrainingSessionMinutes: z.number().int().min(5).max(480).optional(),
-    ownTrainingTypes: StringListSchema.optional(),
+    ownTrainingTypes: z
+      .array(TrainingStyleSchema)
+      .max(11)
+      .refine(uniqueValues, "duplicate_own_training_type")
+      .optional(),
     physiologicalSex: z
       .enum(["female", "male", "intersex", "prefer_not_to_say"])
       .optional(),
@@ -167,7 +235,60 @@ const QuestionnaireAnswersObjectSchema = z
     trainingMode: z.enum(["generated", "own", "none"]).optional(),
     weightKg: z.number().min(30).max(400).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((answers, context) => {
+    if (
+      answers.generatedTrainingEquipment?.includes("none") &&
+      answers.generatedTrainingEquipment.length > 1
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "training_equipment_none_must_be_exclusive",
+        path: ["generatedTrainingEquipment"],
+      });
+    }
+    if (
+      answers.generatedTrainingStyles?.includes("no_preference") &&
+      answers.generatedTrainingStyles.length > 1
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "training_no_preference_must_be_exclusive",
+        path: ["generatedTrainingStyles"],
+      });
+    }
+    if (
+      answers.ownTrainingTypes?.includes("no_preference") &&
+      answers.ownTrainingTypes.length > 1
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "own_training_no_preference_must_be_exclusive",
+        path: ["ownTrainingTypes"],
+      });
+    }
+    if (
+      answers.ownTrainingAnchors?.includes("variable") &&
+      answers.ownTrainingAnchors.length > 1
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "own_training_variable_anchor_must_be_exclusive",
+        path: ["ownTrainingAnchors"],
+      });
+    }
+    if (
+      answers.trainingMode === "generated" &&
+      answers.activeModules !== undefined &&
+      !answers.activeModules.includes("training")
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "generated_training_requires_training_module",
+        path: ["activeModules"],
+      });
+    }
+  });
 
 export const QuestionnaireAnswersSchema = QuestionnaireAnswersObjectSchema;
 type QuestionnaireAnswers = z.infer<typeof QuestionnaireAnswersSchema>;
@@ -378,6 +499,20 @@ const supermarketSuggestions = options([
   ["DIA", "DIA"],
   ["Carrefour", "Carrefour"],
   ["Alcampo", "Alcampo"],
+]);
+
+const trainingStyleSuggestions = options([
+  ["strength", "Pesas orientadas a fuerza"],
+  ["hypertrophy", "Pesas orientadas a hipertrofia"],
+  ["strength_hypertrophy", "Fuerza e hipertrofia combinadas"],
+  ["bodyweight", "Calistenia / peso corporal"],
+  ["endurance", "Cardio / resistencia"],
+  ["pilates", "Pilates"],
+  ["yoga", "Yoga"],
+  ["functional_hiit", "Funcional / HIIT"],
+  ["sport_preparation", "Preparación para deporte"],
+  ["no_preference", "Sin preferencia"],
+  ["other", "Otra modalidad"],
 ]);
 
 const questions: PublicQuestion[] = [
@@ -605,13 +740,28 @@ const questions: PublicQuestion[] = [
     id: "generatedTrainingStyles",
     kind: "multi",
     label: "Estilos preferidos",
+    options: trainingStyleSuggestions,
     visibleWhen: { answerId: "trainingMode", includes: "generated" },
+  },
+  {
+    blockId: "training",
+    id: "generatedTrainingOtherStyle",
+    kind: "text",
+    label: "Otra modalidad (descripción breve)",
+    visibleWhen: { answerId: "generatedTrainingStyles", includes: "other" },
   },
   {
     blockId: "training",
     id: "generatedTrainingDaysPerWeek",
     kind: "number",
-    label: "Días disponibles",
+    label: "Sesiones deseadas por semana",
+    visibleWhen: { answerId: "trainingMode", includes: "generated" },
+  },
+  {
+    blockId: "training",
+    id: "generatedTrainingExperience",
+    kind: "single",
+    label: "Experiencia de entrenamiento",
     visibleWhen: { answerId: "trainingMode", includes: "generated" },
   },
   {
@@ -654,6 +804,21 @@ const questions: PublicQuestion[] = [
     id: "ownTrainingIntensity",
     kind: "single",
     label: "Intensidad del entrenamiento propio",
+    visibleWhen: { answerId: "trainingMode", includes: "own" },
+  },
+  {
+    blockId: "training",
+    id: "ownTrainingAnchors",
+    kind: "multi",
+    label: "Momentos habituales de entrenamiento",
+    options: options([
+      ["early_morning", "Primera hora"],
+      ["morning", "Mañana"],
+      ["midday", "Mediodía"],
+      ["afternoon", "Tarde"],
+      ["evening", "Noche"],
+      ["variable", "Horario variable"],
+    ]),
     visibleWhen: { answerId: "trainingMode", includes: "own" },
   },
   {
@@ -776,6 +941,19 @@ const questions: PublicQuestion[] = [
     id: "mobilityMinutes",
     kind: "single",
     label: "Duración preferida",
+  },
+  {
+    blockId: "mobility",
+    id: "mobilityAnchors",
+    kind: "multi",
+    label: "Momentos preferidos para movilidad",
+    options: options([
+      ["morning", "Por la mañana"],
+      ["daily_break", "En una pausa del día"],
+      ["before_training", "Antes de entrenar"],
+      ["after_training", "Después de entrenar"],
+      ["evening", "Por la noche"],
+    ]),
   },
   {
     blockId: "supplements",

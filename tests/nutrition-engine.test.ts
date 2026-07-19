@@ -119,6 +119,62 @@ describe("objetivos nutricionales T10", () => {
       "MEAL_ANCHORS_DEFAULTED",
     );
   });
+
+  it("usa la carga del entrenamiento propio para ajustar el centro dentro de la banda PAL", () => {
+    const lightTraining = calculateNutritionTargets({
+      ...baseAnswers,
+      ownTrainingAnchors: ["evening"],
+      ownTrainingDaysPerWeek: 2,
+      ownTrainingIntensity: "low",
+      ownTrainingSessionMinutes: 30,
+      ownTrainingTypes: ["strength"],
+      trainingMode: "own",
+    });
+    const highTraining = calculateNutritionTargets({
+      ...baseAnswers,
+      ownTrainingAnchors: ["evening"],
+      ownTrainingDaysPerWeek: 5,
+      ownTrainingIntensity: "high",
+      ownTrainingSessionMinutes: 75,
+      ownTrainingTypes: ["strength"],
+      trainingMode: "own",
+    });
+
+    expect(Number(highTraining.energy.centerKcal)).toBeGreaterThan(
+      Number(lightTraining.energy.centerKcal),
+    );
+    expect(Number(highTraining.energy.centerKcal)).toBeLessThanOrEqual(
+      Number(highTraining.energy.maximumKcal),
+    );
+    expect(highTraining.energy.maximumKcal).toBe(lightTraining.energy.maximumKcal);
+  });
+
+  it("usa la duración realmente prescrita y no una rutina generada fallida", () => {
+    const answers = {
+      ...baseAnswers,
+      generatedTrainingDaysPerWeek: 2,
+      generatedTrainingExperience: "beginner" as const,
+      generatedTrainingSessionMinutes: 60,
+      trainingMode: "generated" as const,
+    };
+    const requestedDuration = calculateNutritionTargets(answers);
+    const prescribedDuration = calculateNutritionTargets(answers, {
+      daysPerWeek: 2,
+      experience: "beginner",
+      sessionMinutes: 26,
+    });
+    const unavailableRoutine = calculateNutritionTargets(answers, null);
+
+    expect(Number(prescribedDuration.energy.centerKcal)).toBeLessThan(
+      Number(requestedDuration.energy.centerKcal),
+    );
+    expect(Number(unavailableRoutine.energy.centerKcal)).toBeLessThan(
+      Number(prescribedDuration.energy.centerKcal),
+    );
+    expect(unavailableRoutine.energy.maximumKcal).toBe(
+      prescribedDuration.energy.maximumKcal,
+    );
+  });
 });
 
 describe("semana nutricional y sustituciones", () => {

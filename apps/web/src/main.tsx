@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { AccessApp } from "./features/access/AccessApp";
 import { AdminApp } from "./features/admin/AdminApp";
 import { NutritionApp } from "./features/nutrition/NutritionApp";
+import { TrainingApp } from "./features/training/TrainingApp";
 import { QuestionnaireRoute } from "./routes/questionnaire";
 import { registerPublicAssetWorker } from "./services/client-cache";
 
@@ -23,6 +24,8 @@ createRoot(rootElement).render(
       <QuestionnaireRoute />
     ) : window.location.pathname.startsWith("/nutrition") ? (
       <NutritionApp />
+    ) : window.location.pathname.startsWith("/training") ? (
+      <TrainingApp />
     ) : (
       <AccessApp />
     )}

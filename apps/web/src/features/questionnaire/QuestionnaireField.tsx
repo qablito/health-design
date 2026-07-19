@@ -1,6 +1,49 @@
 import { useId, useState } from "react";
 
 type Option = { label: string; value: string };
+export type NumericFieldConstraints = {
+  max: number;
+  min: number;
+  step: number | "any";
+};
+
+export const NUMERIC_FIELD_CONSTRAINTS: Readonly<
+  Record<string, NumericFieldConstraints>
+> = {
+  age: { max: 120, min: 18, step: 1 },
+  generatedTrainingDaysPerWeek: { max: 7, min: 1, step: 1 },
+  generatedTrainingSessionMinutes: { max: 240, min: 10, step: 1 },
+  heightCm: { max: 250, min: 100, step: "any" },
+  habitualWaterMl: { max: 10_000, min: 0, step: 1 },
+  indirectCalorimetryRmrKcal: { max: 6_000, min: 500, step: "any" },
+  mealsPerDay: { max: 6, min: 2, step: 1 },
+  ownTrainingDaysPerWeek: { max: 7, min: 1, step: 1 },
+  ownTrainingSessionMinutes: { max: 480, min: 5, step: 1 },
+  sleepDeepMinutes: { max: 1_440, min: 0, step: 1 },
+  sleepHours: { max: 24, min: 0, step: "any" },
+  sleepLightMinutes: { max: 1_440, min: 0, step: 1 },
+  sleepRemMinutes: { max: 1_440, min: 0, step: 1 },
+  targetWeightKg: { max: 400, min: 30, step: "any" },
+  weightKg: { max: 400, min: 30, step: "any" },
+};
+
+export function validateNumericAnswer(id: string, value: unknown): string | undefined {
+  const constraints = NUMERIC_FIELD_CONSTRAINTS[id];
+  if (!constraints || value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "Introduce un número válido.";
+  }
+  if (value < constraints.min || value > constraints.max) {
+    return `Debe estar entre ${constraints.min} y ${constraints.max}.`;
+  }
+  if (constraints.step !== "any" && !Number.isInteger(value)) {
+    return `Usa incrementos de ${constraints.step}.`;
+  }
+  return undefined;
+}
+
 export type QuestionnaireQuestion = {
   blockId: string;
   id: string;
@@ -79,6 +122,11 @@ const FALLBACK_OPTIONS: Readonly<Record<string, readonly Option[]>> = {
     { label: "También opciones contextuales", value: "contextual" },
     { label: "No quiero recomendaciones", value: "none" },
   ],
+  generatedTrainingExperience: [
+    { label: "Principiante", value: "beginner" },
+    { label: "Intermedio", value: "intermediate" },
+    { label: "Avanzado", value: "advanced" },
+  ],
   trainingLimitationsStatus: statusOptions(),
 };
 
@@ -111,6 +159,21 @@ const MULTI_OPTIONS: Readonly<Record<string, readonly Option[]>> = {
     { label: "Rodillas", value: "knees" },
     { label: "Tobillos", value: "ankles" },
   ],
+  mobilityAnchors: [
+    { label: "Por la mañana", value: "morning" },
+    { label: "En una pausa del día", value: "daily_break" },
+    { label: "Antes de entrenar", value: "before_training" },
+    { label: "Después de entrenar", value: "after_training" },
+    { label: "Por la noche", value: "evening" },
+  ],
+  ownTrainingAnchors: [
+    { label: "Primera hora", value: "early_morning" },
+    { label: "Mañana", value: "morning" },
+    { label: "Mediodía", value: "midday" },
+    { label: "Tarde", value: "afternoon" },
+    { label: "Noche", value: "evening" },
+    { label: "Horario variable", value: "variable" },
+  ],
   ownTrainingTypes: trainingOptions(),
   supplementGoals: [
     { label: "Cubrir carencias", value: "deficiencies" },
@@ -130,12 +193,17 @@ function statusOptions(): Option[] {
 
 function trainingOptions(): Option[] {
   return [
-    { label: "Hipertrofia", value: "hypertrophy" },
-    { label: "Fuerza", value: "strength" },
+    { label: "Pesas orientadas a fuerza", value: "strength" },
+    { label: "Pesas orientadas a hipertrofia", value: "hypertrophy" },
+    { label: "Fuerza e hipertrofia combinadas", value: "strength_hypertrophy" },
     { label: "Calistenia / peso corporal", value: "bodyweight" },
+    { label: "Cardio / resistencia", value: "endurance" },
     { label: "Pilates", value: "pilates" },
     { label: "Yoga", value: "yoga" },
-    { label: "Resistencia", value: "endurance" },
+    { label: "Funcional / HIIT", value: "functional_hiit" },
+    { label: "Preparación para deporte", value: "sport_preparation" },
+    { label: "Sin preferencia", value: "no_preference" },
+    { label: "Otra modalidad", value: "other" },
   ];
 }
 
@@ -148,15 +216,37 @@ function isUnknownArray(value: unknown): value is unknown[] {
   return Array.isArray(value);
 }
 
+function exclusiveMultiValue(id: string): string | undefined {
+  if (id === "generatedTrainingEquipment") return "none";
+  if (id === "generatedTrainingStyles" || id === "ownTrainingTypes") {
+    return "no_preference";
+  }
+  if (id === "ownTrainingAnchors") return "variable";
+  return undefined;
+}
+
+function normalizeExclusiveValues(id: string, values: string[]): string[] {
+  const exclusiveValue = exclusiveMultiValue(id);
+  if (exclusiveValue && values.includes(exclusiveValue)) return [exclusiveValue];
+  return values;
+}
+
+export function normalizeQuestionnaireMultiAnswer(id: string, value: unknown): unknown {
+  return Array.isArray(value) ? normalizeExclusiveValues(id, value.map(String)) : value;
+}
+
 export function QuestionnaireField({
+  error,
   onChange,
   question,
   value,
 }: {
+  error?: string | undefined;
   onChange: (value: unknown) => void;
   question: QuestionnaireQuestion;
   value: unknown;
 }) {
+  const inputId = useId();
   const options = question.options ?? FALLBACK_OPTIONS[question.id] ?? [];
   if (question.kind === "boolean") {
     return (
@@ -207,8 +297,11 @@ export function QuestionnaireField({
     );
   }
   if (question.kind === "multi") {
-    const selected = new Set(Array.isArray(value) ? value.map(String) : []);
     const multiOptions = options.length ? options : (MULTI_OPTIONS[question.id] ?? []);
+    const selectedValues = Array.isArray(value)
+      ? (normalizeQuestionnaireMultiAnswer(question.id, value) as string[])
+      : [];
+    const selected = new Set(selectedValues);
     return (
       <fieldset className="question-field option-fieldset">
         <legend>{question.label}</legend>
@@ -220,8 +313,12 @@ export function QuestionnaireField({
                 checked={selected.has(option.value)}
                 onChange={(event) => {
                   const next = new Set(selected);
-                  if (event.target.checked) next.add(option.value);
-                  else next.delete(option.value);
+                  const exclusiveValue = exclusiveMultiValue(question.id);
+                  if (event.target.checked) {
+                    if (option.value === exclusiveValue) next.clear();
+                    else if (exclusiveValue) next.delete(exclusiveValue);
+                    next.add(option.value);
+                  } else next.delete(option.value);
                   onChange([...next]);
                 }}
                 type="checkbox"
@@ -297,22 +394,43 @@ export function QuestionnaireField({
       />
     );
   }
+  if (question.kind === "number") {
+    const errorId = `${inputId}-error`;
+    const constraints = NUMERIC_FIELD_CONSTRAINTS[question.id];
+    return (
+      <label className="question-field" htmlFor={inputId}>
+        <span>{question.label}</span>
+        <input
+          aria-describedby={error ? errorId : undefined}
+          aria-invalid={error ? "true" : "false"}
+          aria-label={question.label}
+          id={inputId}
+          inputMode="decimal"
+          max={constraints?.max}
+          min={constraints?.min}
+          onChange={(event) =>
+            onChange(event.target.value === "" ? undefined : Number(event.target.value))
+          }
+          step={constraints?.step ?? "any"}
+          type="number"
+          value={scalarValue(value)}
+        />
+        {error ? (
+          <p className="field-error" id={errorId} role="alert">
+            {error}
+          </p>
+        ) : null}
+      </label>
+    );
+  }
   return (
     <label className="question-field">
       <span>{question.label}</span>
       <input
         aria-label={question.label}
-        inputMode={question.kind === "number" ? "decimal" : undefined}
         onChange={(event) =>
-          onChange(
-            event.target.value === ""
-              ? undefined
-              : question.kind === "number"
-                ? Number(event.target.value)
-                : event.target.value,
-          )
+          onChange(event.target.value === "" ? undefined : event.target.value)
         }
-        step={question.kind === "number" ? "any" : undefined}
         type={question.kind}
         value={scalarValue(value)}
       />

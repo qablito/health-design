@@ -2,9 +2,11 @@ import { z } from "zod";
 
 export * from "./access";
 export * from "./admin";
+export * from "./mobility";
 export * from "./nutrition";
 export * from "./plans";
 export * from "./questionnaire";
+export * from "./training";
 
 export const RuntimeSmokeSchema = z
   .object({

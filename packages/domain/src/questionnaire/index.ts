@@ -95,6 +95,8 @@ type QuestionnaireAnswerValues = {
   excludedFoods?: string[];
   generatedTrainingDaysPerWeek?: number;
   generatedTrainingEquipment?: string[];
+  generatedTrainingExperience?: "advanced" | "beginner" | "intermediate";
+  generatedTrainingOtherStyle?: string;
   generatedTrainingSessionMinutes?: number;
   generatedTrainingStyles?: string[];
   hasConditions?: boolean;
@@ -114,6 +116,7 @@ type QuestionnaireAnswerValues = {
   medications?: MedicationEntry[];
   menopauseStage?: "not_applicable" | "pre" | "peri" | "post" | "unknown";
   mobilityAreas?: string[];
+  mobilityAnchors?: string[];
   mobilityDiscomfortDetails?: string[];
   mobilityDiscomfortStatus?: "none" | "declared" | "unknown";
   mobilityMinutes?: 5 | 10 | 15;
@@ -125,6 +128,7 @@ type QuestionnaireAnswerValues = {
   nutritionMealAnchors?: NutritionMealAnchor[];
   nutritionMode?: NutritionMode;
   ownTrainingDaysPerWeek?: number;
+  ownTrainingAnchors?: string[];
   ownTrainingIntensity?: "low" | "moderate" | "high" | "variable";
   ownTrainingSessionMinutes?: number;
   ownTrainingTypes?: string[];
@@ -297,6 +301,20 @@ const CRITICAL_RULES: readonly CriticalRule[] = [
     when: (answers) => answers.trainingMode === "generated",
   },
   {
+    answerId: "generatedTrainingOtherStyle",
+    blockId: "training",
+    modules: ["training"],
+    when: (answers) =>
+      answers.trainingMode === "generated" &&
+      Boolean(answers.generatedTrainingStyles?.includes("other")),
+  },
+  {
+    answerId: "generatedTrainingExperience",
+    blockId: "training",
+    modules: ["training"],
+    when: (answers) => answers.trainingMode === "generated",
+  },
+  {
     answerId: "generatedTrainingSessionMinutes",
     blockId: "training",
     modules: ["training"],
@@ -345,6 +363,12 @@ const CRITICAL_RULES: readonly CriticalRule[] = [
     when: (answers) => answers.trainingMode === "own",
   },
   {
+    answerId: "ownTrainingAnchors",
+    blockId: "training",
+    modules: ALL_MODULES,
+    when: (answers) => answers.trainingMode === "own",
+  },
+  {
     answerId: "habitualWaterMl",
     blockId: "hydration",
     modules: ["hydration"],
@@ -354,6 +378,7 @@ const CRITICAL_RULES: readonly CriticalRule[] = [
   { answerId: "sleepQuality", blockId: "sleep", modules: ["sleep"] },
   { answerId: "sleepRegularity", blockId: "sleep", modules: ["sleep"] },
   { answerId: "mobilityAreas", blockId: "mobility", modules: ["mobility"] },
+  { answerId: "mobilityAnchors", blockId: "mobility", modules: ["mobility"] },
   {
     answerId: "mobilityDiscomfortStatus",
     blockId: "mobility",

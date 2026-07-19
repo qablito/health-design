@@ -69,6 +69,83 @@ function midpoint(minimumValue: string, maximumValue: string): string {
   return divideDecimals(addDecimals(minimumValue, maximumValue), "2", 6);
 }
 
+export type GeneratedTrainingLoad = Readonly<{
+  daysPerWeek: number;
+  experience: "advanced" | "beginner" | "intermediate" | "unknown";
+  sessionMinutes: number;
+}>;
+
+function trainingLoadPosition(
+  answers: QuestionnaireAnswers,
+  generatedTrainingLoad?: GeneratedTrainingLoad | null,
+): string {
+  if (
+    answers.trainingMode === "own" &&
+    answers.ownTrainingDaysPerWeek !== undefined &&
+    answers.ownTrainingSessionMinutes !== undefined &&
+    answers.ownTrainingIntensity !== undefined
+  ) {
+    const intensityFactor = {
+      high: "0.85",
+      low: "0.25",
+      moderate: "0.55",
+      variable: "0.5",
+    }[answers.ownTrainingIntensity];
+    const weeklyMinutes = multiplyDecimals(
+      String(answers.ownTrainingDaysPerWeek),
+      String(answers.ownTrainingSessionMinutes),
+    );
+    return multiplyDecimals(
+      minimum("1", divideDecimals(weeklyMinutes, "300", 6)),
+      intensityFactor,
+    );
+  }
+
+  if (answers.trainingMode === "generated" && generatedTrainingLoad === null) {
+    return "0";
+  }
+
+  if (answers.trainingMode === "generated") {
+    const daysPerWeek =
+      generatedTrainingLoad?.daysPerWeek ?? answers.generatedTrainingDaysPerWeek;
+    const sessionMinutes =
+      generatedTrainingLoad?.sessionMinutes ??
+      (answers.generatedTrainingSessionMinutes === undefined
+        ? undefined
+        : Math.min(answers.generatedTrainingSessionMinutes, 60));
+    if (daysPerWeek === undefined || sessionMinutes === undefined) return "0";
+    const experienceFactor = {
+      advanced: "0.8",
+      beginner: "0.45",
+      intermediate: "0.65",
+      unknown: "0.5",
+    }[
+      generatedTrainingLoad?.experience ??
+        answers.generatedTrainingExperience ??
+        "unknown"
+    ];
+    const weeklyMinutes = multiplyDecimals(String(daysPerWeek), String(sessionMinutes));
+    return multiplyDecimals(
+      minimum("1", divideDecimals(weeklyMinutes, "300", 6)),
+      experienceFactor,
+    );
+  }
+
+  return "0";
+}
+
+function palCenterForTraining(
+  answers: QuestionnaireAnswers,
+  pal: (typeof PAL_BANDS)[keyof typeof PAL_BANDS],
+  generatedTrainingLoad?: GeneratedTrainingLoad | null,
+): string {
+  const position = trainingLoadPosition(answers, generatedTrainingLoad);
+  return addDecimals(
+    pal.center,
+    multiplyDecimals(subtractDecimals(pal.maximum, pal.center), position),
+  );
+}
+
 function mifflin(
   weightKg: string,
   heightCm: string,
@@ -161,6 +238,7 @@ function proteinBand(answers: QuestionnaireAnswers): {
 
 export function calculateNutritionTargets(
   answers: QuestionnaireAnswers,
+  generatedTrainingLoad?: GeneratedTrainingLoad | null,
 ): NutritionTargets {
   if (
     answers.age === undefined ||
@@ -239,9 +317,10 @@ export function calculateNutritionTargets(
   }
   const goal = conservative ? "maintenance" : requestedGoal(answers);
   const goalBand = GOAL_BANDS[goal];
+  const palCenter = palCenterForTraining(answers, pal, generatedTrainingLoad);
   const expenditureMinimum = multiplyDecimals(restingMinimum, pal.minimum);
   const expenditureMaximum = multiplyDecimals(restingMaximum, pal.maximum);
-  const expenditureCenter = multiplyDecimals(restingCenter, pal.center);
+  const expenditureCenter = multiplyDecimals(restingCenter, palCenter);
   const energyMinimum = rounded(multiplyDecimals(expenditureMinimum, goalBand.minimum));
   const energyMaximum = rounded(multiplyDecimals(expenditureMaximum, goalBand.maximum));
   const energyCenter = rounded(multiplyDecimals(expenditureCenter, goalBand.center));
@@ -916,6 +995,7 @@ function plannedFunctionsAreMeaningful(foods: readonly PlannedFood[]): boolean {
 export function generateNutritionWeek(input: {
   answers: QuestionnaireAnswers;
   catalog: readonly EffectiveNutritionFood[];
+  generatedTrainingLoad?: GeneratedTrainingLoad | null;
 }): NutritionWeek {
   const meals = input.answers.mealsPerDay;
   if (meals === undefined || meals < 2 || meals > 6) {
@@ -924,7 +1004,7 @@ export function generateNutritionWeek(input: {
   if (!input.answers.nutritionMode || !input.answers.dietaryPattern) {
     throw new Error("nutrition_context_incomplete");
   }
-  const targets = calculateNutritionTargets(input.answers);
+  const targets = calculateNutritionTargets(input.answers, input.generatedTrainingLoad);
   const eligible = eligibleFoods(input.answers, input.catalog);
   const functions = [
     "protein",

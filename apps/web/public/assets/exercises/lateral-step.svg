@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" role="img" aria-labelledby="title desc">
+  <title id="title">Paso lateral</title>
+  <desc id="desc">Tres pasos muestran la posición inicial, el paso hacia un lado y el regreso al centro.</desc>
+  <style>.panel{fill:#fff;stroke:#d9dfd7;stroke-width:2}.body{fill:none;stroke:#173b36;stroke-width:7;stroke-linecap:round;stroke-linejoin:round}.head{fill:#b9d8cd;stroke:#173b36;stroke-width:4}.move{fill:none;stroke:#e46d51;stroke-width:5;stroke-linecap:round}.label{fill:#173b36;font:700 17px sans-serif}.ground{stroke:#9fb1ac;stroke-width:3;stroke-linecap:round}</style>
+  <rect width="900" height="360" rx="28" fill="#f6f4ed"/>
+  <g data-step="1" transform="translate(24 38)"><rect class="panel" width="268" height="282" rx="20"/><text class="label" x="20" y="34">1 · Centro</text><line class="ground" x1="52" y1="246" x2="216" y2="246"/><circle class="head" cx="134" cy="72" r="22"/><path class="body" d="M134 96v76M134 120l-40 39M134 120l40 39M134 172l-24 69M134 172l24 69"/></g>
+  <g data-step="2" transform="translate(316 38)"><rect class="panel" width="268" height="282" rx="20"/><text class="label" x="20" y="34">2 · Abre</text><line class="ground" x1="36" y1="246" x2="232" y2="246"/><circle class="head" cx="125" cy="72" r="22"/><path class="body" d="M125 96v76M125 120l-43 36M125 120l42 36M125 172l-68 69M125 172l44 69"/><path class="move" d="M183 223h45"/><path fill="#e46d51" d="m237 223-17-11v22z"/></g>
+  <g data-step="3" transform="translate(608 38)"><rect class="panel" width="268" height="282" rx="20"/><text class="label" x="20" y="34">3 · Junta</text><line class="ground" x1="52" y1="246" x2="216" y2="246"/><circle class="head" cx="134" cy="72" r="22"/><path class="body" d="M134 96v76M134 120l-40 39M134 120l40 39M134 172l-24 69M134 172l24 69"/><path class="move" d="M55 223h43"/><path fill="#e46d51" d="m107 223-17-11v22z"/></g>
+</svg>

@@ -1,7 +1,8 @@
 # Contrato de runbooks de V1
 
-**Estado:** contrato general; `local-development.md` y `nutrition-import.md` ya
-contienen procedimientos ejecutables verificados en desarrollo.
+**Estado:** contrato general; `local-development.md`, `nutrition-import.md` y
+`exercise-assets.md` ya contienen procedimientos ejecutables verificados en
+desarrollo.
 **Fuente:** [`OPERATIONS.md`](../operations/OPERATIONS.md) y
 [`plan de implementación`](../plans/2026-07-16-v1-implementation-plan.md).
 
@@ -16,7 +17,7 @@ obligatorios, qué deben contener y cuándo se consideran verificados.
 |---|---|---|
 | `local-development.md` | arranque, reset, seed, funciones, frontend y cierre local | T2 |
 | `nutrition-import.md` | cuarentena, manifest, CIQUAL 2025, validación, diff, aprobación y reanudación nutricional | T9–T10 |
-| `exercise-assets.md` | alta, licencia, revisión anatómica, accesibilidad y retirada de activos | T11 |
+| [`exercise-assets.md`](./exercise-assets.md) | alta, licencia, revisión anatómica, accesibilidad y retirada de activos | T11 |
 | `catalog-publication.md` | importación comercial, cobertura 60+20, revisión, publicación y ocultación | T16–T17 |
 | `backup-restore.md` | backup semanal/precrítico, cuatro rotaciones y restore aislado | T18 |
 | `permanent-deletion.md` | solicitud, tombstone, purga reanudable, alias y verificación | T18 |

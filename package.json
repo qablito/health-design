@@ -23,13 +23,14 @@
     "lint": "eslint .",
     "supply-chain:artifacts": "node scripts/verify-supply-chain.mjs --generate-release && node scripts/verify-supply-chain.mjs --verify-release",
     "test": "vitest run",
-    "test:a11y": "playwright test tests/e2e/questionnaire.spec.ts --grep accesible",
+    "test:a11y": "playwright test --grep accesible",
     "test:browser": "vitest run --config vitest.browser.config.ts",
     "test:db": "supabase test db",
     "test:e2e": "playwright test",
     "test:supply-chain": "node scripts/verify-supply-chain.mjs",
     "typecheck": "tsc --noEmit --project tsconfig.json",
-    "verify": "pnpm edge:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm test:browser && pnpm build",
+    "validate:exercise-assets": "node scripts/validate-exercise-assets.mjs",
+    "verify": "pnpm edge:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm validate:exercise-assets && pnpm test && pnpm test:browser && pnpm build",
     "worker:check": "pnpm exec wrangler deploy --dry-run --env development && pnpm exec wrangler deploy --dry-run --env production"
   },
   "devDependencies": {

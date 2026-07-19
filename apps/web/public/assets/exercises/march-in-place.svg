@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" role="img" aria-labelledby="title desc">
+  <title id="title">Marcha en el sitio</title>
+  <desc id="desc">Dos pasos muestran cómo alternar una rodilla elevada sin inclinar el tronco.</desc>
+  <style>.panel{fill:#fff;stroke:#d9dfd7;stroke-width:2}.body{fill:none;stroke:#173b36;stroke-width:7;stroke-linecap:round;stroke-linejoin:round}.joint{fill:#f3aa68;stroke:#173b36;stroke-width:4}.motion{fill:none;stroke:#e46d51;stroke-width:5;stroke-linecap:round}.label{fill:#173b36;font:700 18px sans-serif}.hint{fill:#54706b;font:15px sans-serif}</style>
+  <rect width="900" height="360" rx="28" fill="#f6f4ed"/>
+  <g data-step="1" transform="translate(55 34)">
+    <rect class="panel" width="370" height="288" rx="22"/>
+    <text class="label" x="24" y="36">1 · Rodilla izquierda</text><text class="hint" x="24" y="263">Tronco alto</text>
+    <circle class="joint" cx="185" cy="80" r="24"/><path class="body" d="M185 106v78M185 126l-43 42M185 126l44 38M185 184l-48 52M185 184l56 18 35 42"/>
+    <path class="motion" d="M248 226c21-27 23-56 4-82"/><path fill="#e46d51" d="m247 137 19 9-17 12z"/>
+  </g>
+  <g data-step="2" transform="translate(475 34)">
+    <rect class="panel" width="370" height="288" rx="22"/>
+    <text class="label" x="24" y="36">2 · Rodilla derecha</text><text class="hint" x="24" y="263">Apoyo silencioso</text>
+    <circle class="joint" cx="185" cy="80" r="24"/><path class="body" d="M185 106v78M185 126l-44 38M185 126l43 42M185 184l48 52M185 184l-56 18-35 42"/>
+    <path class="motion" d="M122 226c-21-27-23-56-4-82"/><path fill="#e46d51" d="m123 137-19 9 17 12z"/>
+  </g>
+</svg>

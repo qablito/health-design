@@ -20,8 +20,17 @@ catálogo federado genérico, su procedencia, cuarentena, revisión manual e
 historia efectiva tiene recibo remoto de desarrollo `T9_COMPLETE_REMOTE_PASS`
 en [`TASK_09_VERIFICATION.md`](TASK_09_VERIFICATION.md): cierra el núcleo de
 REQ-DAT-001 y REQ-DAT-002, y la parte genérica de REQ-DAT-004 y REQ-DAT-007.
-Las fórmulas continúan en T10, la adaptación clínica en T12, los productos
-comerciales en T16 y supermercados/precios en T17.
+Las fórmulas y la semana nutricional tienen recibo remoto de desarrollo
+`T10_COMPLETE_REMOTE_PASS` en
+[`TASK_10_VERIFICATION.md`](TASK_10_VERIFICATION.md). Su núcleo CIQUAL curado no
+equivale al catálogo completo, cuya activación queda diferida como T10.1 sin
+bloquear el resto del plan. Entrenamiento opcional, movilidad modular y los 20
+activos visuales tienen recibo local `T11_COMPLETE_LOCAL_PASS` en
+[`TASK_11_VERIFICATION.md`](TASK_11_VERIFICATION.md); no hubo despliegue ni
+validación remota. La adaptación clínica, farmacológica, hidratación, sueño y
+suplementos continúan en T12; F47/F48 y el seguimiento, en T13; PDF e impresión,
+en T15; y la puerta AA final, en T19. Los productos comerciales continúan en
+T16 y supermercados/precios en T17.
 
 ## 1. Bloques de producto
 

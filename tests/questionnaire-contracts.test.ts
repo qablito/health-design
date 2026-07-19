@@ -5,8 +5,83 @@ import {
   QuestionnaireAnswersSchema,
   QuestionnaireDraftSaveRequestSchema,
 } from "@health-design/contracts";
+import {
+  normalizeQuestionnaireMultiAnswer,
+  NUMERIC_FIELD_CONSTRAINTS,
+} from "../apps/web/src/features/questionnaire/QuestionnaireField";
 
 describe("contratos del cuestionario", () => {
+  it("rechaza valores y combinaciones contradictorias de movimiento", () => {
+    expect(
+      QuestionnaireAnswersSchema.safeParse({
+        generatedTrainingEquipment: ["none", "full_gym"],
+      }).success,
+    ).toBe(false);
+    expect(
+      QuestionnaireAnswersSchema.safeParse({
+        generatedTrainingStyles: ["no_preference", "strength"],
+      }).success,
+    ).toBe(false);
+    expect(
+      QuestionnaireAnswersSchema.safeParse({
+        generatedTrainingEquipment: ["laser"],
+      }).success,
+    ).toBe(false);
+    expect(
+      QuestionnaireAnswersSchema.safeParse({
+        ownTrainingTypes: ["no_preference", "strength"],
+      }).success,
+    ).toBe(false);
+    expect(
+      QuestionnaireAnswersSchema.safeParse({
+        ownTrainingAnchors: ["variable", "evening"],
+      }).success,
+    ).toBe(false);
+    expect(
+      QuestionnaireAnswersSchema.safeParse({
+        activeModules: ["nutrition"],
+        trainingMode: "generated",
+      }).success,
+    ).toBe(false);
+    expect(
+      QuestionnaireAnswersSchema.safeParse({
+        activeModules: ["nutrition"],
+        trainingMode: "own",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("normaliza estados exclusivos heredados del borrador", () => {
+    expect(
+      normalizeQuestionnaireMultiAnswer("generatedTrainingEquipment", [
+        "none",
+        "home_basic",
+      ]),
+    ).toEqual(["none"]);
+    expect(
+      normalizeQuestionnaireMultiAnswer("generatedTrainingStyles", [
+        "no_preference",
+        "strength",
+      ]),
+    ).toEqual(["no_preference"]);
+  });
+
+  it("cubre todos los campos numéricos publicados con límites de entrada", () => {
+    const numericIds = QUESTIONNAIRE_PUBLIC_SCHEMA_V2.questions
+      .filter(({ kind }) => kind === "number")
+      .map(({ id }) => id);
+
+    expect(numericIds.every((id) => id in NUMERIC_FIELD_CONSTRAINTS)).toBe(true);
+    for (const id of numericIds) {
+      const constraints = NUMERIC_FIELD_CONSTRAINTS[id];
+      expect(constraints).toBeDefined();
+      if (!constraints) continue;
+      expect(constraints.min).toBeTypeOf("number");
+      expect(constraints.max).toBeTypeOf("number");
+      expect(constraints.step === "any" || constraints.step > 0).toBe(true);
+    }
+  });
+
   it("acepta un borrador parcial y rechaza campos desconocidos", () => {
     expect(
       QuestionnaireAnswersSchema.safeParse({
@@ -85,6 +160,36 @@ describe("contratos del cuestionario", () => {
         ({ id }) => id === "generatedTrainingStyles",
       )?.visibleWhen,
     ).toEqual({ answerId: "trainingMode", includes: "generated" });
+    expect(
+      QUESTIONNAIRE_PUBLIC_SCHEMA_V2.questions.find(
+        ({ id }) => id === "generatedTrainingExperience",
+      ),
+    ).toMatchObject({
+      kind: "single",
+      visibleWhen: { answerId: "trainingMode", includes: "generated" },
+    });
+    expect(
+      QUESTIONNAIRE_PUBLIC_SCHEMA_V2.questions
+        .find(({ id }) => id === "generatedTrainingStyles")
+        ?.options?.map(({ value }) => value),
+    ).toEqual([
+      "strength",
+      "hypertrophy",
+      "strength_hypertrophy",
+      "bodyweight",
+      "endurance",
+      "pilates",
+      "yoga",
+      "functional_hiit",
+      "sport_preparation",
+      "no_preference",
+      "other",
+    ]);
+    expect(
+      QUESTIONNAIRE_PUBLIC_SCHEMA_V2.questions.find(
+        ({ id }) => id === "generatedTrainingOtherStyle",
+      )?.visibleWhen,
+    ).toEqual({ answerId: "generatedTrainingStyles", includes: "other" });
     expect(
       QUESTIONNAIRE_PUBLIC_SCHEMA_V2.questions.find(({ id }) => id === "activeModules")
         ?.options,
