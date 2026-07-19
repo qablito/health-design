@@ -67,7 +67,7 @@ describe("reconciliación de reglas", () => {
       "source:nih-ods-magnesium-fact-sheet@1.0.0",
       "source:pubmed-beta-alanine-review@1.0.0",
       "source:pubmed-glycine-sleep-review@1.0.0",
-      "source:pubmed-theanine-stress-review@1.0.0",
+      "source:pubmed-theanine-sleep-review@1.0.0",
       "source:pubmed-ashwagandha-review@1.0.0",
     ];
 

@@ -4,7 +4,11 @@ import {
   SupplementsPlanSchema,
   type ContextSnapshotInternal,
 } from "@health-design/contracts";
-import { generateSupplementsPlan, runDeterministicEngine } from "@health-design/engine";
+import {
+  CORE_SOURCE_REVISIONS,
+  generateSupplementsPlan,
+  runDeterministicEngine,
+} from "@health-design/engine";
 
 const hash = (pair: string) => pair.repeat(32);
 
@@ -34,6 +38,62 @@ describe("núcleo determinista de suplementos T12", () => {
       experimentalOptions: [],
       notRecommended: [],
     });
+  });
+
+  it("no permite marcar complete con incertidumbres ni provisional sin ellas", () => {
+    const complete = generateSupplementsPlan({
+      activeModules: ["supplements"],
+      dietaryPattern: "vegan",
+      hasConditions: false,
+      hasMedications: false,
+      supplementRecommendationPreference: "only_deficiencies",
+    });
+    expect(complete).toMatchObject({
+      completeness: "complete",
+      status: "complete",
+      uncertainties: [],
+    });
+    expect(() =>
+      SupplementsPlanSchema.parse({
+        ...complete,
+        uncertainties: ["missing_context"],
+      }),
+    ).toThrow("supplements_complete_requires_no_uncertainties");
+    expect(() =>
+      SupplementsPlanSchema.parse({
+        ...complete,
+        completeness: "provisional",
+        status: "provisional",
+        uncertainties: [],
+      }),
+    ).toThrow("supplements_provisional_requires_uncertainties");
+  });
+
+  it("clasifica como revisión sistemática y alinea los reviews de sueño", () => {
+    const sourceFor = (pmid: string) =>
+      CORE_SOURCE_REVISIONS.find(({ url }) =>
+        url.endsWith(`/pubmed.ncbi.nlm.nih.gov/${pmid}/`),
+      );
+    const beta = sourceFor("40995761");
+    const glycine = sourceFor("37851316");
+    expect(beta).toMatchObject({
+      evidenceType: "systematic_review",
+      hierarchy: "systematic_review",
+    });
+    expect(glycine).toMatchObject({
+      evidenceType: "systematic_review",
+      hierarchy: "systematic_review",
+    });
+    for (const pmid of ["40056718", "34559859"]) {
+      const source = sourceFor(pmid);
+      expect(source).toMatchObject({
+        evidenceType: "systematic_review",
+        hierarchy: "systematic_review",
+      });
+      expect(
+        `${source?.applicability.join(" ")} ${source?.citation} ${source?.population}`,
+      ).toMatch(/sueño|sleep/i);
+    }
   });
 
   it("integra suplementación en el pipeline sin mutar módulos no afectados", async () => {
@@ -114,6 +174,30 @@ describe("núcleo determinista de suplementos T12", () => {
     expect(
       contextual.recommendations.every(({ tier }) => tier !== "experimental"),
     ).toBe(true);
+  });
+
+  it("activa las opciones experimentales de L-teanina y ashwagandha solo en sueño pobre", () => {
+    const sleep = generateSupplementsPlan({
+      activeModules: ["supplements"],
+      hasConditions: false,
+      hasMedications: false,
+      sleepQuality: "poor",
+      supplementRecommendationPreference: "contextual",
+    });
+    expect(sleep.experimentalOptions.map(({ id }) => id)).toEqual(
+      expect.arrayContaining(["glycine", "l_theanine", "ashwagandha"]),
+    );
+    const stressOnly = generateSupplementsPlan({
+      activeModules: ["supplements"],
+      hasConditions: false,
+      hasMedications: false,
+      sleepQuality: "good",
+      supplementGoals: ["estrés"],
+      supplementRecommendationPreference: "contextual",
+    });
+    expect(stressOnly.experimentalOptions.map(({ id }) => id)).not.toEqual(
+      expect.arrayContaining(["l_theanine", "ashwagandha"]),
+    );
   });
 
   it("impide dos trial_candidate y registra suplementos actuales sin recomendarlos", () => {

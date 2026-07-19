@@ -24,7 +24,7 @@ const MAGNESIUM_SOURCE = "source:nih-ods-magnesium-fact-sheet@1.0.0";
 const EXPERIMENTAL_SOURCES = [
   "source:pubmed-beta-alanine-review@1.0.0",
   "source:pubmed-glycine-sleep-review@1.0.0",
-  "source:pubmed-theanine-stress-review@1.0.0",
+  "source:pubmed-theanine-sleep-review@1.0.0",
   "source:pubmed-ashwagandha-review@1.0.0",
 ] as const;
 
@@ -85,23 +85,24 @@ const EXPERIMENTAL: ReadonlyArray<{
   },
   {
     id: "l_theanine",
-    purpose: "Explorar una estrategia contextual de estrés o atención.",
-    expectedBenefit: "Beneficio pequeño e incierto.",
+    purpose: "Explorar una estrategia contextual de descanso y funcionamiento diurno.",
+    expectedBenefit: "Beneficio pequeño e incierto para la calidad del sueño.",
     form: "L-teanina; detalle no prescriptivo.",
     risks: ["Somnolencia o cefalea."],
     interactions: ["Revisión individual con sedantes o antihipertensivos."],
-    metric: "Escala breve de estrés o atención.",
+    metric: "Calidad de sueño percibida y funcionamiento diurno.",
   },
   {
     id: "ashwagandha",
-    purpose: "Explorar una estrategia contextual de estrés.",
-    expectedBenefit: "Beneficio pequeño e incierto con riesgos clínicos no triviales.",
+    purpose: "Explorar una estrategia contextual de sueño.",
+    expectedBenefit:
+      "Beneficio pequeño e incierto para el sueño, con riesgos clínicos no triviales.",
     form: "Withania somnifera; detalle no prescriptivo.",
     risks: ["Molestias gastrointestinales y posibles efectos hepáticos o tiroideos."],
     interactions: [
       "Revisión individual obligatoria con tratamientos tiroideos, sedantes o inmunomoduladores.",
     ],
-    metric: "Escala breve de estrés y tolerancia.",
+    metric: "Calidad de sueño percibida, funcionamiento diurno y tolerancia.",
   },
 ];
 const EXPERIMENTAL_SOURCE_BY_ID: Record<(typeof EXPERIMENTAL)[number]["id"], string> = {
@@ -786,8 +787,8 @@ export function generateSupplementsPlan(input: Input): SupplementsPlanContract {
         : id === "glycine"
           ? answers.sleepQuality === "poor" || answers.sleepQuality === "very_poor"
           : id === "l_theanine"
-            ? hasText(answers, ["estres", "stress", "atencion", "atención"])
-            : hasText(answers, ["estres", "stress"]),
+            ? answers.sleepQuality === "poor" || answers.sleepQuality === "very_poor"
+            : answers.sleepQuality === "poor" || answers.sleepQuality === "very_poor",
     );
     for (const option of relevantExperimental) {
       if (hasCurrent([option.id.replace("_", " "), option.id])) continue;

@@ -244,6 +244,28 @@ describe("motor de hidratación", () => {
     expect(plan.proposedBeverages).not.toContain("cerveza");
   });
 
+  it("no expone hallazgos de interacción farmacológica en el payload de hidratación", () => {
+    const plan = generateHydrationPlan({
+      answers: {
+        ...base,
+        hasMedications: true,
+        medications: [
+          { name: "Apixabán" },
+          { name: "Doxiciclina" },
+          { name: "Omeprazol" },
+        ],
+        physiologicalSex: "female",
+      },
+    });
+    expect(plan.safetyFindings).not.toEqual(
+      expect.arrayContaining([
+        "ANTICOAGULANT_CONTEXT_PARTIAL",
+        "MAGNESIUM_INTERACTION_PARTIAL",
+      ]),
+    );
+    expect(plan.safetyFindings).toEqual([]);
+  });
+
   it("normaliza puntuación al clasificar alcohol sin confundir ginger", () => {
     const plan = generateHydrationPlan({
       answers: {

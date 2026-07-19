@@ -181,11 +181,25 @@ export const SupplementsPlanSchema = z
         path: ["status"],
       });
     }
+    if (plan.status === "complete" && plan.uncertainties.length > 0) {
+      context.addIssue({
+        code: "custom",
+        message: "supplements_complete_requires_no_uncertainties",
+        path: ["uncertainties"],
+      });
+    }
     if (plan.status === "provisional" && plan.completeness !== "provisional") {
       context.addIssue({
         code: "custom",
         message: "supplements_provisional_requires_provisional",
         path: ["status"],
+      });
+    }
+    if (plan.status === "provisional" && plan.uncertainties.length === 0) {
+      context.addIssue({
+        code: "custom",
+        message: "supplements_provisional_requires_uncertainties",
+        path: ["uncertainties"],
       });
     }
   });

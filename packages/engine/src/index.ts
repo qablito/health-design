@@ -335,9 +335,10 @@ export type ScientificSourceRevision = Readonly<{
     | "consensus_statement"
     | "position_stand_overview_of_reviews"
     | "public_health_guideline"
+    | "systematic_review"
     | "systematic_review_meta_analysis_meta_regression";
   exclusions: readonly string[];
-  hierarchy: "guideline" | "systematic_review_meta_analysis";
+  hierarchy: "guideline" | "systematic_review" | "systematic_review_meta_analysis";
   id: string;
   population: string;
   reviewedAt: string;
@@ -371,7 +372,7 @@ const NIH_ODS_MAGNESIUM_SOURCE_ID =
 const PUBMED_BETA_ALANINE_SOURCE_ID =
   "source:pubmed-beta-alanine-review@1.0.0" as const;
 const PUBMED_GLYCINE_SOURCE_ID = "source:pubmed-glycine-sleep-review@1.0.0" as const;
-const PUBMED_THEANINE_SOURCE_ID = "source:pubmed-theanine-stress-review@1.0.0" as const;
+const PUBMED_THEANINE_SOURCE_ID = "source:pubmed-theanine-sleep-review@1.0.0" as const;
 const PUBMED_ASHWAGANDHA_SOURCE_ID = "source:pubmed-ashwagandha-review@1.0.0" as const;
 
 export const CORE_SOURCE_REVISIONS = [
@@ -612,11 +613,11 @@ export const CORE_SOURCE_REVISIONS = [
   {
     applicability: ["Opciones experimentales de beta-alanina para rendimiento."],
     citation:
-      "PubMed-indexed review of beta-alanine supplementation and exercise performance.",
+      "PubMed-indexed systematic review of beta-alanine supplementation and exercise performance.",
     confidence: "low",
-    evidenceType: "systematic_review_meta_analysis_meta_regression",
+    evidenceType: "systematic_review",
     exclusions: ["No pauta automática; beneficio pequeño e incierto."],
-    hierarchy: "systematic_review_meta_analysis",
+    hierarchy: "systematic_review",
     id: PUBMED_BETA_ALANINE_SOURCE_ID,
     population: "Adultos físicamente activos en estudios experimentales.",
     reviewedAt: "2026-07-19",
@@ -625,11 +626,11 @@ export const CORE_SOURCE_REVISIONS = [
   },
   {
     applicability: ["Opciones experimentales de glicina para sueño."],
-    citation: "PubMed-indexed review of glycine and sleep outcomes.",
+    citation: "PubMed-indexed systematic review of glycine and sleep outcomes.",
     confidence: "low",
-    evidenceType: "systematic_review_meta_analysis_meta_regression",
+    evidenceType: "systematic_review",
     exclusions: ["No pauta automática; beneficio pequeño e incierto."],
-    hierarchy: "systematic_review_meta_analysis",
+    hierarchy: "systematic_review",
     id: PUBMED_GLYCINE_SOURCE_ID,
     population: "Adultos en estudios experimentales de sueño.",
     reviewedAt: "2026-07-19",
@@ -637,29 +638,34 @@ export const CORE_SOURCE_REVISIONS = [
     url: "https://pubmed.ncbi.nlm.nih.gov/37851316/",
   },
   {
-    applicability: ["Opciones experimentales de L-teanina para estrés o atención."],
-    citation: "PubMed-indexed review of L-theanine and stress/attention outcomes.",
+    applicability: [
+      "Opciones experimentales de L-teanina para calidad y funcionamiento del sueño.",
+    ],
+    citation: "PubMed-indexed systematic review of L-theanine and sleep outcomes.",
     confidence: "low",
-    evidenceType: "systematic_review_meta_analysis_meta_regression",
+    evidenceType: "systematic_review",
     exclusions: ["No pauta automática; beneficio pequeño e incierto."],
-    hierarchy: "systematic_review_meta_analysis",
+    hierarchy: "systematic_review",
     id: PUBMED_THEANINE_SOURCE_ID,
-    population: "Adultos en estudios experimentales de estrés o atención.",
+    population: "Adultos en estudios experimentales de sueño.",
     reviewedAt: "2026-07-19",
     status: "active",
     url: "https://pubmed.ncbi.nlm.nih.gov/40056718/",
   },
   {
-    applicability: ["Opciones experimentales de ashwagandha para estrés."],
-    citation: "PubMed-indexed review of Withania somnifera and stress outcomes.",
+    applicability: [
+      "Opciones experimentales de ashwagandha para calidad y funcionamiento del sueño.",
+    ],
+    citation:
+      "PubMed-indexed systematic review of Withania somnifera and sleep outcomes.",
     confidence: "low",
-    evidenceType: "systematic_review_meta_analysis_meta_regression",
+    evidenceType: "systematic_review",
     exclusions: [
       "No pauta automática; beneficio pequeño e incierto y posibles riesgos clínicos.",
     ],
-    hierarchy: "systematic_review_meta_analysis",
+    hierarchy: "systematic_review",
     id: PUBMED_ASHWAGANDHA_SOURCE_ID,
-    population: "Adultos en estudios experimentales de estrés.",
+    population: "Adultos en estudios experimentales de sueño.",
     reviewedAt: "2026-07-19",
     status: "active",
     url: "https://pubmed.ncbi.nlm.nih.gov/34559859/",

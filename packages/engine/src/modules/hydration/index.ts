@@ -30,6 +30,17 @@ const ALCOHOL_WORDS = [
   "gin",
   "tequila",
 ] as const;
+const HYDRATION_SAFETY_CODES = new Set([
+  "FLUID_RESTRICTION_ACTIVE",
+  "RENAL_CONTEXT_PARTIAL",
+  "CARDIAC_CONTEXT_PARTIAL",
+  "HYPONATREMIA_CONTEXT_PARTIAL",
+  "DIURETIC_CONTEXT_PARTIAL",
+  "ANABOLIC_CONTEXT_PARTIAL",
+  "GLP1_CONTEXT_PARTIAL",
+  "CLINICAL_CONTEXT_UNMODELED",
+  "RETATRUTIDE_CONTEXT_UNMODELED",
+]);
 
 function normalize(value: string): string {
   return value
@@ -279,7 +290,9 @@ export function generateHydrationPlan(
     foodWaterEstimate: { center: 0.25, maximum: 0.3, minimum: 0.2 },
     proposedBeverages: beverageBandMl === null ? [] : ["agua"],
     reminders: answers.hydrationReminders === true,
-    safetyFindings: clinical.safetyFindings.map(({ code }) => code),
+    safetyFindings: clinical.safetyFindings
+      .filter(({ code }) => HYDRATION_SAFETY_CODES.has(code))
+      .map(({ code }) => code),
     status: completeness === "complete" ? "valid" : "provisional",
     strategies,
     strictestActionLevel,
