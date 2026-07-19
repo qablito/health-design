@@ -1,4 +1,7 @@
 import { useId, useState } from "react";
+import type { AempsMedicationSearchResult } from "@health-design/contracts";
+
+import { medicationsClient } from "./medications-client";
 
 type Option = { label: string; value: string };
 export type NumericFieldConstraints = {
@@ -355,6 +358,7 @@ export function QuestionnaireField({
     if (question.id === "medications" || question.id === "currentSupplements") {
       return (
         <MedicationEntries
+          canonicalSearch={question.id === "medications"}
           label={question.label}
           onChange={onChange}
           suggestions={options}
@@ -624,15 +628,28 @@ function NamedEntries({
   );
 }
 
-function MedicationEntries({ label, onChange, suggestions, value }: EntryProps) {
+function MedicationEntries({
+  canonicalSearch = false,
+  label,
+  onChange,
+  suggestions,
+  value,
+}: EntryProps & { canonicalSearch?: boolean }) {
   const suggestionId = `${useId()}-suggestions`;
   const [entry, setEntry] = useState({
+    aempsId: "",
     dose: "",
     frequency: "",
     name: "",
     route: "",
     schedule: "",
   });
+  const [canonicalResults, setCanonicalResults] = useState<
+    AempsMedicationSearchResult[]
+  >([]);
+  const [searchStatus, setSearchStatus] = useState<
+    "error" | "idle" | "loading" | "success"
+  >("idle");
   const entries = isUnknownArray(value) ? value : [];
   return (
     <fieldset className="question-field entity-fieldset">
@@ -650,10 +667,19 @@ function MedicationEntries({ label, onChange, suggestions, value }: EntryProps) 
             <input
               list={key === "name" && suggestions.length ? suggestionId : undefined}
               maxLength={120}
-              onChange={(event) =>
-                setEntry((current) => ({ ...current, [key]: event.target.value }))
-              }
-              value={entry[key as keyof typeof entry]}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                setEntry((current) => ({
+                  ...current,
+                  ...(key === "name" ? { aempsId: "" } : {}),
+                  [key]: nextValue,
+                }));
+                if (key === "name") {
+                  setCanonicalResults([]);
+                  setSearchStatus("idle");
+                }
+              }}
+              value={entry[key as Exclude<keyof typeof entry, "aempsId">]}
             />
           </label>
         ))}
@@ -663,6 +689,70 @@ function MedicationEntries({ label, onChange, suggestions, value }: EntryProps) 
         Busca por nombre o escribe uno que no aparezca. Los demás datos son opcionales
         cuando no se conocen.
       </p>
+      {canonicalSearch ? (
+        <div className="canonical-medication-search">
+          <button
+            className="secondary-button"
+            disabled={entry.name.trim().length < 2 || searchStatus === "loading"}
+            onClick={() => {
+              setSearchStatus("loading");
+              void medicationsClient
+                .search(entry.name)
+                .then(async ({ results }) =>
+                  results.length > 0
+                    ? results
+                    : (await medicationsClient.search(entry.name, "active_ingredient"))
+                        .results,
+                )
+                .then((results) => {
+                  setCanonicalResults(results);
+                  setSearchStatus("success");
+                })
+                .catch(() => {
+                  setCanonicalResults([]);
+                  setSearchStatus("error");
+                });
+            }}
+            type="button"
+          >
+            {searchStatus === "loading" ? "Buscando…" : "Buscar en AEMPS/CIMA"}
+          </button>
+          <p aria-live="polite" className="field-help">
+            {searchStatus === "error"
+              ? "No se pudo consultar CIMA. Puedes mantener la entrada manual."
+              : searchStatus === "success" && canonicalResults.length === 0
+                ? "No hay coincidencias; puedes mantener la entrada manual."
+                : entry.aempsId
+                  ? "Identidad AEMPS/CIMA seleccionada."
+                  : "La selección oficial es opcional; el texto libre sigue disponible."}
+          </p>
+          {canonicalResults.length > 0 ? (
+            <ul aria-label="Coincidencias AEMPS/CIMA" className="canonical-results">
+              {canonicalResults.map((result) => (
+                <li key={result.aempsId}>
+                  <button
+                    className="canonical-result"
+                    onClick={() => {
+                      setEntry((current) => ({
+                        ...current,
+                        aempsId: result.aempsId,
+                        name: result.name,
+                      }));
+                      setCanonicalResults([]);
+                    }}
+                    type="button"
+                  >
+                    <strong>{result.name}</strong>
+                    {result.activeIngredients.length > 0 ? (
+                      <span>{result.activeIngredients.join(", ")}</span>
+                    ) : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
       <button
         className="secondary-button"
         disabled={!entry.name.trim()}
@@ -673,7 +763,16 @@ function MedicationEntries({ label, onChange, suggestions, value }: EntryProps) 
               .map(([key, item]) => [key, item.trim()]),
           );
           onChange([...entries, cleaned]);
-          setEntry({ dose: "", frequency: "", name: "", route: "", schedule: "" });
+          setEntry({
+            aempsId: "",
+            dose: "",
+            frequency: "",
+            name: "",
+            route: "",
+            schedule: "",
+          });
+          setCanonicalResults([]);
+          setSearchStatus("idle");
         }}
         type="button"
       >
