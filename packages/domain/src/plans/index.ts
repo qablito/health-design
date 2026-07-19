@@ -150,7 +150,9 @@ function modulesForField(
   if (
     field.startsWith("supplement") ||
     field === "currentSupplements" ||
-    field === "hasCurrentSupplements"
+    field === "hasCurrentSupplements" ||
+    field === "labValues" ||
+    field === "hasLabValues"
   ) {
     return selectedModules(active, ["supplements"]);
   }

@@ -57,6 +57,18 @@ describe("reconciliación de reglas", () => {
       "source:ingram-static-stretching-meta-analysis-2025@1.0.0",
       "source:efsa-dietary-reference-values-water-2010@1.0.0",
       "source:aasm-srs-adult-sleep-duration-consensus-2015@1.0.0",
+      "source:nih-ods-vitamin-b12-fact-sheet@1.0.0",
+      "source:who-cdc-folic-acid-preconception@1.0.0",
+      "source:nih-ods-exercise-creatine-issn-position@1.0.0",
+      "source:nih-ods-omega-3-fact-sheet@1.0.0",
+      "source:efsa-caffeine-scientific-opinion@1.0.0",
+      "source:acsm-hydration-exercise-position@1.0.0",
+      "source:aemps-ema-nccih-melatonin-safety@1.0.0",
+      "source:nih-ods-magnesium-fact-sheet@1.0.0",
+      "source:pubmed-beta-alanine-review@1.0.0",
+      "source:pubmed-glycine-sleep-review@1.0.0",
+      "source:pubmed-theanine-stress-review@1.0.0",
+      "source:pubmed-ashwagandha-review@1.0.0",
     ];
 
     expect(CORE_SOURCE_REVISIONS.map(({ id }) => id)).toEqual(expectedSourceIds);
@@ -129,9 +141,9 @@ describe("reconciliación de reglas", () => {
   it("versiona el conjunto activo y exige evidencia trazable por revisión", () => {
     expect(ENGINE_VERSION).toBe("engine-v4");
     expect(CORE_RULE_SET_REVISION).toMatchObject({
-      id: "15d71ddc-765e-427b-86e0-63e5a5f2e191",
+      id: "a4b0f4bd-2bb9-4b79-98c3-22ad65b07f27",
       status: "active",
-      version: "4.1.0",
+      version: "4.2.0",
     });
     expect(CORE_RULE_SET_REVISION.ruleRevisionIds).toEqual(
       CORE_RULE_REVISIONS.map(({ id }) => id),

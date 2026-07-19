@@ -2,6 +2,7 @@ import {
   HydrationPlanSchema,
   MobilityPlanSchema,
   SleepPlanSchema,
+  SupplementsPlanSchema,
   TrainingPlanSchema,
   type ContextSnapshotInternal,
   type PlanContextChange,
@@ -30,6 +31,7 @@ import { generateSleepPlan } from "./modules/sleep/index.ts";
 import { detectClinicalContext } from "./clinical/index.ts";
 import type { GeneratedTrainingLoad } from "./modules/nutrition/index.ts";
 import { generateTrainingPlan } from "./modules/training/index.ts";
+import { generateSupplementsPlan } from "./modules/supplements/index.ts";
 
 export * from "./decimal.ts";
 
@@ -311,7 +313,7 @@ export const HISTORICAL_ENGINE_VERSION = "engine-v3" as const;
 export const ENGINE_VERSION = "engine-v4" as const;
 export const HISTORICAL_SOURCE_MANIFEST_ID =
   "cb644399-1275-47de-86b6-195711946f66" as const;
-export const SOURCE_MANIFEST_ID = "8f8063a7-3be8-4c6a-90bd-40b7b6cfb8f7" as const;
+export const SOURCE_MANIFEST_ID = "c7aa1da4-2fa1-4e7b-86b4-5e03f44e7f4c" as const;
 
 export type RuleRevision = Readonly<{
   evidenceRefs: readonly string[];
@@ -353,6 +355,24 @@ const EFSA_WATER_SOURCE_ID =
   "source:efsa-dietary-reference-values-water-2010@1.0.0" as const;
 const AASM_SRS_SLEEP_SOURCE_ID =
   "source:aasm-srs-adult-sleep-duration-consensus-2015@1.0.0" as const;
+const NIH_ODS_B12_SOURCE_ID = "source:nih-ods-vitamin-b12-fact-sheet@1.0.0" as const;
+const WHO_CDC_FOLATE_SOURCE_ID =
+  "source:who-cdc-folic-acid-preconception@1.0.0" as const;
+const NIH_ODS_CREATINE_SOURCE_ID =
+  "source:nih-ods-exercise-creatine-issn-position@1.0.0" as const;
+const NIH_ODS_OMEGA3_SOURCE_ID = "source:nih-ods-omega-3-fact-sheet@1.0.0" as const;
+const EFSA_CAFFEINE_SOURCE_ID =
+  "source:efsa-caffeine-scientific-opinion@1.0.0" as const;
+const ACSM_HYDRATION_SOURCE_ID =
+  "source:acsm-hydration-exercise-position@1.0.0" as const;
+const MELATONIN_SOURCE_ID = "source:aemps-ema-nccih-melatonin-safety@1.0.0" as const;
+const NIH_ODS_MAGNESIUM_SOURCE_ID =
+  "source:nih-ods-magnesium-fact-sheet@1.0.0" as const;
+const PUBMED_BETA_ALANINE_SOURCE_ID =
+  "source:pubmed-beta-alanine-review@1.0.0" as const;
+const PUBMED_GLYCINE_SOURCE_ID = "source:pubmed-glycine-sleep-review@1.0.0" as const;
+const PUBMED_THEANINE_SOURCE_ID = "source:pubmed-theanine-stress-review@1.0.0" as const;
+const PUBMED_ASHWAGANDHA_SOURCE_ID = "source:pubmed-ashwagandha-review@1.0.0" as const;
 
 export const CORE_SOURCE_REVISIONS = [
   {
@@ -451,6 +471,198 @@ export const CORE_SOURCE_REVISIONS = [
     reviewedAt: "2026-07-19",
     status: "active",
     url: "https://aasm.org/resources/pdf/pressroom/adult-sleep-duration-consensus.pdf",
+  },
+  {
+    applicability: [
+      "Vitamina B12 en personas con riesgo dietético o analítico; alimentos fortificados primero.",
+    ],
+    citation:
+      "National Institutes of Health, Office of Dietary Supplements. Vitamin B12 Fact Sheet for Health Professionals.",
+    confidence: "high",
+    evidenceType: "public_health_guideline",
+    exclusions: [
+      "No determina una dosis individual ni diagnostica una carencia con un valor aislado.",
+    ],
+    hierarchy: "guideline",
+    id: NIH_ODS_B12_SOURCE_ID,
+    population: "Personas adultas y grupos con riesgo dietético.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://ods.od.nih.gov/factsheets/VitaminB12-HealthProfessional/",
+  },
+  {
+    applicability: [
+      "Ácido fólico periconcepcional para prevención de defectos del tubo neural.",
+    ],
+    citation:
+      "World Health Organization. Guideline: optimal serum and red blood cell folate concentrations in women of reproductive age; Centers for Disease Control and Prevention folic acid guidance.",
+    confidence: "high",
+    evidenceType: "public_health_guideline",
+    exclusions: [
+      "No justifica 5 mg automáticos ni sustituye indicación prenatal individual.",
+    ],
+    hierarchy: "guideline",
+    id: WHO_CDC_FOLATE_SOURCE_ID,
+    population: "Personas que buscan embarazo y embarazo temprano.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://www.cdc.gov/folic-acid/about/index.html",
+  },
+  {
+    applicability: [
+      "Creatina monohidrato para fuerza y rendimiento en personas sanas.",
+    ],
+    citation:
+      "National Institutes of Health, Office of Dietary Supplements. Exercise and Athletic Performance; International Society of Sports Nutrition position stand on creatine.",
+    confidence: "moderate_high",
+    evidenceType: "position_stand_overview_of_reviews",
+    exclusions: [
+      "No aplica automáticamente a enfermedad renal, restricción de líquidos o cobertura clínica incierta.",
+    ],
+    hierarchy: "systematic_review_meta_analysis",
+    id: NIH_ODS_CREATINE_SOURCE_ID,
+    population: "Adultos sanos con objetivos de fuerza o rendimiento.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://ods.od.nih.gov/factsheets/ExerciseAndAthleticPerformance-HealthProfessional/",
+  },
+  {
+    applicability: [
+      "EPA/DHA cuando la ingesta de pescado es baja o el patrón es vegetariano/vegano.",
+    ],
+    citation:
+      "National Institutes of Health, Office of Dietary Supplements. Omega-3 Fatty Acids Fact Sheet for Health Professionals.",
+    confidence: "moderate",
+    evidenceType: "public_health_guideline",
+    exclusions: [
+      "No hace una afirmación universal de prevención cardiovascular ni una dosis general automática.",
+    ],
+    hierarchy: "guideline",
+    id: NIH_ODS_OMEGA3_SOURCE_ID,
+    population: "Personas adultas con ingesta dietética variable.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://ods.od.nih.gov/factsheets/Omega3FattyAcids-HealthProfessional/",
+  },
+  {
+    applicability: ["Cafeína para rendimiento puntual en adultos sanos."],
+    citation:
+      "EFSA Panel on Dietetic Products, Nutrition and Allergies. Scientific Opinion on the safety of caffeine. EFSA Journal. 2015;13(5):4102.",
+    confidence: "moderate_high",
+    evidenceType: "public_health_guideline",
+    exclusions: ["No recomienda polvo puro ni compensa el mal descanso."],
+    hierarchy: "guideline",
+    id: EFSA_CAFFEINE_SOURCE_ID,
+    population: "Adultos sanos; límites de seguridad poblacionales.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://doi.org/10.2903/j.efsa.2015.4102",
+  },
+  {
+    applicability: [
+      "Hidratación y electrolitos en calor, sudoración alta y ejercicio prolongado.",
+    ],
+    citation:
+      "American College of Sports Medicine. Exercise and Fluid Replacement position stand.",
+    confidence: "moderate",
+    evidenceType: "consensus_statement",
+    exclusions: ["No establece una dosis diaria fija y requiere override clínico."],
+    hierarchy: "guideline",
+    id: ACSM_HYDRATION_SOURCE_ID,
+    population: "Adultos durante actividad física y exposición al calor.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://pubmed.ncbi.nlm.nih.gov/17277604/",
+  },
+  {
+    applicability: [
+      "Melatonina y sueño alterado como revisión contextual, no pauta automática.",
+    ],
+    citation: "AEMPS, EMA and NCCIH public safety information on melatonin.",
+    confidence: "moderate",
+    evidenceType: "public_health_guideline",
+    exclusions: [
+      "No se automatiza dosis ni se sustituye una evaluación clínica del sueño.",
+    ],
+    hierarchy: "guideline",
+    id: MELATONIN_SOURCE_ID,
+    population: "Adultos con sueño pobre o trabajo a turnos; aplicabilidad contextual.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://www.ema.europa.eu/en/medicines/human/referrals/melatonin-containing-medicines",
+  },
+  {
+    applicability: [
+      "Magnesio en insuficiencia dietética, valor bajo reconocido o contexto PPI.",
+    ],
+    citation:
+      "National Institutes of Health, Office of Dietary Supplements. Magnesium Fact Sheet for Health Professionals.",
+    confidence: "moderate",
+    evidenceType: "public_health_guideline",
+    exclusions: [
+      "No se recomienda automáticamente con enfermedad renal ni se inventa un rango de laboratorio.",
+    ],
+    hierarchy: "guideline",
+    id: NIH_ODS_MAGNESIUM_SOURCE_ID,
+    population: "Personas adultas con ingesta o contexto clínico relevante.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://ods.od.nih.gov/factsheets/Magnesium-HealthProfessional/",
+  },
+  {
+    applicability: ["Opciones experimentales de beta-alanina para rendimiento."],
+    citation:
+      "PubMed-indexed review of beta-alanine supplementation and exercise performance.",
+    confidence: "low",
+    evidenceType: "systematic_review_meta_analysis_meta_regression",
+    exclusions: ["No pauta automática; beneficio pequeño e incierto."],
+    hierarchy: "systematic_review_meta_analysis",
+    id: PUBMED_BETA_ALANINE_SOURCE_ID,
+    population: "Adultos físicamente activos en estudios experimentales.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://pubmed.ncbi.nlm.nih.gov/40995761/",
+  },
+  {
+    applicability: ["Opciones experimentales de glicina para sueño."],
+    citation: "PubMed-indexed review of glycine and sleep outcomes.",
+    confidence: "low",
+    evidenceType: "systematic_review_meta_analysis_meta_regression",
+    exclusions: ["No pauta automática; beneficio pequeño e incierto."],
+    hierarchy: "systematic_review_meta_analysis",
+    id: PUBMED_GLYCINE_SOURCE_ID,
+    population: "Adultos en estudios experimentales de sueño.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://pubmed.ncbi.nlm.nih.gov/37851316/",
+  },
+  {
+    applicability: ["Opciones experimentales de L-teanina para estrés o atención."],
+    citation: "PubMed-indexed review of L-theanine and stress/attention outcomes.",
+    confidence: "low",
+    evidenceType: "systematic_review_meta_analysis_meta_regression",
+    exclusions: ["No pauta automática; beneficio pequeño e incierto."],
+    hierarchy: "systematic_review_meta_analysis",
+    id: PUBMED_THEANINE_SOURCE_ID,
+    population: "Adultos en estudios experimentales de estrés o atención.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://pubmed.ncbi.nlm.nih.gov/40056718/",
+  },
+  {
+    applicability: ["Opciones experimentales de ashwagandha para estrés."],
+    citation: "PubMed-indexed review of Withania somnifera and stress outcomes.",
+    confidence: "low",
+    evidenceType: "systematic_review_meta_analysis_meta_regression",
+    exclusions: [
+      "No pauta automática; beneficio pequeño e incierto y posibles riesgos clínicos.",
+    ],
+    hierarchy: "systematic_review_meta_analysis",
+    id: PUBMED_ASHWAGANDHA_SOURCE_ID,
+    population: "Adultos en estudios experimentales de estrés.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://pubmed.ncbi.nlm.nih.gov/34559859/",
   },
 ] as const satisfies readonly ScientificSourceRevision[];
 
@@ -562,6 +774,52 @@ export const CORE_RULE_REVISIONS = [
     status: "active",
     version: "1.0.0",
   },
+  {
+    evidenceRefs: [
+      "contract:t12-supplements-catalog-v1",
+      NIH_ODS_B12_SOURCE_ID,
+      WHO_CDC_FOLATE_SOURCE_ID,
+      NIH_ODS_CREATINE_SOURCE_ID,
+      NIH_ODS_OMEGA3_SOURCE_ID,
+      EFSA_CAFFEINE_SOURCE_ID,
+      ACSM_HYDRATION_SOURCE_ID,
+      MELATONIN_SOURCE_ID,
+      NIH_ODS_MAGNESIUM_SOURCE_ID,
+    ],
+    id: "rule.supplements-catalog@1.0.0",
+    kind: "mandatory",
+    reviewedAt: "2026-07-19",
+    ruleId: "rule.supplements-catalog",
+    scope: ["supplements"],
+    status: "active",
+    version: "1.0.0",
+  },
+  {
+    evidenceRefs: [
+      "contract:t12-supplements-experimental-v1",
+      PUBMED_BETA_ALANINE_SOURCE_ID,
+      PUBMED_GLYCINE_SOURCE_ID,
+      PUBMED_THEANINE_SOURCE_ID,
+      PUBMED_ASHWAGANDHA_SOURCE_ID,
+    ],
+    id: "rule.supplements-experimental@1.0.0",
+    kind: "conditional",
+    reviewedAt: "2026-07-19",
+    ruleId: "rule.supplements-experimental",
+    scope: ["supplements"],
+    status: "active",
+    version: "1.0.0",
+  },
+  {
+    evidenceRefs: ["contract:t12-supplements-lab-context-v1"],
+    id: "rule.supplements-lab-context@1.0.0",
+    kind: "conditional",
+    reviewedAt: "2026-07-19",
+    ruleId: "rule.supplements-lab-context",
+    scope: ["supplements"],
+    status: "active",
+    version: "1.0.0",
+  },
 ] as const satisfies readonly RuleRevision[];
 
 export const HISTORICAL_RULE_SET_REVISION = {
@@ -593,17 +851,17 @@ export const HISTORICAL_ENGINE_SNAPSHOT = {
   sourceManifest: HISTORICAL_SOURCE_MANIFEST,
 } as const;
 export const CORE_RULE_SET_REVISION = {
-  id: "15d71ddc-765e-427b-86e0-63e5a5f2e191",
+  id: "a4b0f4bd-2bb9-4b79-98c3-22ad65b07f27",
   ruleRevisionIds: CORE_RULE_REVISIONS.map(({ id }) => id),
   status: "active",
-  version: "4.1.0",
+  version: "4.2.0",
 } as const;
 export const RULE_SET_REVISION_ID = CORE_RULE_SET_REVISION.id;
 
 export const CORE_SOURCE_MANIFEST = {
   id: SOURCE_MANIFEST_ID,
   sourceRevisionIds: CORE_SOURCE_REVISIONS.map(({ id }) => id),
-  version: "core-with-training-mobility-hydration-sleep-v1",
+  version: "core-with-training-mobility-hydration-sleep-supplements-v1",
 } as const;
 
 const ACTION_LEVELS = [
@@ -923,6 +1181,43 @@ function provisionalModuleResult(
         };
       }
     }
+    if (module === "supplements") {
+      try {
+        const plan = SupplementsPlanSchema.parse(
+          generateSupplementsPlan({ answers: context.answers }),
+        );
+        return {
+          confidence:
+            plan.status === "complete"
+              ? "high"
+              : plan.status === "provisional"
+                ? "medium"
+                : "high",
+          module,
+          payload: { ...plan },
+          status: plan.status === "complete" ? "valid" : "provisional",
+          uncertainties: plan.uncertainties.map((reason) => ({
+            code: reason.toUpperCase().replace(/[^A-Z0-9]+/g, "_"),
+            messageKey: `supplements.uncertainty.${reason}`,
+            module,
+          })),
+        };
+      } catch {
+        return {
+          confidence: "unknown",
+          module,
+          payload: { requested: true, stage: "supplements_engine" },
+          status: "provisional",
+          uncertainties: [
+            {
+              code: "SUPPLEMENTS_ENGINE_UNAVAILABLE",
+              messageKey: "supplements.uncertainty.engine_unavailable",
+              module,
+            },
+          ],
+        };
+      }
+    }
     return {
       confidence: "unknown",
       module,
@@ -1075,27 +1370,65 @@ export async function runDeterministicEngine(
     context: normativeContext(input.context),
   });
   const hydrationResult = moduleResults.find(({ module }) => module === "hydration");
+  const supplementsResult = moduleResults.find(
+    ({ module }) => module === "supplements",
+  );
   const clinical =
-    hydrationResult?.status === "not_requested"
+    hydrationResult?.status === "not_requested" &&
+    supplementsResult?.status === "not_requested"
       ? null
       : detectClinicalContext(input.context.answers);
   const safetyFindings = clinical
-    ? [
-        ...new Map(
-          clinical.safetyFindings.map(
-            ({ actionLevel, code, evidenceRef, messageKey }) => [
-              code,
-              {
-                actionLevel,
-                code,
-                evidenceRef,
-                messageKey,
-                module: "hydration" as const,
-              },
-            ],
-          ),
-        ).values(),
-      ]
+    ? (() => {
+        const hydrationCodes = new Set([
+          "FLUID_RESTRICTION_ACTIVE",
+          "RENAL_CONTEXT_PARTIAL",
+          "CARDIAC_CONTEXT_PARTIAL",
+          "HYPONATREMIA_CONTEXT_PARTIAL",
+          "DIURETIC_CONTEXT_PARTIAL",
+          "ANABOLIC_CONTEXT_PARTIAL",
+          "GLP1_CONTEXT_PARTIAL",
+          "CLINICAL_CONTEXT_UNMODELED",
+          "RETATRUTIDE_CONTEXT_UNMODELED",
+        ]);
+        const supplementCodes = new Set([
+          "ANTICOAGULANT_CONTEXT_PARTIAL",
+          "MAGNESIUM_INTERACTION_PARTIAL",
+          "ANABOLIC_CONTEXT_PARTIAL",
+          "GLP1_CONTEXT_PARTIAL",
+          "CLINICAL_CONTEXT_UNMODELED",
+          "RETATRUTIDE_CONTEXT_UNMODELED",
+          "RENAL_CONTEXT_PARTIAL",
+          "CARDIAC_CONTEXT_PARTIAL",
+          "HYPONATREMIA_CONTEXT_PARTIAL",
+          "DIURETIC_CONTEXT_PARTIAL",
+          "FLUID_RESTRICTION_ACTIVE",
+        ]);
+        const hydrationSelected = hydrationResult?.status !== "not_requested";
+        const supplementsSelected = supplementsResult?.status !== "not_requested";
+        const findings: PlanEngineResult["safetyFindings"] = [];
+        for (const finding of clinical.safetyFindings) {
+          const targets = [
+            ...(hydrationSelected && hydrationCodes.has(finding.code)
+              ? (["hydration"] as const)
+              : []),
+            ...(supplementsSelected && supplementCodes.has(finding.code)
+              ? (["supplements"] as const)
+              : []),
+          ];
+          for (const module of targets) {
+            if (
+              findings.some(
+                (item) => item.module === module && item.code === finding.code,
+              )
+            ) {
+              continue;
+            }
+            findings.push({ ...finding, module });
+          }
+        }
+        return findings;
+      })()
     : [];
   const normativeOutput = {
     canonicalizationVersion: CONTEXT_CANONICALIZATION_VERSION,
@@ -1121,3 +1454,4 @@ export * from "./modules/hydration/index.ts";
 export * from "./modules/mobility/index.ts";
 export * from "./modules/sleep/index.ts";
 export * from "./modules/training/index.ts";
+export * from "./modules/supplements/index.ts";

@@ -9,6 +9,7 @@ export * from "./nutrition";
 export * from "./plans";
 export * from "./questionnaire";
 export * from "./sleep";
+export * from "./supplements";
 export * from "./training";
 
 export const RuntimeSmokeSchema = z

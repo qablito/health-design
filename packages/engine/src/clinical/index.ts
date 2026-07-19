@@ -102,18 +102,33 @@ export function detectClinicalContext(input: ClinicalContextInput): ClinicalResu
   const medicationsDetailsMissing =
     medicationsConfirmed === true && medicationTexts.length === 0;
   const allTexts = [...conditionTexts, ...medicationTexts];
+  const catalogEntry = (code: string) =>
+    CLINICAL_CATALOG.find((entry) => entry.code === code)!;
+  const fluidRule = catalogEntry("FLUID_RESTRICTION_ACTIVE");
+  const renalRule = catalogEntry("RENAL_CONTEXT_PARTIAL");
+  const cardiacRule = catalogEntry("CARDIAC_CONTEXT_PARTIAL");
+  const sodiumRule = catalogEntry("HYPONATREMIA_CONTEXT_PARTIAL");
+  const glp1Rule = catalogEntry("GLP1_CONTEXT_PARTIAL");
+  const diureticRule = catalogEntry("DIURETIC_CONTEXT_PARTIAL");
+  const anticoagulantRule = catalogEntry("ANTICOAGULANT_CONTEXT_PARTIAL");
+  const magnesiumRule = catalogEntry("MAGNESIUM_INTERACTION_PARTIAL");
+  const retatrutideRule = catalogEntry("RETATRUTIDE_CONTEXT_UNMODELED");
+  const anabolicRule = catalogEntry("ANABOLIC_CONTEXT_PARTIAL");
   const fluidRestriction =
     answers.hydrationFluidRestriction === true ||
     answers.hydrationFluidRestriction === "declared" ||
     answers.fluidRestriction === true ||
     answers.liquidRestriction === true ||
-    hasAlias(allTexts, CLINICAL_CATALOG[0].aliases);
-  const renal = hasAlias(conditionTexts, CLINICAL_CATALOG[1].aliases);
-  const cardiac = hasAlias(conditionTexts, CLINICAL_CATALOG[2].aliases);
-  const hyponatremia = hasAlias(conditionTexts, CLINICAL_CATALOG[3].aliases);
-  const glp1 = hasAlias(medicationTexts, CLINICAL_CATALOG[4].aliases);
-  const diuretic = hasAlias(medicationTexts, CLINICAL_CATALOG[5].aliases);
-  const anabolic = hasAlias(medicationTexts, CLINICAL_CATALOG[6].aliases);
+    hasAlias(allTexts, fluidRule.aliases);
+  const renal = hasAlias(conditionTexts, renalRule.aliases);
+  const cardiac = hasAlias(conditionTexts, cardiacRule.aliases);
+  const hyponatremia = hasAlias(conditionTexts, sodiumRule.aliases);
+  const glp1 = hasAlias(medicationTexts, glp1Rule.aliases);
+  const diuretic = hasAlias(medicationTexts, diureticRule.aliases);
+  const anticoagulant = hasAlias(medicationTexts, anticoagulantRule.aliases);
+  const magnesiumInteraction = hasAlias(medicationTexts, magnesiumRule.aliases);
+  const retatrutide = hasAlias(medicationTexts, retatrutideRule.aliases);
+  const anabolic = hasAlias(medicationTexts, anabolicRule.aliases);
 
   const safetyFindings: ClinicalSafetyFinding[] = [];
   const uncertainties: ClinicalUncertainty[] = [];
@@ -121,24 +136,24 @@ export function detectClinicalContext(input: ClinicalContextInput): ClinicalResu
   let strictestActionLevel: ActionLevel = "information";
 
   if (fluidRestriction) {
-    const finding = findingFor(CLINICAL_CATALOG[0]);
+    const finding = findingFor(fluidRule);
     safetyFindings.push(finding);
     strictestActionLevel = actionMax(strictestActionLevel, finding.actionLevel);
     pushUnique(uncertainties, uncertainty("FLUID_LIMIT_NOT_PROVIDED"));
     strategies.push("fluid_limit_precedes_reference");
   }
   if (renal) {
-    const finding = findingFor(CLINICAL_CATALOG[1]);
+    const finding = findingFor(renalRule);
     safetyFindings.push(finding);
     strictestActionLevel = actionMax(strictestActionLevel, finding.actionLevel);
   }
   if (cardiac) {
-    const finding = findingFor(CLINICAL_CATALOG[2]);
+    const finding = findingFor(cardiacRule);
     safetyFindings.push(finding);
     strictestActionLevel = actionMax(strictestActionLevel, finding.actionLevel);
   }
   if (hyponatremia) {
-    const finding = findingFor(CLINICAL_CATALOG[3]);
+    const finding = findingFor(sodiumRule);
     safetyFindings.push(finding);
     strictestActionLevel = actionMax(strictestActionLevel, finding.actionLevel);
   }
@@ -147,21 +162,42 @@ export function detectClinicalContext(input: ClinicalContextInput): ClinicalResu
     strategies.push("clinical_limit_required");
   }
   if (glp1) {
-    const finding = findingFor(CLINICAL_CATALOG[4]);
+    const finding = findingFor(glp1Rule);
     safetyFindings.push(finding);
     strictestActionLevel = actionMax(strictestActionLevel, finding.actionLevel);
     pushUnique(uncertainties, uncertainty("GLP1_CONTEXT_PARTIAL"));
     strategies.push("glp1_context_only");
   }
   if (diuretic) {
-    const finding = findingFor(CLINICAL_CATALOG[5]);
+    const finding = findingFor(diureticRule);
     safetyFindings.push(finding);
     strictestActionLevel = actionMax(strictestActionLevel, finding.actionLevel);
     pushUnique(uncertainties, uncertainty("DIURETIC_CONTEXT_PARTIAL"));
     strategies.push("diuretic_mechanism_only");
   }
+  if (anticoagulant) {
+    const finding = findingFor(anticoagulantRule);
+    safetyFindings.push(finding);
+    strictestActionLevel = actionMax(strictestActionLevel, finding.actionLevel);
+    pushUnique(uncertainties, uncertainty("ANTICOAGULANT_CONTEXT_PARTIAL"));
+    strategies.push("anticoagulant_interaction_review");
+  }
+  if (magnesiumInteraction) {
+    const finding = findingFor(magnesiumRule);
+    safetyFindings.push(finding);
+    strictestActionLevel = actionMax(strictestActionLevel, finding.actionLevel);
+    pushUnique(uncertainties, uncertainty("MAGNESIUM_INTERACTION_PARTIAL"));
+    strategies.push("magnesium_interaction_review");
+  }
+  if (retatrutide) {
+    const finding = findingFor(retatrutideRule);
+    safetyFindings.push(finding);
+    strictestActionLevel = actionMax(strictestActionLevel, finding.actionLevel);
+    pushUnique(uncertainties, uncertainty("RETATRUTIDE_CONTEXT_UNMODELED"));
+    strategies.push("retatrutide_unmodeled");
+  }
   if (anabolic) {
-    const finding = findingFor(CLINICAL_CATALOG[6]);
+    const finding = findingFor(anabolicRule);
     safetyFindings.push(finding);
     strictestActionLevel = actionMax(strictestActionLevel, finding.actionLevel);
     pushUnique(uncertainties, uncertainty("ANABOLIC_CONTEXT_PARTIAL"));
@@ -210,7 +246,11 @@ export function detectClinicalContext(input: ClinicalContextInput): ClinicalResu
         ? "partial"
         : "modeled";
   const coverage =
-    hasUnknownContext || contextCoverage === "unmodeled"
+    hasUnknownContext ||
+    contextCoverage === "unmodeled" ||
+    safetyFindings.some(
+      ({ coverage: findingCoverage }) => findingCoverage === "unmodeled",
+    )
       ? "unmodeled"
       : contextCoverage === "partial" || safetyFindings.length > 0
         ? "partial"
@@ -222,12 +262,15 @@ export function detectClinicalContext(input: ClinicalContextInput): ClinicalResu
     coverage,
     detected: {
       anabolic,
+      anticoagulant,
       cardiac,
       diuretic,
       fluidRestriction,
       glp1,
       hyponatremia,
+      magnesiumInteraction,
       renal,
+      retatrutide,
     },
     safetyFindings,
     strategies,

@@ -80,6 +80,27 @@ describe("reglas clínicas selectivas", () => {
     expect(CLINICAL_CATALOG_VERSION).toBe("clinical-selective-v1");
   });
 
+  it("reconoce alias internos selectivos sin confundir subcadenas", () => {
+    const result = detectClinicalContext({
+      hasConditions: false,
+      hasMedications: true,
+      medications: [
+        { name: "Wegovy" },
+        { name: "Mounjaro" },
+        { name: "Retatrutida" },
+        { name: "Apixabán" },
+        { name: "Doxiciclina" },
+        { name: "Ostarina" },
+      ],
+    });
+    expect(result.detected.glp1).toBe(true);
+    expect(result.detected.retatrutide).toBe(true);
+    expect(result.detected.anticoagulant).toBe(true);
+    expect(result.detected.magnesiumInteraction).toBe(true);
+    expect(result.detected.anabolic).toBe(true);
+    expect(result.coverage).toBe("unmodeled");
+  });
+
   it("solo desplaza el contexto anabólico al extremo alto y no recomienda su uso", () => {
     const result = detectClinicalContext({
       hasConditions: false,
