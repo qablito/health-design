@@ -567,9 +567,7 @@ describe("pipeline determinista T8", () => {
     expect(PlanEngineResultSchema.parse(result)).toEqual(result);
     expect(result.completeness).toBe("provisional");
     expect(result.validation).toMatchObject({ completeness: "provisional" });
-    expect(result.validation.provisionalReasons).toContain(
-      "clinical_context_partial",
-    );
+    expect(result.validation.provisionalReasons).toContain("clinical_context_partial");
   });
 
   it.each([

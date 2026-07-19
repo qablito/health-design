@@ -580,7 +580,8 @@ export function generateSupplementsPlan(input: Input): SupplementsPlanContract {
         interactions: [
           "Revisar absorción, medicación y analítica si el déficit está confirmado.",
         ],
-        metric: "Valor actual de B12 con rango aportado y síntomas relevantes declarados.",
+        metric:
+          "Valor actual de B12 con rango aportado y síntomas relevantes declarados.",
         purpose: "Prevención o revisión de carencia asociada a veganismo o valor bajo.",
         risks: ["No se automatiza dosis."],
         stopCondition:

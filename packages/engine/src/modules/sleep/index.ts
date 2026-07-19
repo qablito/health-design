@@ -147,20 +147,19 @@ export function generateSleepPlan(input: SleepEngineInput): SleepPlanContract {
   const criticalSleepDataMissing = uncertainties.some(({ code }) =>
     code.startsWith("SLEEP_"),
   );
-  const confidence =
-    criticalSleepDataMissing
-      ? "low"
-      : confidenceFactors.some((factor) =>
-            [
-              "quality_low",
-              "regularity_variable",
-              "manual_phases",
-              "long_duration_context",
-              "clinical_context_partial",
-            ].includes(factor),
-          )
-        ? "medium"
-        : "high";
+  const confidence = criticalSleepDataMissing
+    ? "low"
+    : confidenceFactors.some((factor) =>
+          [
+            "quality_low",
+            "regularity_variable",
+            "manual_phases",
+            "long_duration_context",
+            "clinical_context_partial",
+          ].includes(factor),
+        )
+      ? "medium"
+      : "high";
 
   return {
     status: uncertainties.length === 0 ? "valid" : "provisional",
