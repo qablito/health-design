@@ -230,10 +230,10 @@ describe("reconciliación de reglas", () => {
       context,
     });
 
-    expect(result.validation).toMatchObject({
-      checks: expect.arrayContaining(["clinical_catalog_descriptor_exact_match"]),
-      clinicalCatalogDescriptor: descriptor,
-    });
+    expect(result.validation).toMatchObject({ clinicalCatalogDescriptor: descriptor });
+    expect(result.validation.checks).toContain(
+      "clinical_catalog_descriptor_exact_match",
+    );
     await expect(
       runDeterministicEngine({
         baseContext: null,
@@ -361,7 +361,6 @@ describe("reconciliación de reglas", () => {
       engineVersion: "engine-v4",
       ruleSetRevision: {
         id: "a4b0f4bd-2bb9-4b79-98c3-22ad65b07f27",
-        ruleRevisionIds: expect.arrayContaining(["rule.clinical-selective@1.0.0"]),
         version: "4.2.0",
       },
       sourceManifest: {
@@ -369,6 +368,9 @@ describe("reconciliación de reglas", () => {
         version: "core-with-training-mobility-hydration-sleep-supplements-v1",
       },
     });
+    expect(T12_INITIAL_ENGINE_SNAPSHOT.ruleSetRevision.ruleRevisionIds).toContain(
+      "rule.clinical-selective@1.0.0",
+    );
     expect(T12_INITIAL_ENGINE_SNAPSHOT.ruleSetRevision.ruleRevisionIds).not.toContain(
       "rule.clinical-selective@2.0.0",
     );
@@ -564,10 +566,10 @@ describe("pipeline determinista T8", () => {
     expect(JSON.stringify(result)).not.toContain("Hipertensión");
     expect(PlanEngineResultSchema.parse(result)).toEqual(result);
     expect(result.completeness).toBe("provisional");
-    expect(result.validation).toMatchObject({
-      completeness: "provisional",
-      provisionalReasons: expect.arrayContaining(["clinical_context_partial"]),
-    });
+    expect(result.validation).toMatchObject({ completeness: "provisional" });
+    expect(result.validation.provisionalReasons).toContain(
+      "clinical_context_partial",
+    );
   });
 
   it.each([
