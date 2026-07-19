@@ -87,8 +87,8 @@ describe("núcleo determinista de suplementos T12", () => {
     for (const pmid of ["40056718", "34559859"]) {
       const source = sourceFor(pmid);
       expect(source).toMatchObject({
-        evidenceType: "systematic_review",
-        hierarchy: "systematic_review",
+        evidenceType: "systematic_review_meta_analysis_meta_regression",
+        hierarchy: "systematic_review_meta_analysis",
       });
       expect(
         `${source?.applicability.join(" ")} ${source?.citation} ${source?.population}`,

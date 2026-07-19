@@ -249,12 +249,13 @@ describe("motor de hidratación", () => {
       answers: {
         ...base,
         hasMedications: true,
+        habitualWaterMl: 2_000,
         medications: [
           { name: "Apixabán" },
           { name: "Doxiciclina" },
           { name: "Omeprazol" },
         ],
-        physiologicalSex: "female",
+        physiologicalSex: "male",
       },
     });
     expect(plan.safetyFindings).not.toEqual(
@@ -264,6 +265,15 @@ describe("motor de hidratación", () => {
       ]),
     );
     expect(plan.safetyFindings).toEqual([]);
+    expect(plan.uncertainties).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "ANTICOAGULANT_CONTEXT_PARTIAL" }),
+        expect.objectContaining({ code: "MAGNESIUM_INTERACTION_PARTIAL" }),
+      ]),
+    );
+    expect(plan.clinicalCoverage).toBe("modeled");
+    expect(plan.strictestActionLevel).toBe("information");
+    expect(plan.completeness).toBe("complete");
   });
 
   it("normaliza puntuación al clasificar alcohol sin confundir ginger", () => {

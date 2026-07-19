@@ -1,4 +1,6 @@
 import {
+  type ActionLevel,
+  type ClinicalCoverage,
   type ClinicalResult,
   type HydrationPlanContract,
 } from "@health-design/contracts";
@@ -41,6 +43,84 @@ const HYDRATION_SAFETY_CODES = new Set([
   "CLINICAL_CONTEXT_UNMODELED",
   "RETATRUTIDE_CONTEXT_UNMODELED",
 ]);
+const HYDRATION_UNCERTAINTY_CODES = new Set([
+  "FLUID_LIMIT_NOT_PROVIDED",
+  "CLINICAL_FLUID_LIMIT_MISSING",
+  "GLP1_CONTEXT_PARTIAL",
+  "DIURETIC_CONTEXT_PARTIAL",
+  "ANABOLIC_CONTEXT_PARTIAL",
+  "CLINICAL_CONTEXT_UNMODELED",
+  "RETATRUTIDE_CONTEXT_UNMODELED",
+  "CONDITIONS_CONFIRMATION_MISSING",
+  "CONDITIONS_DETAILS_MISSING",
+  "MEDICATIONS_CONFIRMATION_MISSING",
+  "MEDICATIONS_DETAILS_MISSING",
+]);
+const HYDRATION_CLINICAL_STRATEGIES = new Set([
+  "fluid_limit_precedes_reference",
+  "clinical_limit_required",
+  "glp1_context_only",
+  "diuretic_mechanism_only",
+  "retatrutide_unmodeled",
+  "high_side_only",
+  "clinical_conditions_confirmation_required",
+  "clinical_conditions_details_required",
+  "clinical_medications_confirmation_required",
+  "clinical_medications_details_required",
+]);
+const ACTION_ORDER: readonly ActionLevel[] = [
+  "information",
+  "adjustment",
+  "priority_review",
+  "immediate_conservative",
+];
+
+function hydrationClinicalContext(clinical: ClinicalResult): {
+  coverage: ClinicalCoverage;
+  safetyFindings: ClinicalResult["safetyFindings"];
+  strategies: string[];
+  strictestActionLevel: ActionLevel;
+  uncertainties: ClinicalResult["uncertainties"];
+} {
+  const safetyFindings = clinical.safetyFindings.filter(({ code }) =>
+    HYDRATION_SAFETY_CODES.has(code),
+  );
+  const uncertainties = clinical.uncertainties.filter(({ code }) =>
+    HYDRATION_UNCERTAINTY_CODES.has(code),
+  );
+  const strategies = clinical.strategies.filter((strategy) =>
+    HYDRATION_CLINICAL_STRATEGIES.has(strategy),
+  );
+  const strictestActionLevel = safetyFindings.reduce<ActionLevel>(
+    (current, finding) =>
+      ACTION_ORDER.indexOf(finding.actionLevel) > ACTION_ORDER.indexOf(current)
+        ? finding.actionLevel
+        : current,
+    "information",
+  );
+  const unmodeled =
+    safetyFindings.some(({ coverage }) => coverage === "unmodeled") ||
+    uncertainties.some(({ code }) =>
+      [
+        "CLINICAL_CONTEXT_UNMODELED",
+        "RETATRUTIDE_CONTEXT_UNMODELED",
+        "CONDITIONS_CONFIRMATION_MISSING",
+        "MEDICATIONS_CONFIRMATION_MISSING",
+      ].includes(code),
+    );
+  const coverage: ClinicalCoverage = unmodeled
+    ? "unmodeled"
+    : safetyFindings.length > 0 || uncertainties.length > 0
+      ? "partial"
+      : "modeled";
+  return {
+    coverage,
+    safetyFindings,
+    strategies,
+    strictestActionLevel,
+    uncertainties,
+  };
+}
 
 function normalize(value: string): string {
   return value
@@ -153,6 +233,7 @@ export function generateHydrationPlan(
     "clinical" in (input as Record<string, unknown>)
       ? ((input as HydrationEngineInput).clinical ?? detectClinicalContext(answers))
       : detectClinicalContext(answers);
+  const hydrationClinical = hydrationClinicalContext(clinical);
   const totalReferenceMl = rangeFor(answers);
   const declaredBeverages = Array.isArray(answers.habitualBeverages)
     ? answers.habitualBeverages.filter(
@@ -163,7 +244,7 @@ export function generateHydrationPlan(
   const countedBeverages = declaredBeverages.filter((beverage) => !isAlcohol(beverage));
   const alcoholRecorded = declaredBeverages.some(isAlcohol);
   const { anchors, anchorSource } = anchorsFor(answers);
-  const uncertainties = [...clinical.uncertainties];
+  const uncertainties = [...hydrationClinical.uncertainties];
   const restrictionStatus = normalizeRestrictionStatus(
     answers.hydrationFluidRestriction,
   );
@@ -225,9 +306,9 @@ export function generateHydrationPlan(
     clinical.detected.fluidRestriction ||
     (limitMissing && !clinical.detected.fluidRestriction);
   const strictestActionLevel =
-    restrictionUnknown && clinical.strictestActionLevel === "information"
+    restrictionUnknown && hydrationClinical.strictestActionLevel === "information"
       ? "priority_review"
-      : clinical.strictestActionLevel;
+      : hydrationClinical.strictestActionLevel;
 
   const choiceRules: ChoiceRule<"high_side" | "standard">[] = [
     {
@@ -266,10 +347,12 @@ export function generateHydrationPlan(
     "food_water_estimate",
     "flexible_anchors",
     "alcohol_excluded",
+    ...hydrationClinical.strategies,
   ];
   if (sideChoice === "high_side") strategies.push("high_side_only");
   if (bandUnavailable) strategies.push("clinical_limit_precedes_reference");
   if (restrictionUnknown) strategies.push("fluid_limit_status_required");
+  const planStrategies = [...new Set(strategies)];
   const planUncertainties = [
     ...new Map(uncertainties.map((item) => [item.code, item])).values(),
   ];
@@ -281,20 +364,18 @@ export function generateHydrationPlan(
     anchors,
     beverageBandMl,
     clinicalCoverage:
-      restrictionUnknown && clinical.coverage === "modeled"
+      restrictionUnknown && hydrationClinical.coverage === "modeled"
         ? "partial"
-        : clinical.coverage,
+        : hydrationClinical.coverage,
     completeness,
     countedBeverages,
     electrolyteStrategy: electrolyteActive ? "contextual_review" : "not_indicated",
     foodWaterEstimate: { center: 0.25, maximum: 0.3, minimum: 0.2 },
     proposedBeverages: beverageBandMl === null ? [] : ["agua"],
     reminders: answers.hydrationReminders === true,
-    safetyFindings: clinical.safetyFindings
-      .filter(({ code }) => HYDRATION_SAFETY_CODES.has(code))
-      .map(({ code }) => code),
+    safetyFindings: hydrationClinical.safetyFindings.map(({ code }) => code),
     status: completeness === "complete" ? "valid" : "provisional",
-    strategies,
+    strategies: planStrategies,
     strictestActionLevel,
     totalReferenceMl,
     habitualWaterMl:
