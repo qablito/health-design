@@ -55,7 +55,7 @@ insert into public.questionnaire_drafts (
 ) values (
   '71000000-0000-4000-8000-000000007101',
   '51000000-0000-4000-8000-000000007101',
-  1, 1, 'submitted', 'provisional',
+  2, 1, 'submitted', 'provisional',
   '{"activeModules":["nutrition","hydration"],"age":35,"weightKg":82}'::jsonb,
   array['core', 'modules', 'summary'], 'summary',
   '[{"answerId":"heightCm","affectedModules":["nutrition","hydration"]}]'::jsonb,
@@ -628,7 +628,7 @@ insert into public.questionnaire_drafts (
 ) values (
   '71000000-0000-4000-8000-000000007102',
   '51000000-0000-4000-8000-000000007102',
-  1, 1, 'submitted', 'complete', '{}', '{}', 'summary', '[]', '[]'
+  2, 1, 'submitted', 'complete', '{}', '{}', 'summary', '[]', '[]'
 );
 insert into public.context_snapshots (
   id, profile_id, source_draft_id, source_draft_version, schema_version,
@@ -637,7 +637,7 @@ insert into public.context_snapshots (
 ) values (
   '72000000-0000-4000-8000-000000007102',
   '51000000-0000-4000-8000-000000007102',
-  '71000000-0000-4000-8000-000000007102', 1, 1, now(), '{}', 'complete',
+  '71000000-0000-4000-8000-000000007102', 1, 2, now(), '{}', 'complete',
   'normalization-v1', decode(repeat('91', 32), 'hex'), 'canonical-json-v1'
 );
 select lives_ok(
@@ -701,7 +701,7 @@ insert into public.questionnaire_drafts (
 ) values (
   '71000000-0000-4000-8000-000000007199',
   '51000000-0000-4000-8000-000000007199',
-  1, 1, 'submitted', 'complete',
+  2, 1, 'submitted', 'complete',
   '{"activeModules":["nutrition"],"age":35,"weightKg":82,"heightCm":178}'::jsonb,
   array['core', 'modules', 'summary'], 'summary', '[]'::jsonb, '[]'::jsonb
 );
@@ -712,7 +712,7 @@ insert into public.context_snapshots (
 ) values (
   '72000000-0000-4000-8000-000000007199',
   '51000000-0000-4000-8000-000000007199',
-  '71000000-0000-4000-8000-000000007199', 1, 1, now(),
+  '71000000-0000-4000-8000-000000007199', 1, 2, now(),
   '{"activeModules":["nutrition"],"age":35,"weightKg":82,"heightCm":178}'::jsonb,
   'complete', 'normalization-v1', decode(repeat('71', 32), 'hex'),
   'canonical-json-v1'

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  QUESTIONNAIRE_PUBLIC_SCHEMA_V1,
+  QUESTIONNAIRE_PUBLIC_SCHEMA_V2,
   QuestionnaireAnswersSchema,
   QuestionnaireDraftSaveRequestSchema,
 } from "@health-design/contracts";
@@ -65,7 +65,7 @@ describe("contratos del cuestionario", () => {
       confirmedBlockIds: ["modules"],
       currentBlockId: "nutrition",
       expectedVersion: 0,
-      schemaVersion: 1,
+      schemaVersion: 2,
     });
 
     expect(parsed.expectedVersion).toBe(0);
@@ -77,29 +77,34 @@ describe("contratos del cuestionario", () => {
     ).toBe(false);
   });
 
-  it("publica opciones y dependencias como parte del schema V1", () => {
-    expect(QUESTIONNAIRE_PUBLIC_SCHEMA_V1.schemaVersion).toBe(1);
-    expect(QUESTIONNAIRE_PUBLIC_SCHEMA_V1.blocks.at(-1)?.id).toBe("summary");
+  it("publica opciones y dependencias como parte del schema V2", () => {
+    expect(QUESTIONNAIRE_PUBLIC_SCHEMA_V2.schemaVersion).toBe(2);
+    expect(QUESTIONNAIRE_PUBLIC_SCHEMA_V2.blocks.at(-1)?.id).toBe("summary");
     expect(
-      QUESTIONNAIRE_PUBLIC_SCHEMA_V1.questions.find(
+      QUESTIONNAIRE_PUBLIC_SCHEMA_V2.questions.find(
         ({ id }) => id === "generatedTrainingStyles",
       )?.visibleWhen,
     ).toEqual({ answerId: "trainingMode", includes: "generated" });
     expect(
-      QUESTIONNAIRE_PUBLIC_SCHEMA_V1.questions.find(({ id }) => id === "activeModules")
+      QUESTIONNAIRE_PUBLIC_SCHEMA_V2.questions.find(({ id }) => id === "activeModules")
         ?.options,
     ).toHaveLength(6);
     expect(
-      QUESTIONNAIRE_PUBLIC_SCHEMA_V1.questions
+      QUESTIONNAIRE_PUBLIC_SCHEMA_V2.questions.find(
+        ({ id }) => id === "indirectCalorimetryDate",
+      )?.kind,
+    ).toBe("date");
+    expect(
+      QUESTIONNAIRE_PUBLIC_SCHEMA_V2.questions
         .find(({ id }) => id === "medications")
         ?.options?.some(({ value }) => value === "Semaglutida"),
     ).toBe(true);
     expect(
-      QUESTIONNAIRE_PUBLIC_SCHEMA_V1.questions.find(({ id }) => id === "preferredFoods")
+      QUESTIONNAIRE_PUBLIC_SCHEMA_V2.questions.find(({ id }) => id === "preferredFoods")
         ?.options?.length,
     ).toBeGreaterThan(10);
     expect(
-      QUESTIONNAIRE_PUBLIC_SCHEMA_V1.questions
+      QUESTIONNAIRE_PUBLIC_SCHEMA_V2.questions
         .find(({ id }) => id === "preferredSupermarket")
         ?.options?.map(({ value }) => value),
     ).toEqual(["Mercadona", "Lidl", "DIA", "Carrefour", "Alcampo"]);

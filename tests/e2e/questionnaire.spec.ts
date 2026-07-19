@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { QUESTIONNAIRE_PUBLIC_SCHEMA_V1 } from "@health-design/contracts";
+import { QUESTIONNAIRE_PUBLIC_SCHEMA_V2 } from "@health-design/contracts";
 import { evaluateQuestionnaire } from "@health-design/domain";
 
 const userId = "00000000-0000-4000-8000-000000000902";
@@ -64,7 +64,7 @@ async function mockQuestionnaire(page: Page) {
     const path = new URL(request.url()).pathname;
     if (path.endsWith("/v1/questionnaire/schema")) {
       await route.fulfill({
-        body: JSON.stringify(QUESTIONNAIRE_PUBLIC_SCHEMA_V1),
+        body: JSON.stringify(QUESTIONNAIRE_PUBLIC_SCHEMA_V2),
         contentType: "application/json",
         status: 200,
       });
@@ -98,7 +98,7 @@ async function mockQuestionnaire(page: Page) {
       currentBlockId: body.currentBlockId ?? draft?.currentBlockId ?? "summary",
       hardErrors: evaluation.hardErrors,
       profileId,
-      schemaVersion: 1,
+      schemaVersion: 2,
       status: path.endsWith("/submit") ? "submitted" : "editing",
       uncertainties: evaluation.uncertainties,
       updatedAt: new Date().toISOString(),
@@ -142,6 +142,12 @@ test("reanuda, ramifica, edita el resumen y no persiste respuestas clínicas", a
   await page.getByRole("button", { name: "Continuar" }).click();
 
   await page.getByLabel("Comidas al día").fill("4");
+  await page.getByLabel("Estilo de menú").selectOption("balanced");
+  await page.getByLabel("Patrón de alimentación").selectOption("omnivore");
+  await page.getByLabel("Al despertar").check();
+  await page.getByLabel("Mediodía").check();
+  await page.getByLabel("Tarde").check();
+  await page.getByLabel("Noche").check();
   await page.getByLabel("Alergias y contaminación cruzada").selectOption("none");
   await page.getByLabel("Intolerancias").selectOption("none");
   await page.getByLabel("Ansiedad alimentaria").selectOption("no");

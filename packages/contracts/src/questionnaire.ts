@@ -2,6 +2,9 @@ import { z } from "zod";
 
 import {
   evaluateQuestionnaire as evaluateDomainQuestionnaire,
+  DIETARY_PATTERNS,
+  NUTRITION_MEAL_ANCHORS,
+  NUTRITION_MODES,
   OBJECTIVE_IDS,
   QUESTIONNAIRE_BLOCK_IDS,
   QUESTIONNAIRE_MODULES,
@@ -72,6 +75,7 @@ const QuestionnaireAnswersObjectSchema = z
     country: z.literal("ES").optional(),
     currentSupplements: z.array(MedicationEntrySchema).max(50).optional(),
     dailySchedule: z.enum(["regular", "variable", "shift_work"]).optional(),
+    dietaryPattern: z.enum(DIETARY_PATTERNS).optional(),
     excludedFoods: StringListSchema.optional(),
     generatedTrainingDaysPerWeek: z.number().int().min(1).max(7).optional(),
     generatedTrainingEquipment: StringListSchema.optional(),
@@ -80,10 +84,16 @@ const QuestionnaireAnswersObjectSchema = z
     hasConditions: z.boolean().optional(),
     hasCurrentSupplements: z.boolean().optional(),
     hasLabValues: z.boolean().optional(),
+    hasIndirectCalorimetry: z.boolean().optional(),
     hasMedications: z.boolean().optional(),
     habitualBeverages: StringListSchema.optional(),
     habitualWaterMl: z.number().int().min(0).max(10_000).optional(),
     heightCm: z.number().min(100).max(250).optional(),
+    indirectCalorimetryDate: z.iso.date().optional(),
+    indirectCalorimetryRmrKcal: z.number().min(500).max(6_000).optional(),
+    indirectCalorimetrySource: z
+      .enum(["clinical_service", "sports_service", "other"])
+      .optional(),
     hydrationAnchors: StringListSchema.optional(),
     hydrationClimate: z.enum(["temperate", "hot", "cold", "variable"]).optional(),
     hydrationReminders: z.boolean().optional(),
@@ -105,6 +115,13 @@ const QuestionnaireAnswersObjectSchema = z
       .optional(),
     nutritionIntolerances: z.array(IntoleranceEntrySchema).max(50).optional(),
     nutritionIntolerancesStatus: z.enum(["none", "declared", "unknown"]).optional(),
+    nutritionMealAnchors: z
+      .array(z.enum(NUTRITION_MEAL_ANCHORS))
+      .min(2)
+      .max(6)
+      .refine((anchors) => new Set(anchors).size === anchors.length, "duplicate_anchor")
+      .optional(),
+    nutritionMode: z.enum(NUTRITION_MODES).optional(),
     ownTrainingDaysPerWeek: z.number().int().min(1).max(7).optional(),
     ownTrainingIntensity: z.enum(["low", "moderate", "high", "variable"]).optional(),
     ownTrainingSessionMinutes: z.number().int().min(5).max(480).optional(),
@@ -242,7 +259,8 @@ type Option = { label: string; value: string };
 type PublicQuestion = {
   blockId: QuestionnaireBlockId;
   id: keyof QuestionnaireAnswers;
-  kind: "boolean" | "entities" | "multi" | "number" | "single" | "text" | "time";
+  kind:
+    "boolean" | "date" | "entities" | "multi" | "number" | "single" | "text" | "time";
   label: string;
   options?: Option[];
   visibleWhen?: {
@@ -403,6 +421,38 @@ const questions: PublicQuestion[] = [
     ]),
   },
   {
+    blockId: "core",
+    id: "hasIndirectCalorimetry",
+    kind: "boolean",
+    label: "Tengo una medición de metabolismo basal por calorimetría indirecta",
+  },
+  {
+    blockId: "core",
+    id: "indirectCalorimetryRmrKcal",
+    kind: "number",
+    label: "Metabolismo basal medido (kcal/día)",
+    visibleWhen: { answerId: "hasIndirectCalorimetry", includes: true },
+  },
+  {
+    blockId: "core",
+    id: "indirectCalorimetryDate",
+    kind: "date",
+    label: "Fecha de la medición",
+    visibleWhen: { answerId: "hasIndirectCalorimetry", includes: true },
+  },
+  {
+    blockId: "core",
+    id: "indirectCalorimetrySource",
+    kind: "single",
+    label: "Dónde se realizó la medición",
+    options: options([
+      ["clinical_service", "Servicio clínico"],
+      ["sports_service", "Servicio de rendimiento deportivo"],
+      ["other", "Otro centro"],
+    ]),
+    visibleWhen: { answerId: "hasIndirectCalorimetry", includes: true },
+  },
+  {
     blockId: "goals",
     id: "primaryObjective",
     kind: "single",
@@ -445,6 +495,44 @@ const questions: PublicQuestion[] = [
     ]),
   },
   { blockId: "nutrition", id: "mealsPerDay", kind: "number", label: "Comidas al día" },
+  {
+    blockId: "nutrition",
+    id: "nutritionMode",
+    kind: "single",
+    label: "Estilo de menú",
+    options: options([
+      ["simple", "Simple: menos alimentos y más repetición"],
+      ["balanced", "Equilibrado: más variedad durante la semana"],
+    ]),
+  },
+  {
+    blockId: "nutrition",
+    id: "dietaryPattern",
+    kind: "single",
+    label: "Patrón de alimentación",
+    options: options([
+      ["omnivore", "Omnívoro"],
+      ["pescetarian", "Pescetariano"],
+      ["vegetarian", "Vegetariano"],
+      ["vegan", "Vegano"],
+    ]),
+  },
+  {
+    blockId: "nutrition",
+    id: "nutritionMealAnchors",
+    kind: "multi",
+    label: "Anclajes flexibles de las comidas",
+    options: options([
+      ["wake_up", "Al despertar"],
+      ["mid_morning", "Media mañana"],
+      ["midday", "Mediodía"],
+      ["afternoon", "Tarde"],
+      ["evening", "Noche"],
+      ["pre_sleep", "Antes de dormir"],
+      ["pre_training", "Antes de entrenar"],
+      ["post_training", "Después de entrenar"],
+    ]),
+  },
   {
     blockId: "nutrition",
     id: "nutritionAllergiesStatus",
@@ -771,7 +859,7 @@ const questions: PublicQuestion[] = [
   },
 ];
 
-export const QUESTIONNAIRE_PUBLIC_SCHEMA_V1 = {
+export const QUESTIONNAIRE_PUBLIC_SCHEMA_V2 = {
   blocks: [
     { estimatedMinutes: 2, id: "core", title: "Contexto básico" },
     { estimatedMinutes: 1, id: "goals", title: "Objetivos" },
@@ -795,7 +883,16 @@ const PublicQuestionSchema = z
   .object({
     blockId: QuestionnaireBlockIdSchema,
     id: z.string().min(1),
-    kind: z.enum(["boolean", "entities", "multi", "number", "single", "text", "time"]),
+    kind: z.enum([
+      "boolean",
+      "date",
+      "entities",
+      "multi",
+      "number",
+      "single",
+      "text",
+      "time",
+    ]),
     label: z.string().min(1),
     options: z.array(PublicOptionSchema).optional(),
     visibleWhen: z
@@ -824,4 +921,4 @@ export const QuestionnairePublicSchemaResponseSchema = z
   })
   .strict();
 
-QuestionnairePublicSchemaResponseSchema.parse(QUESTIONNAIRE_PUBLIC_SCHEMA_V1);
+QuestionnairePublicSchemaResponseSchema.parse(QUESTIONNAIRE_PUBLIC_SCHEMA_V2);

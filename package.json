@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "node scripts/build-web.mjs",
+    "catalog:activate:ciqual": "node scripts/activate-ciqual-core.mjs",
     "check:public-env": "node scripts/check-public-env.mjs",
     "dev": "pnpm --filter @health-design/web dev",
     "edge:check": "node scripts/generate-edge-contracts.mjs --check",
@@ -47,6 +48,7 @@
     "globals": "17.7.0",
     "playwright": "1.58.2",
     "prettier": "3.9.5",
+    "read-excel-file": "9.3.2",
     "supabase": "2.108.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.64.0",

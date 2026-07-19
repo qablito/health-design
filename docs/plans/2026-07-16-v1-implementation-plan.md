@@ -696,6 +696,13 @@ pnpm run import:nutrition -- --fixture
 
 ## Tarea 10 — Generador de alimentación y sustituciones
 
+> **Estado 2026-07-19:** `T10_COMPLETE_REMOTE_PASS`. Cuestionario nutricional,
+> semana determinista de 2–6 comidas, dos sustitutos por alimento, recálculo y
+> núcleo oficial CIQUAL 2025 implementados y validados en desarrollo. No
+> incluye reglas clínicas/farmacológicas de T12, productos GTIN de T16,
+> supermercados/precios de T17 ni cambios en producción. Véase
+> [`TASK_10_VERIFICATION.md`](../quality/TASK_10_VERIFICATION.md).
+
 **Resultado:** semana estable de 2–6 comidas, con dos sustitutos por alimento y
 recálculo completo.
 

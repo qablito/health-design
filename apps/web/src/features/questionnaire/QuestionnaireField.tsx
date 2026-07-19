@@ -4,7 +4,8 @@ type Option = { label: string; value: string };
 export type QuestionnaireQuestion = {
   blockId: string;
   id: string;
-  kind: "boolean" | "entities" | "multi" | "number" | "single" | "text" | "time";
+  kind:
+    "boolean" | "date" | "entities" | "multi" | "number" | "single" | "text" | "time";
   label: string;
   options?: readonly Option[];
 };

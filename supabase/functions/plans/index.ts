@@ -6,6 +6,7 @@ import {
   type QuestionnaireDependencies,
 } from "./questionnaire.ts";
 import { handlePlanLifecycle, type PlanLifecycleDependencies } from "./lifecycle.ts";
+import { hydrateEffectiveNutritionCatalog } from "./nutrition-catalog.ts";
 
 function secret(name: string, fallback?: string): string {
   const value = runtimeValue(name) ?? fallback;
@@ -68,7 +69,20 @@ function dependencies(): QuestionnaireDependencies & PlanLifecycleDependencies {
       };
       return { data, error };
     },
-    runEngine: runDeterministicEngine,
+    runEngine: async (input) => {
+      const result: unknown = await serviceClient.rpc(
+        "internal_nutrition_effective_generator_catalog" as never,
+      );
+      const { data, error } = result as {
+        data: unknown;
+        error: { code?: string; message?: string } | null;
+      };
+      if (error) throw new Error("effective_nutrition_catalog_unavailable");
+      return runDeterministicEngine({
+        ...input,
+        nutritionCatalog: hydrateEffectiveNutritionCatalog(data),
+      });
+    },
   };
 }
 

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./nutrition": "./src/nutrition/index.ts"
+    "./nutrition": "./src/nutrition/index.ts",
+    "./nutrition-plan": "./src/profiles/nutrition/index.ts"
   }
 }

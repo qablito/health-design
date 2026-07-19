@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { QuestionnaireAnswersSchema } from "./questionnaire";
 export declare const PLAN_SCHEMA_VERSION: 1;
+export declare const CONTEXT_SOURCE_SCHEMA_VERSIONS: readonly [1, 2];
 export declare const CONTEXT_NORMALIZATION_VERSION: "normalization-v1";
 export declare const CONTEXT_CANONICALIZATION_VERSION: "canonical-json-v1";
 export declare const PlanModuleSchema: z.ZodEnum<{
@@ -21,8 +22,8 @@ export declare const PlanCompletenessSchema: z.ZodEnum<{
     provisional: "provisional";
 }>;
 export declare const PlanValidationStatusSchema: z.ZodEnum<{
-    valid: "valid";
     invalid: "invalid";
+    valid: "valid";
 }>;
 export declare const PlanCandidateStatusSchema: z.ZodEnum<{
     invalid: "invalid";
@@ -72,7 +73,7 @@ export declare const ContextSnapshotAckSchema: z.ZodObject<{
     inputHash: z.ZodString;
     normalizationVersion: z.ZodLiteral<"normalization-v1">;
     profileId: z.ZodUUID;
-    schemaVersion: z.ZodLiteral<1>;
+    schemaVersion: z.ZodUnion<readonly [z.ZodLiteral<1>, z.ZodLiteral<2>]>;
     sourceDraftId: z.ZodUUID;
     sourceDraftVersion: z.ZodNumber;
 }, z.core.$strict>;
@@ -88,7 +89,7 @@ export declare const ContextSnapshotInternalSchema: z.ZodObject<{
     inputHash: z.ZodString;
     normalizationVersion: z.ZodLiteral<"normalization-v1">;
     profileId: z.ZodUUID;
-    schemaVersion: z.ZodLiteral<1>;
+    schemaVersion: z.ZodUnion<readonly [z.ZodLiteral<1>, z.ZodLiteral<2>]>;
     sourceDraftId: z.ZodUUID;
     sourceDraftVersion: z.ZodNumber;
     answers: z.ZodObject<{
@@ -127,6 +128,12 @@ export declare const ContextSnapshotInternalSchema: z.ZodObject<{
             variable: "variable";
             shift_work: "shift_work";
         }>>;
+        dietaryPattern: z.ZodOptional<z.ZodEnum<{
+            omnivore: "omnivore";
+            pescetarian: "pescetarian";
+            vegetarian: "vegetarian";
+            vegan: "vegan";
+        }>>;
         excludedFoods: z.ZodOptional<z.ZodArray<z.ZodString>>;
         generatedTrainingDaysPerWeek: z.ZodOptional<z.ZodNumber>;
         generatedTrainingEquipment: z.ZodOptional<z.ZodArray<z.ZodString>>;
@@ -135,10 +142,18 @@ export declare const ContextSnapshotInternalSchema: z.ZodObject<{
         hasConditions: z.ZodOptional<z.ZodBoolean>;
         hasCurrentSupplements: z.ZodOptional<z.ZodBoolean>;
         hasLabValues: z.ZodOptional<z.ZodBoolean>;
+        hasIndirectCalorimetry: z.ZodOptional<z.ZodBoolean>;
         hasMedications: z.ZodOptional<z.ZodBoolean>;
         habitualBeverages: z.ZodOptional<z.ZodArray<z.ZodString>>;
         habitualWaterMl: z.ZodOptional<z.ZodNumber>;
         heightCm: z.ZodOptional<z.ZodNumber>;
+        indirectCalorimetryDate: z.ZodOptional<z.ZodISODate>;
+        indirectCalorimetryRmrKcal: z.ZodOptional<z.ZodNumber>;
+        indirectCalorimetrySource: z.ZodOptional<z.ZodEnum<{
+            clinical_service: "clinical_service";
+            sports_service: "sports_service";
+            other: "other";
+        }>>;
         hydrationAnchors: z.ZodOptional<z.ZodArray<z.ZodString>>;
         hydrationClimate: z.ZodOptional<z.ZodEnum<{
             variable: "variable";
@@ -218,6 +233,20 @@ export declare const ContextSnapshotInternalSchema: z.ZodObject<{
             unknown: "unknown";
             none: "none";
             declared: "declared";
+        }>>;
+        nutritionMealAnchors: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+            wake_up: "wake_up";
+            mid_morning: "mid_morning";
+            midday: "midday";
+            afternoon: "afternoon";
+            evening: "evening";
+            pre_sleep: "pre_sleep";
+            pre_training: "pre_training";
+            post_training: "post_training";
+        }>>>;
+        nutritionMode: z.ZodOptional<z.ZodEnum<{
+            simple: "simple";
+            balanced: "balanced";
         }>>;
         ownTrainingDaysPerWeek: z.ZodOptional<z.ZodNumber>;
         ownTrainingIntensity: z.ZodOptional<z.ZodEnum<{
@@ -335,8 +364,8 @@ export declare const PlanModuleResultInputSchema: z.ZodObject<{
     payload: z.ZodRecord<z.ZodString, z.ZodUnknown>;
     status: z.ZodEnum<{
         provisional: "provisional";
-        valid: "valid";
         invalid: "invalid";
+        valid: "valid";
         not_requested: "not_requested";
     }>;
     uncertainties: z.ZodArray<z.ZodUnknown>;
@@ -386,8 +415,8 @@ export declare const PlanEngineResultSchema: z.ZodObject<{
         payload: z.ZodRecord<z.ZodString, z.ZodUnknown>;
         status: z.ZodEnum<{
             provisional: "provisional";
-            valid: "valid";
             invalid: "invalid";
+            valid: "valid";
             not_requested: "not_requested";
         }>;
         uncertainties: z.ZodArray<z.ZodUnknown>;
@@ -416,8 +445,8 @@ export declare const PlanEngineResultSchema: z.ZodObject<{
     sourceManifestId: z.ZodUUID;
     validation: z.ZodRecord<z.ZodString, z.ZodUnknown>;
     validationStatus: z.ZodEnum<{
-        valid: "valid";
         invalid: "invalid";
+        valid: "valid";
     }>;
 }, z.core.$strict>;
 export declare const PlanMutationAckSchema: z.ZodObject<{
@@ -440,8 +469,8 @@ export declare const PlanMutationAckSchema: z.ZodObject<{
         archived: "archived";
     }>;
     validationStatus: z.ZodEnum<{
-        valid: "valid";
         invalid: "invalid";
+        valid: "valid";
     }>;
 }, z.core.$strict>;
 export declare const PlanCandidateAckSchema: z.ZodObject<{
@@ -464,8 +493,8 @@ export declare const PlanCandidateAckSchema: z.ZodObject<{
         archived: "archived";
     }>;
     validationStatus: z.ZodEnum<{
-        valid: "valid";
         invalid: "invalid";
+        valid: "valid";
     }>;
     baseVersionId: z.ZodUUID;
     candidateId: z.ZodUUID;
@@ -523,8 +552,8 @@ export declare const PlanVersionSchema: z.ZodObject<{
     validatedAt: z.ZodISODateTime;
     validation: z.ZodRecord<z.ZodString, z.ZodUnknown>;
     validationStatus: z.ZodEnum<{
-        valid: "valid";
         invalid: "invalid";
+        valid: "valid";
     }>;
 }, z.core.$strict>;
 export declare const PlanModuleResultSchema: z.ZodObject<{
@@ -545,8 +574,8 @@ export declare const PlanModuleResultSchema: z.ZodObject<{
     payload: z.ZodRecord<z.ZodString, z.ZodUnknown>;
     status: z.ZodEnum<{
         provisional: "provisional";
-        valid: "valid";
         invalid: "invalid";
+        valid: "valid";
         not_requested: "not_requested";
     }>;
     uncertainties: z.ZodArray<z.ZodUnknown>;
@@ -601,8 +630,8 @@ export declare const PlanVersionDetailSchema: z.ZodObject<{
     validatedAt: z.ZodISODateTime;
     validation: z.ZodRecord<z.ZodString, z.ZodUnknown>;
     validationStatus: z.ZodEnum<{
-        valid: "valid";
         invalid: "invalid";
+        valid: "valid";
     }>;
     moduleResults: z.ZodArray<z.ZodObject<{
         confidence: z.ZodEnum<{
@@ -622,8 +651,8 @@ export declare const PlanVersionDetailSchema: z.ZodObject<{
         payload: z.ZodRecord<z.ZodString, z.ZodUnknown>;
         status: z.ZodEnum<{
             provisional: "provisional";
-            valid: "valid";
             invalid: "invalid";
+            valid: "valid";
             not_requested: "not_requested";
         }>;
         uncertainties: z.ZodArray<z.ZodUnknown>;
@@ -684,8 +713,8 @@ export declare const PlanHistorySchema: z.ZodObject<{
         validatedAt: z.ZodISODateTime;
         validation: z.ZodRecord<z.ZodString, z.ZodUnknown>;
         validationStatus: z.ZodEnum<{
-            valid: "valid";
             invalid: "invalid";
+            valid: "valid";
         }>;
     }, z.core.$strict>>;
 }, z.core.$strict>;
@@ -697,3 +726,5 @@ export type PlanEngineResult = z.infer<typeof PlanEngineResultSchema>;
 export type PlanModuleResultInput = z.infer<typeof PlanModuleResultInputSchema>;
 export type PlanGenerationRequest = z.infer<typeof PlanGenerationRequestSchema>;
 export type PlanMutationRequest = z.infer<typeof PlanMutationRequestSchema>;
+export type PlanMutationAck = z.infer<typeof PlanMutationAckSchema>;
+export type PlanVersionDetail = z.infer<typeof PlanVersionDetailSchema>;

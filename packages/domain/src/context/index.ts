@@ -14,7 +14,7 @@ export type ContextSnapshotState = Readonly<{
   inputHash: string;
   normalizationVersion: typeof CONTEXT_NORMALIZATION_VERSION;
   profileId: string;
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   sourceDraftId: string;
   sourceDraftVersion: number;
 }>;

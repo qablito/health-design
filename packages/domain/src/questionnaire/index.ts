@@ -1,4 +1,27 @@
-export const QUESTIONNAIRE_SCHEMA_VERSION = 1 as const;
+export const QUESTIONNAIRE_SCHEMA_VERSION = 2 as const;
+
+export const NUTRITION_MODES = ["simple", "balanced"] as const;
+export type NutritionMode = (typeof NUTRITION_MODES)[number];
+
+export const DIETARY_PATTERNS = [
+  "omnivore",
+  "pescetarian",
+  "vegetarian",
+  "vegan",
+] as const;
+export type DietaryPattern = (typeof DIETARY_PATTERNS)[number];
+
+export const NUTRITION_MEAL_ANCHORS = [
+  "wake_up",
+  "mid_morning",
+  "midday",
+  "afternoon",
+  "evening",
+  "pre_sleep",
+  "pre_training",
+  "post_training",
+] as const;
+export type NutritionMealAnchor = (typeof NUTRITION_MEAL_ANCHORS)[number];
 
 export const QUESTIONNAIRE_MODULES = [
   "nutrition",
@@ -68,6 +91,7 @@ type QuestionnaireAnswerValues = {
   age?: number;
   country?: "ES";
   dailySchedule?: "regular" | "variable" | "shift_work";
+  dietaryPattern?: DietaryPattern;
   excludedFoods?: string[];
   generatedTrainingDaysPerWeek?: number;
   generatedTrainingEquipment?: string[];
@@ -77,6 +101,7 @@ type QuestionnaireAnswerValues = {
   hasCurrentSupplements?: boolean;
   hasLabValues?: boolean;
   hasMedications?: boolean;
+  hasIndirectCalorimetry?: boolean;
   heightCm?: number;
   habitualBeverages?: string[];
   habitualWaterMl?: number;
@@ -97,6 +122,8 @@ type QuestionnaireAnswerValues = {
   nutritionFoodAnxiety?: "no" | "sometimes" | "frequent" | "prefer_not_to_say";
   nutritionIntolerances?: IntoleranceEntry[];
   nutritionIntolerancesStatus?: "none" | "declared" | "unknown";
+  nutritionMealAnchors?: NutritionMealAnchor[];
+  nutritionMode?: NutritionMode;
   ownTrainingDaysPerWeek?: number;
   ownTrainingIntensity?: "low" | "moderate" | "high" | "variable";
   ownTrainingSessionMinutes?: number;
@@ -113,6 +140,9 @@ type QuestionnaireAnswerValues = {
   preferredSupermarket?: string;
   primaryObjective?: ObjectiveId;
   proteinPreference?: "food_only" | "usual_powder" | "optional_substitution";
+  indirectCalorimetryDate?: string;
+  indirectCalorimetryRmrKcal?: number;
+  indirectCalorimetrySource?: "clinical_service" | "sports_service" | "other";
   secondaryObjectives?: ObjectiveId[];
   sleepBedTime?: string;
   sleepDeepMinutes?: number;
@@ -170,6 +200,24 @@ const CRITICAL_RULES: readonly CriticalRule[] = [
   { answerId: "heightCm", blockId: "core", modules: BODY_DEPENDENT_MODULES },
   { answerId: "weightKg", blockId: "core", modules: BODY_DEPENDENT_MODULES },
   {
+    answerId: "indirectCalorimetryRmrKcal",
+    blockId: "core",
+    modules: ["nutrition"],
+    when: (answers) => answers.hasIndirectCalorimetry === true,
+  },
+  {
+    answerId: "indirectCalorimetryDate",
+    blockId: "core",
+    modules: ["nutrition"],
+    when: (answers) => answers.hasIndirectCalorimetry === true,
+  },
+  {
+    answerId: "indirectCalorimetrySource",
+    blockId: "core",
+    modules: ["nutrition"],
+    when: (answers) => answers.hasIndirectCalorimetry === true,
+  },
+  {
     answerId: "targetWeightKg",
     blockId: "goals",
     modules: BODY_DEPENDENT_MODULES,
@@ -206,6 +254,8 @@ const CRITICAL_RULES: readonly CriticalRule[] = [
     when: (answers) => answers.physiologicalSex === "female",
   },
   { answerId: "mealsPerDay", blockId: "nutrition", modules: ["nutrition"] },
+  { answerId: "nutritionMode", blockId: "nutrition", modules: ["nutrition"] },
+  { answerId: "dietaryPattern", blockId: "nutrition", modules: ["nutrition"] },
   {
     answerId: "nutritionAllergiesStatus",
     blockId: "nutrition",
@@ -359,6 +409,7 @@ export function getVisibleQuestionIds(
     "age",
     "country",
     "dailySchedule",
+    "hasIndirectCalorimetry",
     "hasConditions",
     "hasLabValues",
     "hasMedications",
@@ -380,6 +431,7 @@ export function getVisibleQuestionIds(
   if (answers.activeModules?.includes("nutrition")) {
     visible.add("preferredFoods");
     visible.add("excludedFoods");
+    visible.add("nutritionMealAnchors");
     visible.add("preferredSupermarket");
     visible.add("compareSupermarkets");
   }

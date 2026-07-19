@@ -266,7 +266,7 @@ function setup(options?: {
             hardErrors: [],
             id: draftId,
             profileId,
-            schemaVersion: 1,
+            schemaVersion: 2,
             status: "submitted",
             uncertainties: [],
             updatedAt: timestamp,

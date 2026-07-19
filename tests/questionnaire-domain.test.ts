@@ -28,9 +28,9 @@ const baseAnswers: QuestionnaireAnswers = {
   weightKg: 80,
 };
 
-describe("cuestionario adaptativo V1", () => {
+describe("cuestionario adaptativo V2", () => {
   it("mantiene una versión canónica explícita", () => {
-    expect(QUESTIONNAIRE_SCHEMA_VERSION).toBe(1);
+    expect(QUESTIONNAIRE_SCHEMA_VERSION).toBe(2);
   });
 
   it("rechaza cero módulos sin modificar el borrador", () => {
@@ -165,5 +165,30 @@ describe("cuestionario adaptativo V1", () => {
     expect(nutrition).toContain("compareSupermarkets");
     expect(sleepOnly).not.toContain("preferredSupermarket");
     expect(sleepOnly).not.toContain("compareSupermarkets");
+  });
+
+  it("muestra la calorimetría opcional y sus detalles solo cuando se declara", () => {
+    const base = getVisibleQuestionIds(baseAnswers);
+    const declared = getVisibleQuestionIds({
+      ...baseAnswers,
+      hasIndirectCalorimetry: true,
+    });
+
+    expect(base).toContain("hasIndirectCalorimetry");
+    expect(base).not.toContain("indirectCalorimetryRmrKcal");
+    expect(declared).toEqual(
+      expect.arrayContaining([
+        "indirectCalorimetryRmrKcal",
+        "indirectCalorimetryDate",
+        "indirectCalorimetrySource",
+      ]),
+    );
+  });
+
+  it("muestra los anclajes flexibles solo con alimentación activa", () => {
+    expect(getVisibleQuestionIds(baseAnswers)).toContain("nutritionMealAnchors");
+    expect(
+      getVisibleQuestionIds({ ...baseAnswers, activeModules: ["sleep"] }),
+    ).not.toContain("nutritionMealAnchors");
   });
 });

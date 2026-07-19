@@ -63,8 +63,15 @@ const GLOBAL_CONTEXT_FIELDS = new Set<string>([
 
 const NUTRITION_FIELDS = new Set<string>([
   "compareSupermarkets",
+  "dietaryPattern",
   "excludedFoods",
+  "hasIndirectCalorimetry",
+  "indirectCalorimetryDate",
+  "indirectCalorimetryRmrKcal",
+  "indirectCalorimetrySource",
   "mealsPerDay",
+  "nutritionMealAnchors",
+  "nutritionMode",
   "preferredFoods",
   "preferredSupermarket",
   "proteinPreference",

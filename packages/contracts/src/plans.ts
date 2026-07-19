@@ -15,6 +15,7 @@ import {
 import { QuestionnaireAnswersSchema } from "./questionnaire";
 
 export const PLAN_SCHEMA_VERSION = 1 as const;
+export const CONTEXT_SOURCE_SCHEMA_VERSIONS = [1, 2] as const;
 export const CONTEXT_NORMALIZATION_VERSION = DOMAIN_CONTEXT_NORMALIZATION_VERSION;
 export const CONTEXT_CANONICALIZATION_VERSION = DOMAIN_CONTEXT_CANONICALIZATION_VERSION;
 
@@ -23,6 +24,10 @@ const VersionNameSchema = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/);
 const JsonObjectSchema = z.record(z.string(), z.unknown());
 const JsonArraySchema = z.array(z.unknown());
 const TimestampSchema = z.iso.datetime({ offset: true });
+const ContextSourceSchemaVersionSchema = z.union([
+  z.literal(CONTEXT_SOURCE_SCHEMA_VERSIONS[0]),
+  z.literal(CONTEXT_SOURCE_SCHEMA_VERSIONS[1]),
+]);
 
 export const PlanModuleSchema = z.enum(QUESTIONNAIRE_MODULES);
 export const PlanVersionStatusSchema = z.enum(PLAN_VERSION_STATUSES);
@@ -84,7 +89,7 @@ export const ContextSnapshotAckSchema = z
     inputHash: HexSha256Schema,
     normalizationVersion: z.literal(CONTEXT_NORMALIZATION_VERSION),
     profileId: z.uuid(),
-    schemaVersion: z.literal(PLAN_SCHEMA_VERSION),
+    schemaVersion: ContextSourceSchemaVersionSchema,
     sourceDraftId: z.uuid(),
     sourceDraftVersion: z.number().int().min(1),
   })
@@ -237,3 +242,5 @@ export type PlanEngineResult = z.infer<typeof PlanEngineResultSchema>;
 export type PlanModuleResultInput = z.infer<typeof PlanModuleResultInputSchema>;
 export type PlanGenerationRequest = z.infer<typeof PlanGenerationRequestSchema>;
 export type PlanMutationRequest = z.infer<typeof PlanMutationRequestSchema>;
+export type PlanMutationAck = z.infer<typeof PlanMutationAckSchema>;
+export type PlanVersionDetail = z.infer<typeof PlanVersionDetailSchema>;

@@ -40,7 +40,7 @@ function setup(storedAnswers: Record<string, unknown> = baseAnswers): {
     currentBlockId: "nutrition",
     hardErrors: [],
     profileId,
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: "editing",
     uncertainties: [],
     updatedAt: "2026-07-18T10:00:00.000Z",
@@ -111,7 +111,7 @@ describe("Edge del cuestionario", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ schemaVersion: 1 });
+    expect(await response.json()).toMatchObject({ schemaVersion: 2 });
     expect(current.calls).toEqual([]);
     expect(response.headers.get("cache-control")).toBe("no-store, private");
   });
@@ -137,7 +137,7 @@ describe("Edge del cuestionario", () => {
         confirmedBlockIds: [],
         currentBlockId: "nutrition",
         expectedVersion: 0,
-        schemaVersion: 1,
+        schemaVersion: 2,
       }),
       arrayCase.dependencies,
     );
@@ -150,7 +150,7 @@ describe("Edge del cuestionario", () => {
         confirmedBlockIds: [],
         currentBlockId: "clinical",
         expectedVersion: 0,
-        schemaVersion: 1,
+        schemaVersion: 2,
       }),
       textCase.dependencies,
     );
@@ -183,7 +183,7 @@ describe("Edge del cuestionario", () => {
         confirmedBlockIds: ["core", "goals", "modules"],
         currentBlockId: "summary",
         expectedVersion: 0,
-        schemaVersion: 1,
+        schemaVersion: 2,
       }),
       save.dependencies,
     );
@@ -191,7 +191,7 @@ describe("Edge del cuestionario", () => {
     const submitResponse = await handleQuestionnaire(
       request(`/v1/profiles/${profileId}/draft/submit`, "POST", {
         expectedVersion: 1,
-        schemaVersion: 1,
+        schemaVersion: 2,
       }),
       submit.dependencies,
     );
@@ -216,7 +216,7 @@ describe("Edge del cuestionario", () => {
     const response = await handleQuestionnaire(
       request(`/v1/profiles/${profileId}/draft/submit`, "POST", {
         expectedVersion: 1,
-        schemaVersion: 1,
+        schemaVersion: 2,
       }),
       current.dependencies,
     );

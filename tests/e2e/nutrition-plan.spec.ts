@@ -1,0 +1,273 @@
+import { expect, test, type Page } from "@playwright/test";
+
+import { PlanVersionDetailSchema } from "@health-design/contracts";
+import type { QuestionnaireAnswers } from "@health-design/domain";
+import { generateNutritionWeek } from "@health-design/engine";
+import { effectiveNutritionFoods } from "@health-design/test-fixtures/nutrition-plan";
+
+const userId = "00000000-0000-4000-8000-000000001001";
+const sessionId = "21000000-0000-4000-8000-000000001001";
+const profileId = "51000000-0000-4000-8000-000000001001";
+const draftId = "71000000-0000-4000-8000-000000001001";
+const contextSnapshotId = "52000000-0000-4000-8000-000000001001";
+const planId = "53000000-0000-4000-8000-000000001001";
+const planVersionId = "54000000-0000-4000-8000-000000001001";
+const createdAt = "2026-07-19T10:00:00.000Z";
+
+const answers = {
+  activeModules: ["nutrition"],
+  activityLevel: "moderate" as const,
+  age: 35,
+  country: "ES" as const,
+  dailySchedule: "regular" as const,
+  dietaryPattern: "omnivore" as const,
+  hasConditions: false,
+  hasMedications: false,
+  heightCm: 175,
+  mealsPerDay: 4,
+  nutritionAllergiesStatus: "none" as const,
+  nutritionFoodAnxiety: "sometimes" as const,
+  nutritionIntolerancesStatus: "none" as const,
+  nutritionMealAnchors: ["wake_up", "midday", "afternoon", "evening"],
+  nutritionMode: "balanced" as const,
+  physiologicalSex: "male" as const,
+  primaryObjective: "body_composition_maintain" as const,
+  proteinPreference: "food_only" as const,
+  trainingMode: "none" as const,
+  weightKg: 80,
+} satisfies QuestionnaireAnswers;
+
+const nutritionWeek = generateNutritionWeek({
+  answers,
+  catalog: effectiveNutritionFoods,
+});
+
+function base64Url(value: unknown): string {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
+}
+
+function browserSession() {
+  const now = Math.floor(Date.now() / 1_000);
+  return {
+    access_token: `${base64Url({ alg: "HS256", typ: "JWT" })}.${base64Url({
+      aud: "authenticated",
+      exp: now + 3_600,
+      iat: now,
+      role: "authenticated",
+      session_id: sessionId,
+      sub: userId,
+    })}.test-signature`,
+    expires_at: now + 3_600,
+    expires_in: 3_600,
+    refresh_token: "nutrition-refresh-token",
+    token_type: "bearer",
+    user: {
+      app_metadata: { provider: "anonymous", providers: ["anonymous"] },
+      aud: "authenticated",
+      created_at: createdAt,
+      id: userId,
+      is_anonymous: true,
+      role: "authenticated",
+      updated_at: createdAt,
+      user_metadata: {},
+    },
+  };
+}
+
+async function installSession(page: Page) {
+  await page.addInitScript((session) => {
+    window.localStorage.setItem("sb-127-auth-token", JSON.stringify(session));
+  }, browserSession());
+}
+
+function mutationAck(status: "active" | "draft", aggregateVersion: number) {
+  return {
+    activatedAt: status === "active" ? "2026-07-19T10:05:00.000Z" : null,
+    activeVersionId: status === "active" ? planVersionId : null,
+    aggregateVersion,
+    archivedAt: null,
+    completeness: "complete",
+    contextSnapshotId,
+    createdAt,
+    ordinal: 1,
+    planId,
+    planVersionId,
+    status,
+    validationStatus: "valid",
+  };
+}
+
+async function mockNutritionApi(page: Page) {
+  const seenRequests: Array<{ body: unknown; method: string; path: string }> = [];
+  await page.route("http://127.0.0.1:54321/functions/v1/access/**", (route) =>
+    route.fulfill({
+      body: JSON.stringify([
+        {
+          accessScope: "owner",
+          alias: "Perfil nutricional",
+          profileId,
+          status: "active",
+        },
+      ]),
+      contentType: "application/json",
+      status: 200,
+    }),
+  );
+  await page.route("http://127.0.0.1:54321/functions/v1/plans/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const body: unknown = request.postData()
+      ? (request.postDataJSON() as unknown)
+      : null;
+    seenRequests.push({ body, method: request.method(), path });
+
+    if (
+      path.endsWith(`/v1/profiles/${profileId}/draft`) &&
+      request.method() === "GET"
+    ) {
+      await route.fulfill({
+        body: JSON.stringify({
+          answers,
+          completeness: "complete",
+          confirmedBlockIds: ["core", "goals", "modules", "nutrition"],
+          currentBlockId: "summary",
+          hardErrors: [],
+          id: draftId,
+          profileId,
+          schemaVersion: 2,
+          status: "submitted",
+          uncertainties: [],
+          updatedAt: createdAt,
+          version: 4,
+        }),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    if (path.endsWith(`/v1/profiles/${profileId}/contexts/snapshot`)) {
+      await route.fulfill({
+        body: JSON.stringify({
+          canonicalizationVersion: "canonical-json-v1",
+          completeness: "complete",
+          createdAt,
+          effectiveAt: createdAt,
+          id: contextSnapshotId,
+          inputHash: "a".repeat(64),
+          normalizationVersion: "normalization-v1",
+          profileId,
+          schemaVersion: 1,
+          sourceDraftId: draftId,
+          sourceDraftVersion: 4,
+        }),
+        contentType: "application/json",
+        status: 201,
+      });
+      return;
+    }
+    if (path.endsWith(`/v1/profiles/${profileId}/plans/generate`)) {
+      await route.fulfill({
+        body: JSON.stringify(mutationAck("draft", 1)),
+        contentType: "application/json",
+        status: 201,
+      });
+      return;
+    }
+    if (path.endsWith(`/v1/plans/${planId}/versions/${planVersionId}`)) {
+      const detail = PlanVersionDetailSchema.parse({
+        activatedAt: null,
+        archivedAt: null,
+        canonicalizationVersion: "canonical-json-v1",
+        completeness: "complete",
+        contextSnapshotId,
+        createdAt,
+        engineVersion: "engine-v2",
+        hashAlgorithm: "sha256",
+        id: planVersionId,
+        inputHash: "a".repeat(64),
+        moduleResults: [
+          {
+            confidence: "high",
+            createdAt,
+            id: "56000000-0000-4000-8000-000000001001",
+            module: "nutrition",
+            payload: nutritionWeek,
+            status: "valid",
+            uncertainties: [],
+          },
+        ],
+        ordinal: 1,
+        outputHash: "b".repeat(64),
+        planId,
+        ruleSetRevisionId: "8f1d57b0-0dc2-4cd2-aef9-2dc0b31bc922",
+        safetyFindings: [],
+        sourceManifestId: "90000000-0000-4000-8000-000000000001",
+        status: "draft",
+        validatedAt: createdAt,
+        validation: { status: "valid" },
+        validationStatus: "valid",
+      });
+      await route.fulfill({
+        body: JSON.stringify(detail),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    if (path.endsWith(`/v1/plans/${planId}/versions/${planVersionId}/activate`)) {
+      await route.fulfill({
+        body: JSON.stringify(mutationAck("active", 2)),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    await route.fulfill({
+      body: JSON.stringify({ error: { code: "NOT_FOUND" } }),
+      contentType: "application/json",
+      status: 404,
+    });
+  });
+  return seenRequests;
+}
+
+test("genera, recalcula una sustitución y activa solo el borrador original", async ({
+  page,
+}) => {
+  await installSession(page);
+  const requests = await mockNutritionApi(page);
+  await page.goto("/nutrition");
+
+  await expect(
+    page.getByRole("heading", { name: "Tu semana de alimentación" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Generar semana estable" }).click();
+  await expect(
+    page.getByRole("region", { name: "Objetivos nutricionales" }),
+  ).toBeVisible();
+  await expect(page.getByText("Día 7", { exact: true })).toBeVisible();
+  await expect(page.getByRole("option", { name: /·/ }).first()).toBeAttached();
+
+  const dailyBefore = await page.locator(".nutrition-toolbar span").textContent();
+  const firstSubstitution = page.getByRole("combobox", { name: /^Sustituir / }).first();
+  await firstSubstitution.selectOption({ index: 1 });
+  await expect(page.getByText("Vista previa recalculada.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Activar plan" })).toBeDisabled();
+  expect(await page.locator(".nutrition-toolbar span").textContent()).not.toBe(
+    dailyBefore,
+  );
+
+  await page.getByRole("button", { name: "Restablecer elecciones" }).click();
+  await expect(page.locator(".nutrition-toolbar span")).toHaveText(dailyBefore ?? "");
+  await page.getByRole("button", { name: "Activar plan" }).click();
+  await expect(page.getByRole("button", { name: "Plan activo" })).toBeVisible();
+
+  const activation = requests.find(({ path }) => path.endsWith("/activate"));
+  expect(activation).toMatchObject({
+    body: { expectedVersion: 1, schemaVersion: 1 },
+    method: "POST",
+  });
+  expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain(
+    "Pechuga de pollo",
+  );
+});

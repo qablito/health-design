@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  QUESTIONNAIRE_PUBLIC_SCHEMA_V1,
+  QUESTIONNAIRE_PUBLIC_SCHEMA_V2,
   QuestionnaireAnswersSchema,
   QuestionnairePublicSchemaResponseSchema,
   type QuestionnaireDraftAck,
@@ -25,7 +25,7 @@ import "./questionnaire.css";
 type PublicSchema = Awaited<ReturnType<typeof questionnaireClient.getSchema>>;
 
 const blockTitles = Object.fromEntries(
-  QUESTIONNAIRE_PUBLIC_SCHEMA_V1.blocks.map(({ id, title }) => [id, title]),
+  QUESTIONNAIRE_PUBLIC_SCHEMA_V2.blocks.map(({ id, title }) => [id, title]),
 ) as Record<QuestionnaireBlockId, string>;
 
 function friendlyError(error: unknown): string {
@@ -96,7 +96,7 @@ export function QuestionnaireApp() {
   const [profileId, setProfileId] = useState<string>();
   const [savedAt, setSavedAt] = useState<string>();
   const [schema, setSchema] = useState<PublicSchema>(() =>
-    QuestionnairePublicSchemaResponseSchema.parse(QUESTIONNAIRE_PUBLIC_SCHEMA_V1),
+    QuestionnairePublicSchemaResponseSchema.parse(QUESTIONNAIRE_PUBLIC_SCHEMA_V2),
   );
   const [status, setStatus] = useState<"editing" | "submitted">("editing");
   const [uncertainties, setUncertainties] = useState<
@@ -118,7 +118,7 @@ export function QuestionnaireApp() {
           setSchema(schemaResult.value);
         } else {
           setError(
-            "No se ha podido actualizar la definición del cuestionario. Puedes continuar con la versión V1 incluida en la aplicación.",
+            "No se ha podido actualizar la definición del cuestionario. Puedes continuar con la versión V2 incluida en la aplicación.",
           );
         }
         setProfileId((current) => current ?? nextProfiles[0]?.profileId);
@@ -249,7 +249,7 @@ export function QuestionnaireApp() {
           confirmedBlockIds: nextConfirmed,
           currentBlockId: nextBlockId,
           expectedVersion: version,
-          schemaVersion: 1,
+          schemaVersion: 2,
         },
         { idempotencyKey },
       );
@@ -277,7 +277,7 @@ export function QuestionnaireApp() {
     try {
       const ack = await questionnaireClient.submitDraft(
         profileId,
-        { expectedVersion: version, schemaVersion: 1 },
+        { expectedVersion: version, schemaVersion: 2 },
         { idempotencyKey },
       );
       pendingKey.current = undefined;
@@ -317,7 +317,7 @@ export function QuestionnaireApp() {
     <main className="questionnaire-shell">
       <header className="questionnaire-header">
         <div>
-          <p className="eyebrow">HEALTH DESIGN · CONTEXTO V1</p>
+          <p className="eyebrow">HEALTH DESIGN · CONTEXTO V2</p>
           <h1>Tu contexto, paso a paso</h1>
           <p className="lede">
             Una sección cada vez. Solo preguntamos lo que puede cambiar tu plan.
@@ -369,7 +369,10 @@ export function QuestionnaireApp() {
         <div className="message success-message" role="status">
           Contexto confirmado como{" "}
           {completeness === "complete" ? "completo" : "provisional"}. La generación del
-          plan llegará en la siguiente tarea.
+          plan ya puede generarse desde alimentación.
+          <a className="text-button" href="/nutrition">
+            Abrir alimentación
+          </a>
         </div>
       ) : null}
 

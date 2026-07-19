@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { AccessApp } from "./features/access/AccessApp";
 import { AdminApp } from "./features/admin/AdminApp";
+import { NutritionApp } from "./features/nutrition/NutritionApp";
 import { QuestionnaireRoute } from "./routes/questionnaire";
 import { registerPublicAssetWorker } from "./services/client-cache";
 
@@ -20,6 +21,8 @@ createRoot(rootElement).render(
       <AdminApp />
     ) : window.location.pathname.startsWith("/questionnaire") ? (
       <QuestionnaireRoute />
+    ) : window.location.pathname.startsWith("/nutrition") ? (
+      <NutritionApp />
     ) : (
       <AccessApp />
     )}

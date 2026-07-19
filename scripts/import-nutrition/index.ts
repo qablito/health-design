@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 import {
@@ -19,6 +19,8 @@ import {
   fineliOatsArtifact,
 } from "@health-design/test-fixtures/nutrition";
 
+import { buildCiqual2025GeneratorArtifact, downloadCiqual2025 } from "./ciqual-2025.ts";
+
 type Descriptor = Readonly<{
   envelope: NutritionImportEnvelope;
   licenseStatus: NutritionImportArtifact["licenseStatus"];
@@ -32,6 +34,11 @@ type Descriptor = Readonly<{
 
 function descriptorPath(arguments_: readonly string[]): string | null {
   const index = arguments_.indexOf("--descriptor");
+  return index >= 0 ? (arguments_[index + 1] ?? null) : null;
+}
+
+function argumentValue(arguments_: readonly string[], name: string): string | null {
+  const index = arguments_.indexOf(name);
   return index >= 0 ? (arguments_[index + 1] ?? null) : null;
 }
 
@@ -114,15 +121,62 @@ async function importFixture(): Promise<void> {
   process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
 }
 
+async function importCiqual2025(arguments_: readonly string[]): Promise<void> {
+  const workbookArgument = argumentValue(arguments_, "--workbook");
+  const downloadArgument = argumentValue(arguments_, "--download");
+  const output = argumentValue(arguments_, "--output");
+  if (
+    output === null ||
+    (workbookArgument === null && downloadArgument === null) ||
+    (workbookArgument !== null && downloadArgument !== null)
+  ) {
+    throw new Error("ciqual_2025_arguments_invalid");
+  }
+  const workbook = resolve(workbookArgument ?? downloadArgument!);
+  if (downloadArgument !== null) await downloadCiqual2025(workbook);
+  const retrievedAt =
+    argumentValue(arguments_, "--retrieved-at") ?? new Date().toISOString();
+  const artifact = await buildCiqual2025GeneratorArtifact(workbook, retrievedAt);
+  const batch = await buildNutritionQuarantineBatch(artifact);
+  if (batch.status !== "quarantined") {
+    throw new Error(
+      `ciqual_2025_quarantine_failed:${JSON.stringify(batch.violations)}`,
+    );
+  }
+  const serialized = `${JSON.stringify(batch, null, 2)}\n`;
+  if (new TextEncoder().encode(serialized).byteLength > 512 * 1_024) {
+    throw new Error("ciqual_2025_edge_batch_limit_exceeded");
+  }
+  await writeFile(resolve(output), serialized, { encoding: "utf8", flag: "w" });
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        manifest: batch.manifest.id,
+        output: resolve(output),
+        records: batch.revisions.length,
+        source: batch.manifest.sourceKey,
+        sourceVersion: batch.manifest.sourceVersion,
+        status: batch.status,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
 const arguments_ = process.argv.slice(2);
 const path = descriptorPath(arguments_);
-if (arguments_.includes("--fixture") && path === null) {
+if (arguments_.includes("--ciqual-2025")) {
+  await importCiqual2025(arguments_);
+} else if (arguments_.includes("--fixture") && path === null) {
   await importFixture();
 } else if (path !== null && !arguments_.includes("--fixture")) {
   await importDescriptor(path);
 } else {
   process.stderr.write(
-    "Uso: pnpm run import:nutrition -- --fixture | --descriptor <ruta.json>\n",
+    "Uso: pnpm run import:nutrition -- --fixture | --descriptor <ruta.json> | " +
+      "--ciqual-2025 (--workbook <ciqual.xlsx> | --download <ciqual.xlsx>) " +
+      "--output <lote.json> [--retrieved-at <ISO>]\n",
   );
   process.exitCode = 1;
 }

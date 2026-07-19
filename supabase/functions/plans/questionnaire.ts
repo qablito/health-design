@@ -1,6 +1,6 @@
 import {
   evaluateQuestionnaire,
-  QUESTIONNAIRE_PUBLIC_SCHEMA_V1,
+  QUESTIONNAIRE_PUBLIC_SCHEMA_V2,
   QuestionnaireDraftAckSchema,
   QuestionnaireDraftSaveRequestSchema,
   QuestionnaireDraftSchema,
@@ -282,7 +282,7 @@ async function dispatch(
   dependencies: QuestionnaireDependencies,
   auth: AuthContext,
 ): Promise<unknown> {
-  if (route.kind === "schema") return QUESTIONNAIRE_PUBLIC_SCHEMA_V1;
+  if (route.kind === "schema") return QUESTIONNAIRE_PUBLIC_SCHEMA_V2;
   if (route.kind === "draft-get") return getDraft(dependencies, auth, route.profileId);
   if (route.kind === "draft-put") {
     const body = parse(QuestionnaireDraftSaveRequestSchema, await readJson(request));

@@ -46,9 +46,9 @@ const context: ContextSnapshotInternal = {
 describe("reconciliación de reglas", () => {
   it("versiona el conjunto activo y exige evidencia trazable por revisión", () => {
     expect(CORE_RULE_SET_REVISION).toMatchObject({
-      id: "8f1d57b0-0dc2-4cd2-aef9-2dc0b31bc921",
+      id: "8f1d57b0-0dc2-4cd2-aef9-2dc0b31bc922",
       status: "active",
-      version: "1.0.0",
+      version: "2.0.0",
     });
     expect(CORE_RULE_SET_REVISION.ruleRevisionIds).toEqual(
       CORE_RULE_REVISIONS.map(({ id }) => id),
@@ -57,7 +57,7 @@ describe("reconciliación de reglas", () => {
       CORE_RULE_REVISIONS.every(
         ({ evidenceRefs, reviewedAt, status, version }) =>
           evidenceRefs.length > 0 &&
-          reviewedAt === "2026-07-18" &&
+          ["2026-07-18", "2026-07-19"].includes(reviewedAt) &&
           status === "active" &&
           version === "1.0.0",
       ),

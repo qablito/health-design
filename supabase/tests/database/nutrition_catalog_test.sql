@@ -53,6 +53,16 @@ select is(
   'la precedencia federada canónica queda fijada en datos'
 );
 
+select is(
+  (
+    select canonical_unit
+    from public.nutrition_nutrients
+    where nutrient_key = 'sodium'
+  ),
+  'mg',
+  'el sodio usa mg como unidad canónica de extremo a extremo'
+);
+
 select ok(
   not has_table_privilege('authenticated', 'public.canonical_foods', 'SELECT')
   and not has_table_privilege(
@@ -558,8 +568,8 @@ select public.internal_nutrition_stage_batch(
           'sodium', jsonb_build_object(
             'basis', 'per_100_g', 'foodState', 'raw',
             'nutrientClass', 'sodium', 'state', 'known',
-            'originalValue', '-0.01', 'originalUnit', 'g',
-            'normalizedValue', '-0.01', 'normalizedUnit', 'g'
+            'originalValue', '-0.01', 'originalUnit', 'mg',
+            'normalizedValue', '-0.01', 'normalizedUnit', 'mg'
           )
         )
       )
@@ -584,6 +594,31 @@ select throws_ok(
   '55000',
   'nutrition_revision_negative_value',
   'un valor negativo imposible no puede superar la validación'
+);
+
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.internal_nutrition_effective_generator_catalog()',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'authenticated',
+    'public.internal_nutrition_effective_generator_catalog()',
+    'EXECUTE'
+  )
+  and has_function_privilege(
+    'service_role',
+    'public.internal_nutrition_effective_generator_catalog()',
+    'EXECUTE'
+  ),
+  'el lector efectivo T10 es privado y solo está disponible para service_role'
+);
+
+select is(
+  public.internal_nutrition_effective_generator_catalog(),
+  '[]'::jsonb,
+  'una revisión sin los cinco valores exactos requeridos no entra en el generador'
 );
 
 select * from finish();

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ContextSnapshotAckSchema,
   ContextSnapshotCreateRequestSchema,
   PlanCandidateCreateRequestSchema,
   PlanEngineResultSchema,
@@ -26,6 +27,31 @@ describe("contratos del ciclo de vida del plan", () => {
         expectedDraftVersion: 0,
         schemaVersion: 1,
       }).success,
+    ).toBe(false);
+  });
+
+  it("lee snapshots históricos V1 y snapshots nuevos procedentes del cuestionario V2", () => {
+    const snapshot = {
+      canonicalizationVersion: "canonical-json-v1",
+      completeness: "complete",
+      createdAt: "2026-07-19T12:00:00.000Z",
+      effectiveAt: "2026-07-19T12:00:00.000Z",
+      id: id("41"),
+      inputHash: hash("41"),
+      normalizationVersion: "normalization-v1",
+      profileId: id("42"),
+      sourceDraftId: id("43"),
+      sourceDraftVersion: 2,
+    };
+
+    expect(
+      ContextSnapshotAckSchema.safeParse({ ...snapshot, schemaVersion: 1 }).success,
+    ).toBe(true);
+    expect(
+      ContextSnapshotAckSchema.safeParse({ ...snapshot, schemaVersion: 2 }).success,
+    ).toBe(true);
+    expect(
+      ContextSnapshotAckSchema.safeParse({ ...snapshot, schemaVersion: 3 }).success,
     ).toBe(false);
   });
 

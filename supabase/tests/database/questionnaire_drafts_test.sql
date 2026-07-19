@@ -70,7 +70,7 @@ begin
     '00000000-0000-4000-8000-000000006199',
     '21000000-0000-4000-8000-000000006199',
     '51000000-0000-4000-8000-000000006199',
-    1, 0, '{"activeModules":["nutrition"]}'::jsonb,
+    2, 0, '{"activeModules":["nutrition"]}'::jsonb,
     array['modules'], 'nutrition', 'provisional', '[]'::jsonb, '[]'::jsonb,
     p_key_digest, p_request_digest
   );
@@ -262,13 +262,29 @@ values
     'Ajeno', now(), now(), now() + interval '30 days', now() + interval '180 days'
   );
 
+select throws_ok(
+  $$
+    select public.internal_put_questionnaire_draft(
+      '00000000-0000-4000-8000-000000006101',
+      '21000000-0000-4000-8000-000000006101',
+      '51000000-0000-4000-8000-000000006101',
+      1, 0, '{"activeModules":["nutrition"]}'::jsonb,
+      array['modules'], 'nutrition', 'provisional', '[]'::jsonb, '[]'::jsonb,
+      decode(repeat('01', 32), 'hex'), decode(repeat('02', 32), 'hex')
+    )
+  $$,
+  '22023',
+  'invalid_input',
+  'T10 rechaza nuevas escrituras con schema V1'
+);
+
 select is(
   (
     public.internal_put_questionnaire_draft(
       '00000000-0000-4000-8000-000000006101',
       '21000000-0000-4000-8000-000000006101',
       '51000000-0000-4000-8000-000000006101',
-      1,
+      2,
       0,
       '{"activeModules":["nutrition"]}'::jsonb,
       array['modules'],
@@ -290,7 +306,7 @@ select is(
       '00000000-0000-4000-8000-000000006101',
       '21000000-0000-4000-8000-000000006101',
       '51000000-0000-4000-8000-000000006101',
-      1,
+      2,
       0,
       '{"activeModules":["nutrition"]}'::jsonb,
       array['modules'],
@@ -312,7 +328,7 @@ select throws_ok(
       '00000000-0000-4000-8000-000000006101',
       '21000000-0000-4000-8000-000000006101',
       '51000000-0000-4000-8000-000000006101',
-      1, 0, '{"activeModules":["sleep"]}'::jsonb,
+      2, 0, '{"activeModules":["sleep"]}'::jsonb,
       array['modules'], 'sleep', 'provisional', '[]'::jsonb, '[]'::jsonb,
       decode(repeat('11', 32), 'hex'), decode(repeat('13', 32), 'hex')
     )
@@ -328,7 +344,7 @@ select throws_ok(
       '00000000-0000-4000-8000-000000006101',
       '21000000-0000-4000-8000-000000006101',
       '51000000-0000-4000-8000-000000006101',
-      1, 0, '{"activeModules":["nutrition"]}'::jsonb,
+      2, 0, '{"activeModules":["nutrition"]}'::jsonb,
       array['modules'], 'nutrition', 'provisional', '[]'::jsonb, '[]'::jsonb,
       decode(repeat('21', 32), 'hex'), decode(repeat('22', 32), 'hex')
     )
@@ -357,7 +373,7 @@ select is(
       '00000000-0000-4000-8000-000000006101',
       '21000000-0000-4000-8000-000000006101',
       '51000000-0000-4000-8000-000000006101',
-      1, 1, 'provisional', '[]'::jsonb, '[]'::jsonb,
+      2, 1, 'provisional', '[]'::jsonb, '[]'::jsonb,
       decode(repeat('31', 32), 'hex'), decode(repeat('32', 32), 'hex')
     ) ->> 'status'
   ),

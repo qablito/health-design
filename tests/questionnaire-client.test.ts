@@ -10,7 +10,7 @@ const ack = {
   currentBlockId: "goals",
   hardErrors: [],
   profileId,
-  schemaVersion: 1,
+  schemaVersion: 2,
   status: "editing",
   uncertainties: [],
   updatedAt: "2026-07-18T10:00:00.000Z",
@@ -41,7 +41,7 @@ describe("cliente del cuestionario", () => {
         confirmedBlockIds: ["core"],
         currentBlockId: "goals",
         expectedVersion: 1,
-        schemaVersion: 1,
+        schemaVersion: 2,
       },
       { idempotencyKey: "fixed-retry-key-0001" },
     );
@@ -75,7 +75,7 @@ describe("cliente del cuestionario", () => {
           confirmedBlockIds: [],
           currentBlockId: "core",
           expectedVersion: 0,
-          schemaVersion: 1,
+          schemaVersion: 2,
         },
         { idempotencyKey: "fixed-retry-key-0002" },
       ),
@@ -105,7 +105,7 @@ describe("cliente del cuestionario", () => {
       confirmedBlockIds: [],
       currentBlockId: "core",
       expectedVersion: 1,
-      schemaVersion: 1,
+      schemaVersion: 2,
     });
 
     expect(receivedThis).toEqual([undefined]);

@@ -72,6 +72,12 @@ export declare const QuestionnaireAnswersSchema: z.ZodObject<{
         variable: "variable";
         shift_work: "shift_work";
     }>>;
+    dietaryPattern: z.ZodOptional<z.ZodEnum<{
+        omnivore: "omnivore";
+        pescetarian: "pescetarian";
+        vegetarian: "vegetarian";
+        vegan: "vegan";
+    }>>;
     excludedFoods: z.ZodOptional<z.ZodArray<z.ZodString>>;
     generatedTrainingDaysPerWeek: z.ZodOptional<z.ZodNumber>;
     generatedTrainingEquipment: z.ZodOptional<z.ZodArray<z.ZodString>>;
@@ -80,10 +86,18 @@ export declare const QuestionnaireAnswersSchema: z.ZodObject<{
     hasConditions: z.ZodOptional<z.ZodBoolean>;
     hasCurrentSupplements: z.ZodOptional<z.ZodBoolean>;
     hasLabValues: z.ZodOptional<z.ZodBoolean>;
+    hasIndirectCalorimetry: z.ZodOptional<z.ZodBoolean>;
     hasMedications: z.ZodOptional<z.ZodBoolean>;
     habitualBeverages: z.ZodOptional<z.ZodArray<z.ZodString>>;
     habitualWaterMl: z.ZodOptional<z.ZodNumber>;
     heightCm: z.ZodOptional<z.ZodNumber>;
+    indirectCalorimetryDate: z.ZodOptional<z.ZodISODate>;
+    indirectCalorimetryRmrKcal: z.ZodOptional<z.ZodNumber>;
+    indirectCalorimetrySource: z.ZodOptional<z.ZodEnum<{
+        clinical_service: "clinical_service";
+        sports_service: "sports_service";
+        other: "other";
+    }>>;
     hydrationAnchors: z.ZodOptional<z.ZodArray<z.ZodString>>;
     hydrationClimate: z.ZodOptional<z.ZodEnum<{
         variable: "variable";
@@ -163,6 +177,20 @@ export declare const QuestionnaireAnswersSchema: z.ZodObject<{
         unknown: "unknown";
         none: "none";
         declared: "declared";
+    }>>;
+    nutritionMealAnchors: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+        wake_up: "wake_up";
+        mid_morning: "mid_morning";
+        midday: "midday";
+        afternoon: "afternoon";
+        evening: "evening";
+        pre_sleep: "pre_sleep";
+        pre_training: "pre_training";
+        post_training: "post_training";
+    }>>>;
+    nutritionMode: z.ZodOptional<z.ZodEnum<{
+        simple: "simple";
+        balanced: "balanced";
     }>>;
     ownTrainingDaysPerWeek: z.ZodOptional<z.ZodNumber>;
     ownTrainingIntensity: z.ZodOptional<z.ZodEnum<{
@@ -343,6 +371,12 @@ export declare const QuestionnaireDraftSaveRequestSchema: z.ZodObject<{
             variable: "variable";
             shift_work: "shift_work";
         }>>;
+        dietaryPattern: z.ZodOptional<z.ZodEnum<{
+            omnivore: "omnivore";
+            pescetarian: "pescetarian";
+            vegetarian: "vegetarian";
+            vegan: "vegan";
+        }>>;
         excludedFoods: z.ZodOptional<z.ZodArray<z.ZodString>>;
         generatedTrainingDaysPerWeek: z.ZodOptional<z.ZodNumber>;
         generatedTrainingEquipment: z.ZodOptional<z.ZodArray<z.ZodString>>;
@@ -351,10 +385,18 @@ export declare const QuestionnaireDraftSaveRequestSchema: z.ZodObject<{
         hasConditions: z.ZodOptional<z.ZodBoolean>;
         hasCurrentSupplements: z.ZodOptional<z.ZodBoolean>;
         hasLabValues: z.ZodOptional<z.ZodBoolean>;
+        hasIndirectCalorimetry: z.ZodOptional<z.ZodBoolean>;
         hasMedications: z.ZodOptional<z.ZodBoolean>;
         habitualBeverages: z.ZodOptional<z.ZodArray<z.ZodString>>;
         habitualWaterMl: z.ZodOptional<z.ZodNumber>;
         heightCm: z.ZodOptional<z.ZodNumber>;
+        indirectCalorimetryDate: z.ZodOptional<z.ZodISODate>;
+        indirectCalorimetryRmrKcal: z.ZodOptional<z.ZodNumber>;
+        indirectCalorimetrySource: z.ZodOptional<z.ZodEnum<{
+            clinical_service: "clinical_service";
+            sports_service: "sports_service";
+            other: "other";
+        }>>;
         hydrationAnchors: z.ZodOptional<z.ZodArray<z.ZodString>>;
         hydrationClimate: z.ZodOptional<z.ZodEnum<{
             variable: "variable";
@@ -434,6 +476,20 @@ export declare const QuestionnaireDraftSaveRequestSchema: z.ZodObject<{
             unknown: "unknown";
             none: "none";
             declared: "declared";
+        }>>;
+        nutritionMealAnchors: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+            wake_up: "wake_up";
+            mid_morning: "mid_morning";
+            midday: "midday";
+            afternoon: "afternoon";
+            evening: "evening";
+            pre_sleep: "pre_sleep";
+            pre_training: "pre_training";
+            post_training: "post_training";
+        }>>>;
+        nutritionMode: z.ZodOptional<z.ZodEnum<{
+            simple: "simple";
+            balanced: "balanced";
         }>>;
         ownTrainingDaysPerWeek: z.ZodOptional<z.ZodNumber>;
         ownTrainingIntensity: z.ZodOptional<z.ZodEnum<{
@@ -561,11 +617,11 @@ export declare const QuestionnaireDraftSaveRequestSchema: z.ZodObject<{
         summary: "summary";
     }>;
     expectedVersion: z.ZodNumber;
-    schemaVersion: z.ZodLiteral<1>;
+    schemaVersion: z.ZodLiteral<2>;
 }, z.core.$strict>;
 export declare const QuestionnaireDraftSubmitRequestSchema: z.ZodObject<{
     expectedVersion: z.ZodNumber;
-    schemaVersion: z.ZodLiteral<1>;
+    schemaVersion: z.ZodLiteral<2>;
 }, z.core.$strict>;
 export declare const QuestionnaireDraftAckSchema: z.ZodObject<{
     completeness: z.ZodEnum<{
@@ -613,7 +669,7 @@ export declare const QuestionnaireDraftAckSchema: z.ZodObject<{
         }>;
     }, z.core.$strict>>;
     profileId: z.ZodUUID;
-    schemaVersion: z.ZodLiteral<1>;
+    schemaVersion: z.ZodLiteral<2>;
     status: z.ZodEnum<{
         editing: "editing";
         submitted: "submitted";
@@ -693,7 +749,7 @@ export declare const QuestionnaireDraftSchema: z.ZodObject<{
         }>;
     }, z.core.$strict>>;
     profileId: z.ZodUUID;
-    schemaVersion: z.ZodLiteral<1>;
+    schemaVersion: z.ZodLiteral<2>;
     status: z.ZodEnum<{
         editing: "editing";
         submitted: "submitted";
@@ -762,6 +818,12 @@ export declare const QuestionnaireDraftSchema: z.ZodObject<{
             variable: "variable";
             shift_work: "shift_work";
         }>>;
+        dietaryPattern: z.ZodOptional<z.ZodEnum<{
+            omnivore: "omnivore";
+            pescetarian: "pescetarian";
+            vegetarian: "vegetarian";
+            vegan: "vegan";
+        }>>;
         excludedFoods: z.ZodOptional<z.ZodArray<z.ZodString>>;
         generatedTrainingDaysPerWeek: z.ZodOptional<z.ZodNumber>;
         generatedTrainingEquipment: z.ZodOptional<z.ZodArray<z.ZodString>>;
@@ -770,10 +832,18 @@ export declare const QuestionnaireDraftSchema: z.ZodObject<{
         hasConditions: z.ZodOptional<z.ZodBoolean>;
         hasCurrentSupplements: z.ZodOptional<z.ZodBoolean>;
         hasLabValues: z.ZodOptional<z.ZodBoolean>;
+        hasIndirectCalorimetry: z.ZodOptional<z.ZodBoolean>;
         hasMedications: z.ZodOptional<z.ZodBoolean>;
         habitualBeverages: z.ZodOptional<z.ZodArray<z.ZodString>>;
         habitualWaterMl: z.ZodOptional<z.ZodNumber>;
         heightCm: z.ZodOptional<z.ZodNumber>;
+        indirectCalorimetryDate: z.ZodOptional<z.ZodISODate>;
+        indirectCalorimetryRmrKcal: z.ZodOptional<z.ZodNumber>;
+        indirectCalorimetrySource: z.ZodOptional<z.ZodEnum<{
+            clinical_service: "clinical_service";
+            sports_service: "sports_service";
+            other: "other";
+        }>>;
         hydrationAnchors: z.ZodOptional<z.ZodArray<z.ZodString>>;
         hydrationClimate: z.ZodOptional<z.ZodEnum<{
             variable: "variable";
@@ -853,6 +923,20 @@ export declare const QuestionnaireDraftSchema: z.ZodObject<{
             unknown: "unknown";
             none: "none";
             declared: "declared";
+        }>>;
+        nutritionMealAnchors: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+            wake_up: "wake_up";
+            mid_morning: "mid_morning";
+            midday: "midday";
+            afternoon: "afternoon";
+            evening: "evening";
+            pre_sleep: "pre_sleep";
+            pre_training: "pre_training";
+            post_training: "post_training";
+        }>>>;
+        nutritionMode: z.ZodOptional<z.ZodEnum<{
+            simple: "simple";
+            balanced: "balanced";
         }>>;
         ownTrainingDaysPerWeek: z.ZodOptional<z.ZodNumber>;
         ownTrainingIntensity: z.ZodOptional<z.ZodEnum<{
@@ -964,7 +1048,7 @@ type Option = {
 type PublicQuestion = {
     blockId: QuestionnaireBlockId;
     id: keyof QuestionnaireAnswers;
-    kind: "boolean" | "entities" | "multi" | "number" | "single" | "text" | "time";
+    kind: "boolean" | "date" | "entities" | "multi" | "number" | "single" | "text" | "time";
     label: string;
     options?: Option[];
     visibleWhen?: {
@@ -972,7 +1056,7 @@ type PublicQuestion = {
         includes: boolean | string | string[];
     };
 };
-export declare const QUESTIONNAIRE_PUBLIC_SCHEMA_V1: {
+export declare const QUESTIONNAIRE_PUBLIC_SCHEMA_V2: {
     readonly blocks: ({
         estimatedMinutes: number;
         id: "core";
@@ -1023,7 +1107,7 @@ export declare const QUESTIONNAIRE_PUBLIC_SCHEMA_V1: {
         title: string;
     })[];
     readonly questions: PublicQuestion[];
-    readonly schemaVersion: 1;
+    readonly schemaVersion: 2;
 };
 export declare const QuestionnairePublicSchemaResponseSchema: z.ZodObject<{
     blocks: z.ZodArray<z.ZodObject<{
@@ -1063,6 +1147,7 @@ export declare const QuestionnairePublicSchemaResponseSchema: z.ZodObject<{
         kind: z.ZodEnum<{
             number: "number";
             boolean: "boolean";
+            date: "date";
             entities: "entities";
             multi: "multi";
             single: "single";
@@ -1079,6 +1164,6 @@ export declare const QuestionnairePublicSchemaResponseSchema: z.ZodObject<{
             includes: z.ZodUnion<readonly [z.ZodBoolean, z.ZodString, z.ZodArray<z.ZodString>]>;
         }, z.core.$strict>>;
     }, z.core.$strict>>;
-    schemaVersion: z.ZodLiteral<1>;
+    schemaVersion: z.ZodLiteral<2>;
 }, z.core.$strict>;
 export {};

@@ -7,141 +7,21 @@ import type {
 import {
   CONTEXT_CANONICALIZATION_VERSION,
   QUESTIONNAIRE_MODULES,
+  type EffectiveNutritionFood,
   type QuestionnaireModule,
 } from "@health-design/domain";
 
-type Decimal = Readonly<{ coefficient: bigint; scale: number }>;
+import {
+  absoluteDecimal,
+  compareDecimals,
+  multiplyDecimals,
+  normalizeDecimal,
+  subtractDecimals,
+  sumDecimals,
+} from "./decimal.ts";
+import { generateNutritionWeek } from "./modules/nutrition/index.ts";
 
-const DECIMAL_PATTERN = /^-?\d+(?:\.\d+)?$/;
-
-function powerOfTen(exponent: number): bigint {
-  return 10n ** BigInt(exponent);
-}
-
-function parseDecimal(value: string): Decimal {
-  if (!DECIMAL_PATTERN.test(value)) throw new Error("invalid_decimal");
-
-  const negative = value.startsWith("-");
-  const unsigned = negative ? value.slice(1) : value;
-  const [integer, fraction = ""] = unsigned.split(".");
-  let coefficient = BigInt(`${negative ? "-" : ""}${integer}${fraction}`);
-  let scale = fraction.length;
-
-  while (scale > 0 && coefficient % 10n === 0n) {
-    coefficient /= 10n;
-    scale -= 1;
-  }
-
-  return { coefficient, scale };
-}
-
-function formatDecimal(decimal: Decimal): string {
-  let { coefficient, scale } = decimal;
-  while (scale > 0 && coefficient % 10n === 0n) {
-    coefficient /= 10n;
-    scale -= 1;
-  }
-  if (coefficient === 0n) return "0";
-
-  const negative = coefficient < 0n;
-  const digits = (negative ? -coefficient : coefficient).toString();
-  if (scale === 0) return `${negative ? "-" : ""}${digits}`;
-
-  const padded = digits.padStart(scale + 1, "0");
-  const split = padded.length - scale;
-  return `${negative ? "-" : ""}${padded.slice(0, split)}.${padded.slice(split)}`;
-}
-
-function alignDecimals(left: Decimal, right: Decimal): readonly [bigint, bigint] {
-  const scale = Math.max(left.scale, right.scale);
-  return [
-    left.coefficient * powerOfTen(scale - left.scale),
-    right.coefficient * powerOfTen(scale - right.scale),
-  ];
-}
-
-export function normalizeDecimal(value: string): string {
-  return formatDecimal(parseDecimal(value));
-}
-
-export function addDecimals(left: string, right: string): string {
-  const parsedLeft = parseDecimal(left);
-  const parsedRight = parseDecimal(right);
-  const scale = Math.max(parsedLeft.scale, parsedRight.scale);
-  const [leftCoefficient, rightCoefficient] = alignDecimals(parsedLeft, parsedRight);
-  return formatDecimal({ coefficient: leftCoefficient + rightCoefficient, scale });
-}
-
-export function multiplyDecimals(left: string, right: string): string {
-  const parsedLeft = parseDecimal(left);
-  const parsedRight = parseDecimal(right);
-  return formatDecimal({
-    coefficient: parsedLeft.coefficient * parsedRight.coefficient,
-    scale: parsedLeft.scale + parsedRight.scale,
-  });
-}
-
-export function compareDecimals(left: string, right: string): -1 | 0 | 1 {
-  const [leftCoefficient, rightCoefficient] = alignDecimals(
-    parseDecimal(left),
-    parseDecimal(right),
-  );
-  return leftCoefficient < rightCoefficient
-    ? -1
-    : leftCoefficient > rightCoefficient
-      ? 1
-      : 0;
-}
-
-function subtractDecimals(left: string, right: string): string {
-  const parsedRight = parseDecimal(right);
-  return addDecimals(
-    left,
-    formatDecimal({
-      coefficient: -parsedRight.coefficient,
-      scale: parsedRight.scale,
-    }),
-  );
-}
-
-function absoluteDecimal(value: string): string {
-  const parsed = parseDecimal(value);
-  return formatDecimal({
-    coefficient: parsed.coefficient < 0n ? -parsed.coefficient : parsed.coefficient,
-    scale: parsed.scale,
-  });
-}
-
-export function sumDecimals(values: readonly string[]): string {
-  return values.reduce(addDecimals, "0");
-}
-
-export function checkDecimalClosure(values: readonly string[], total: string): boolean {
-  return compareDecimals(sumDecimals(values), total) === 0;
-}
-
-export function roundDecimal(
-  value: string,
-  scale: number,
-  mode: "half_away_from_zero" | "toward_zero",
-): string {
-  if (!Number.isInteger(scale) || scale < 0 || scale > 18) {
-    throw new Error("invalid_rounding_scale");
-  }
-  const parsed = parseDecimal(value);
-  if (parsed.scale <= scale) return formatDecimal(parsed);
-
-  const divisor = powerOfTen(parsed.scale - scale);
-  let quotient = parsed.coefficient / divisor;
-  const remainder = parsed.coefficient % divisor;
-  if (
-    mode === "half_away_from_zero" &&
-    (remainder < 0n ? -remainder : remainder) * 2n >= divisor
-  ) {
-    quotient += parsed.coefficient < 0n ? -1n : 1n;
-  }
-  return formatDecimal({ coefficient: quotient, scale });
-}
+export * from "./decimal.ts";
 
 export const UNIT_CONVERSION_VERSION = "unit-conversion-v1" as const;
 
@@ -417,7 +297,7 @@ export async function sha256CanonicalJson(value: unknown): Promise<string> {
     .join("");
 }
 
-export const ENGINE_VERSION = "engine-v1" as const;
+export const ENGINE_VERSION = "engine-v2" as const;
 export const SOURCE_MANIFEST_ID = "50ee50a1-f142-4d59-a957-b7a32538a937" as const;
 
 export type RuleRevision = Readonly<{
@@ -452,20 +332,40 @@ export const CORE_RULE_REVISIONS = [
     status: "active",
     version: "1.0.0",
   },
+  {
+    evidenceRefs: ["contract:t10-nutrition-targets-v1"],
+    id: "rule.nutrition-targets@1.0.0",
+    kind: "mandatory",
+    reviewedAt: "2026-07-19",
+    ruleId: "rule.nutrition-targets",
+    scope: ["nutrition"],
+    status: "active",
+    version: "1.0.0",
+  },
+  {
+    evidenceRefs: ["contract:t10-two-substitutes-v1"],
+    id: "rule.nutrition-substitutions@1.0.0",
+    kind: "mandatory",
+    reviewedAt: "2026-07-19",
+    ruleId: "rule.nutrition-substitutions",
+    scope: ["nutrition"],
+    status: "active",
+    version: "1.0.0",
+  },
 ] as const satisfies readonly RuleRevision[];
 
 export const CORE_RULE_SET_REVISION = {
-  id: "8f1d57b0-0dc2-4cd2-aef9-2dc0b31bc921",
+  id: "8f1d57b0-0dc2-4cd2-aef9-2dc0b31bc922",
   ruleRevisionIds: CORE_RULE_REVISIONS.map(({ id }) => id),
   status: "active",
-  version: "1.0.0",
+  version: "2.0.0",
 } as const;
 export const RULE_SET_REVISION_ID = CORE_RULE_SET_REVISION.id;
 
 export const CORE_SOURCE_MANIFEST = {
   id: SOURCE_MANIFEST_ID,
   sourceRevisionIds: [],
-  version: "core-empty-v1",
+  version: "core-with-effective-nutrition-v1",
 } as const;
 
 const ACTION_LEVELS = [
@@ -555,6 +455,7 @@ export type DeterministicEngineInput = Readonly<{
   baseModuleResults: readonly PlanModuleResultInput[] | null;
   change: PlanContextChange | null;
   context: ContextSnapshotInternal;
+  nutritionCatalog?: readonly EffectiveNutritionFood[];
 }>;
 
 function moduleChoice(
@@ -586,8 +487,48 @@ function moduleChoice(
 function provisionalModuleResult(
   module: QuestionnaireModule,
   context: ContextSnapshotInternal,
+  nutritionCatalog: readonly EffectiveNutritionFood[] | undefined,
 ): PlanModuleResultInput {
   if (moduleChoice(module, context) === "requested") {
+    if (module === "nutrition" && nutritionCatalog !== undefined) {
+      try {
+        const week = generateNutritionWeek({
+          answers: context.answers,
+          catalog: nutritionCatalog,
+        });
+        return {
+          confidence: week.targets.completeness === "complete" ? "high" : "medium",
+          module,
+          payload: { ...week },
+          status: week.targets.completeness === "complete" ? "valid" : "provisional",
+          uncertainties: week.targets.uncertainties.map((uncertainty) => ({
+            ...uncertainty,
+            module,
+          })),
+        };
+      } catch (error) {
+        const code =
+          error instanceof Error &&
+          ["CATALOG_COVERAGE_INSUFFICIENT", "nutrition_context_incomplete"].includes(
+            error.message,
+          )
+            ? error.message.toUpperCase()
+            : "NUTRITION_ENGINE_UNAVAILABLE";
+        return {
+          confidence: "unknown",
+          module,
+          payload: { requested: true, stage: "nutrition_engine" },
+          status: "provisional",
+          uncertainties: [
+            {
+              code,
+              messageKey: `nutrition.uncertainty.${code.toLowerCase()}`,
+              module,
+            },
+          ],
+        };
+      }
+    }
     return {
       confidence: "unknown",
       module,
@@ -650,19 +591,44 @@ export async function runDeterministicEngine(
       return baseResult;
     }
     recalculatedModules.push(module);
-    return provisionalModuleResult(module, input.context);
+    return provisionalModuleResult(module, input.context, input.nutritionCatalog);
   });
   const errors = input.context.answers.activeModules?.length
     ? []
     : ["modules_required"];
   const validationStatus: "invalid" | "valid" =
     errors.length === 0 ? "valid" : "invalid";
+  const completeness = moduleResults.some(({ status }) => status === "provisional")
+    ? ("provisional" as const)
+    : ("complete" as const);
+  const provisionalReasons = [
+    ...new Set(
+      moduleResults.flatMap(({ uncertainties }) =>
+        uncertainties.flatMap((uncertainty) => {
+          if (
+            uncertainty !== null &&
+            typeof uncertainty === "object" &&
+            "code" in uncertainty &&
+            typeof uncertainty.code === "string"
+          ) {
+            return [uncertainty.code.toLowerCase()];
+          }
+          return [];
+        }),
+      ),
+    ),
+  ];
   const validation = {
-    checks: ["canonical_input", "module_coverage", "training_optional"],
-    completeness: "provisional" as const,
+    checks: [
+      "canonical_input",
+      "module_coverage",
+      "nutrition_catalog_effective_only",
+      "training_optional",
+    ],
+    completeness,
     errors,
     preservedModules,
-    provisionalReasons: ["module_implementation_pending"],
+    provisionalReasons,
     recalculatedModules,
     warnings: [],
   };
@@ -680,12 +646,13 @@ export async function runDeterministicEngine(
       engineVersion: ENGINE_VERSION,
       ruleSetRevision: CORE_RULE_SET_REVISION,
       sourceManifest: CORE_SOURCE_MANIFEST,
+      nutritionCatalog: input.nutritionCatalog ?? null,
     },
     context: normativeContext(input.context),
   });
   const normativeOutput = {
     canonicalizationVersion: CONTEXT_CANONICALIZATION_VERSION,
-    completeness: "provisional" as const,
+    completeness,
     engineVersion: ENGINE_VERSION,
     inputHash,
     moduleResults,
@@ -701,3 +668,5 @@ export async function runDeterministicEngine(
     outputHash: await sha256CanonicalJson(normativeOutput),
   };
 }
+
+export * from "./modules/nutrition/index.ts";

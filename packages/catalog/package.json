@@ -4,9 +4,11 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./nutrition": "./src/nutrition/index.ts"
+    "./nutrition": "./src/nutrition/index.ts",
+    "./nutrition-generator": "./src/nutrition/generator-metadata.ts"
   },
   "dependencies": {
+    "@health-design/domain": "workspace:*",
     "@health-design/engine": "workspace:*"
   }
 }

@@ -108,6 +108,19 @@ describe("contrato compartido entre runtimes", () => {
     expect(config).toMatch(/\[functions\.runtime-smoke\][\s\S]*?verify_jwt\s*=\s*true/);
   });
 
+  it("declara el catálogo nutricional en el import map desplegable de plans", async () => {
+    const denoConfig = JSON.parse(
+      await readFile(
+        new URL("../supabase/functions/plans/deno.json", import.meta.url),
+        "utf8",
+      ),
+    ) as { imports?: Record<string, string> };
+
+    expect(denoConfig.imports?.["@health-design/catalog/nutrition-generator"]).toBe(
+      "../../../packages/catalog/src/nutrition/generator-metadata.ts",
+    );
+  });
+
   it("aplica CORS exacto y rechaza orígenes ajenos", async () => {
     const allowedRequest = new Request("http://localhost/runtime-smoke", {
       body: JSON.stringify(RUNTIME_SMOKE_EXAMPLE),

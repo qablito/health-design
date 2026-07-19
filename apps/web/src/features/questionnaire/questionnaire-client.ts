@@ -62,7 +62,7 @@ export function createQuestionnaireClient(dependencies: Dependencies) {
     const headers: Record<string, string> = {
       apikey: dependencies.publishableKey,
       authorization: `Bearer ${accessToken}`,
-      "x-client-info": "health-design-web/questionnaire-v1",
+      "x-client-info": "health-design-web/questionnaire-v2",
     };
     if (method !== "GET") {
       headers["content-type"] = "application/json";
