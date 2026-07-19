@@ -108,7 +108,7 @@ const firstAck = {
   activeVersionId: null,
   aggregateVersion: 1,
   archivedAt: null,
-  completeness: "complete",
+  completeness: "provisional",
   contextSnapshotId: contextId,
   createdAt: timestamp,
   ordinal: 1,
@@ -368,7 +368,10 @@ describe("Edge del ciclo de vida del plan", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ status: "draft" });
+    expect(await response.json()).toMatchObject({
+      completeness: "provisional",
+      status: "draft",
+    });
     expect(current.engineCalls).toHaveLength(1);
     expect(current.engineCalls[0]).toMatchObject({ baseModuleResults: null });
     expect(current.calls.map(({ name }) => name)).toEqual([
@@ -377,12 +380,33 @@ describe("Edge del ciclo de vida del plan", () => {
     ]);
     expect(current.calls[1]?.args).toMatchObject({
       p_canonicalization_version: "canonical-json-v1",
+      p_engine_completeness: "provisional",
       p_engine_version: "engine-v1",
       p_validation: {
         checks: ["structure"],
         completeness: "provisional",
       },
       p_validation_status: "valid",
+    });
+  });
+
+  it("falla cerrado si el ACK no conserva la completitud efectiva del motor", async () => {
+    const current = setup({
+      rpcData: {
+        internal_create_plan_draft: [{ ...firstAck, completeness: "complete" }],
+      },
+    });
+    const response = await handlePlanLifecycle(
+      request(`/v1/profiles/${profileId}/plans/generate`, "POST", {
+        contextSnapshotId: contextId,
+        schemaVersion: 1,
+      }),
+      current.dependencies,
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: { code: "DEPENDENCY_UNAVAILABLE" },
     });
   });
 

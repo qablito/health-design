@@ -193,7 +193,8 @@ select public.internal_create_plan_draft(
   '82000000-0000-4000-8000-000000007101',
   decode(repeat('21', 32), 'hex'),
   decode(repeat('22', 32), 'hex'),
-  'valid', '{"checks":["structure"]}'::jsonb,
+  'complete',
+  'valid', '{"checks":["structure"],"completeness":"complete"}'::jsonb,
   '[{"module":"nutrition","status":"valid","confidence":"medium","payload":{"days":7},"uncertainties":[]}]'::jsonb,
   '[{"module":"hydration","actionLevel":"information","code":"HYDRATION_CONTEXT","messageKey":"plan.hydration.context","evidenceRef":"rule:hydration-v1"}]'::jsonb,
   decode(repeat('23', 32), 'hex'),
@@ -359,6 +360,7 @@ select public.internal_create_plan_candidate(
   '82000000-0000-4000-8000-000000007101',
   decode(repeat('44', 32), 'hex'),
   decode(repeat('45', 32), 'hex'),
+  'provisional',
   'valid', '{"checks":["structure","constraints"],"completeness":"provisional"}'::jsonb,
   '[{"module":"nutrition","status":"valid","confidence":"high","payload":{"days":7},"uncertainties":[]}]'::jsonb,
   '[]'::jsonb,
@@ -436,6 +438,57 @@ select is(
 
 select throws_ok(
   $$
+    select public.internal_create_plan_candidate(
+      '00000000-0000-4000-8000-000000007101',
+      '21000000-0000-4000-8000-000000007101',
+      (select (response ->> 'planId')::uuid from first_plan),
+      4,
+      (select (response ->> 'planVersionId')::uuid from valid_candidate),
+      (select (response ->> 'id')::uuid from second_snapshot),
+      'context_changed', '{"changedFields":["weightKg"]}'::jsonb,
+      'module_only',
+      '{"changedFields":["weightKg"],"affectedModules":["nutrition"]}'::jsonb,
+      'engine-contract-v1', 'plan-canonical-v1',
+      '81000000-0000-4000-8000-000000007101',
+      '82000000-0000-4000-8000-000000007101',
+      decode(repeat('54', 32), 'hex'), decode(repeat('55', 32), 'hex'),
+      'complete',
+      'valid', '{"completeness":"provisional"}'::jsonb,
+      '[{"module":"nutrition","status":"valid","confidence":"high","payload":{},"uncertainties":[]}]'::jsonb,
+      '[]'::jsonb,
+      decode(repeat('56', 32), 'hex'), decode(repeat('57', 32), 'hex')
+    )
+  $$,
+  '22023',
+  'invalid_input',
+  'la RPC rechaza una completitud del motor incoherente con su validación'
+);
+
+select throws_ok(
+  $$
+    insert into public.plan_versions (
+      id, plan_id, ordinal, status, completeness, validation_status, validation,
+      context_snapshot_id, engine_version, rule_set_revision_id,
+      source_manifest_id, input_hash, output_hash, canonicalization_version
+    ) values (
+      '74000000-0000-4000-8000-000000007197',
+      (select (response ->> 'planId')::uuid from first_plan),
+      97, 'draft', 'complete', 'valid', '{}'::jsonb,
+      (select (response ->> 'id')::uuid from second_snapshot),
+      'engine-contract-v1',
+      '81000000-0000-4000-8000-000000007197',
+      '82000000-0000-4000-8000-000000007197',
+      decode(repeat('58', 32), 'hex'), decode(repeat('59', 32), 'hex'),
+      'plan-canonical-v1'
+    )
+  $$,
+  '23514',
+  'invalid_engine_completeness',
+  'la persistencia falla cerrada si falta la completitud del motor'
+);
+
+select throws_ok(
+  $$
     insert into public.plan_versions (
       id, plan_id, ordinal, status, completeness, validation_status, validation,
       context_snapshot_id, engine_version, rule_set_revision_id,
@@ -493,7 +546,8 @@ select public.internal_create_plan_candidate(
   '82000000-0000-4000-8000-000000007101',
   decode(repeat('64', 32), 'hex'),
   decode(repeat('65', 32), 'hex'),
-  'invalid', '{"errors":["constraint_failed"]}'::jsonb,
+  'provisional',
+  'invalid', '{"errors":["constraint_failed"],"completeness":"provisional"}'::jsonb,
   '[]'::jsonb,
   '[{"module":"nutrition","actionLevel":"immediate_conservative","code":"CONSTRAINT_FAILED","messageKey":"plan.constraint.failed","evidenceRef":"rule:mandatory-v1"}]'::jsonb,
   decode(repeat('66', 32), 'hex'),
@@ -730,7 +784,7 @@ insert into public.plan_versions (
 ) values (
   '74000000-0000-4000-8000-000000007199',
   '73000000-0000-4000-8000-000000007199', 1, 'draft', 'complete',
-  'valid', '{"checks":["structure"]}'::jsonb,
+  'valid', '{"checks":["structure"],"completeness":"complete"}'::jsonb,
   '72000000-0000-4000-8000-000000007199', 'engine-contract-v1',
   '81000000-0000-4000-8000-000000007199',
   '82000000-0000-4000-8000-000000007199',

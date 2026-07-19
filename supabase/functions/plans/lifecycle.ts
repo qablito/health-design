@@ -444,6 +444,7 @@ async function createSnapshot(
 function engineRpcArgs(result: PlanEngineResult) {
   return {
     p_canonicalization_version: result.canonicalizationVersion,
+    p_engine_completeness: result.completeness,
     p_engine_version: result.engineVersion,
     p_input_hash: `\\x${result.inputHash}`,
     p_module_results: result.moduleResults,
@@ -479,7 +480,7 @@ async function generatePlan(
     throw new PlanHttpError("PLAN_VALIDATION_FAILED", 422);
   }
   const digests = await mutationDigests(request, body, route);
-  return parseDependency(
+  const ack = parseDependency(
     PlanMutationAckSchema,
     firstRow(
       await rpc(dependencies, "internal_create_plan_draft", {
@@ -492,6 +493,15 @@ async function generatePlan(
       }),
     ),
   );
+  if (
+    ack.completeness !==
+    (context.completeness === "complete" && result.completeness === "complete"
+      ? "complete"
+      : "provisional")
+  ) {
+    throw new PlanHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  }
+  return ack;
 }
 
 async function createCandidate(
@@ -547,7 +557,7 @@ async function createCandidate(
     context,
   });
   const digests = await mutationDigests(request, body, route);
-  return parseDependency(
+  const ack = parseDependency(
     PlanCandidateAckSchema,
     firstRow(
       await rpc(dependencies, "internal_create_plan_candidate", {
@@ -569,6 +579,15 @@ async function createCandidate(
       }),
     ),
   );
+  if (
+    ack.completeness !==
+    (context.completeness === "complete" && result.completeness === "complete"
+      ? "complete"
+      : "provisional")
+  ) {
+    throw new PlanHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  }
+  return ack;
 }
 
 async function dispatch(
