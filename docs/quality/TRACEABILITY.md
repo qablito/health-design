@@ -15,7 +15,13 @@ la canonicalización, los hashes, la resolución mínima de restricciones y el
 corte cuestionario→borrador tienen recibo remoto de desarrollo
 `T8_COMPLETE_REMOTE_PASS` en
 [`TASK_08_VERIFICATION.md`](TASK_08_VERIFICATION.md). Los catálogos, fórmulas
-nutricionales y reglas clínicas completas continúan en T9–T12.
+nutricionales y reglas clínicas completas continúan en T9–T12. El núcleo del
+catálogo federado genérico, su procedencia, cuarentena, revisión manual e
+historia efectiva tiene recibo remoto de desarrollo `T9_COMPLETE_REMOTE_PASS`
+en [`TASK_09_VERIFICATION.md`](TASK_09_VERIFICATION.md): cierra el núcleo de
+REQ-DAT-001 y REQ-DAT-002, y la parte genérica de REQ-DAT-004 y REQ-DAT-007.
+Las fórmulas continúan en T10, la adaptación clínica en T12, los productos
+comerciales en T16 y supermercados/precios en T17.
 
 ## 1. Bloques de producto
 

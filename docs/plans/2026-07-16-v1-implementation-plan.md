@@ -640,6 +640,13 @@ pnpm test --filter numeric-contract
 
 ## Tarea 9 — Ingesta nutricional federada y revisiones efectivas
 
+> **Estado 2026-07-19:** `T9_COMPLETE_REMOTE_PASS`. Catálogo federado de
+> alimentos genéricos, cuarentena, procedencia, revisiones manuales e historia
+> efectiva implementados y validados en desarrollo. No incluye generación de
+> dietas, catálogo comercial por GTIN, supermercados, precios ni cambios en
+> producción. Véase
+> [`TASK_09_VERIFICATION.md`](../quality/TASK_09_VERIFICATION.md).
+
 **Resultado:** alimentos genéricos con procedencia, estado y revisión; ninguna
 fuente se promedia silenciosamente.
 
