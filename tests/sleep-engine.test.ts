@@ -5,6 +5,8 @@ import { generateSleepPlan } from "@health-design/engine";
 
 const selected = {
   activeModules: ["sleep" as const],
+  hasConditions: false,
+  hasMedications: false,
   sleepQuality: "good" as const,
   sleepRegularity: "regular" as const,
   sleepHours: 8,
@@ -128,6 +130,27 @@ describe("motor de sueño T12", () => {
     expect(plan.strategies).toContain("record_schedule");
     expect(plan.confidenceFactors).toContain("schedule_missing");
     expect(plan.uncertainties).toEqual([]);
+  });
+
+  it("incorpora contexto clínico y fisiológico como revisión, no como diagnóstico", () => {
+    const plan = generateSleepPlan({
+      ...selected,
+      hasConditions: false,
+      hasMedications: false,
+      pregnancyLactation: "pregnant",
+    });
+
+    expect(plan.status).toBe("provisional");
+    expect(plan.completeness).toBe("provisional");
+    expect(plan.uncertainties).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "CLINICAL_CONTEXT_PARTIAL" }),
+      ]),
+    );
+    expect(plan.strategies).toContain("clinical_context_review");
+    expect(plan.confidenceFactors).toContain("clinical_context_partial");
+    expect(plan.confidence).toBe("medium");
+    expect(JSON.stringify(plan)).not.toMatch(/diagnos|medication change|dosis/i);
   });
 
   it("no incluye diario, importación ni notificaciones en el contrato", () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  PlanEngineResultSchema,
   SleepPlanSchema,
   type ContextSnapshotInternal,
 } from "@health-design/contracts";
@@ -9,8 +10,11 @@ import {
   CORE_RULE_SET_REVISION,
   CORE_SOURCE_MANIFEST,
   CORE_SOURCE_REVISIONS,
+  createClinicalCatalogDescriptor,
   ENGINE_VERSION,
   HISTORICAL_ENGINE_SNAPSHOT,
+  HISTORICAL_CLINICAL_RULE_REVISION,
+  T12_INITIAL_ENGINE_SNAPSHOT,
   resolveChoice,
   runDeterministicEngine,
 } from "../packages/engine/src/index";
@@ -69,9 +73,18 @@ describe("reconciliación de reglas", () => {
       "source:pubmed-glycine-sleep-review@1.0.0",
       "source:pubmed-theanine-sleep-review@1.0.0",
       "source:pubmed-ashwagandha-review@1.0.0",
+      "source:who-sodium-intake-guideline-2012@1.0.0",
+      "source:glp1-nutrition-joint-advisory-2025@1.0.0",
+      "source:ema-ozempic-product-information@1.0.0",
+      "source:ema-mounjaro-product-information@1.0.0",
+      "source:aemps-cima-medicines-catalog@1.0.0",
     ];
 
     expect(CORE_SOURCE_REVISIONS.map(({ id }) => id)).toEqual(expectedSourceIds);
+    expect(CORE_SOURCE_MANIFEST).toMatchObject({
+      id: "d46591cd-ae2a-4330-a037-c39436cae923",
+      version: "core-with-contextual-wellness-v1",
+    });
     expect(CORE_SOURCE_MANIFEST.sourceRevisionIds).toEqual(expectedSourceIds);
     expect(
       CORE_SOURCE_REVISIONS.every(
@@ -99,6 +112,11 @@ describe("reconciliación de reglas", () => {
     ).toBe(true);
 
     const registeredSourceIds = new Set(expectedSourceIds);
+    expect(
+      CORE_RULE_REVISIONS.flatMap(({ evidenceRefs }) => evidenceRefs)
+        .filter((reference) => reference.startsWith("source:"))
+        .every((reference) => registeredSourceIds.has(reference)),
+    ).toBe(true);
     const t11Rules = CORE_RULE_REVISIONS.filter(({ ruleId }) =>
       [
         "rule.training-generated-block",
@@ -141,9 +159,9 @@ describe("reconciliación de reglas", () => {
   it("versiona el conjunto activo y exige evidencia trazable por revisión", () => {
     expect(ENGINE_VERSION).toBe("engine-v4");
     expect(CORE_RULE_SET_REVISION).toMatchObject({
-      id: "a4b0f4bd-2bb9-4b79-98c3-22ad65b07f27",
+      id: "9cf98aae-0f9f-452f-9577-72283eeff4d5",
       status: "active",
-      version: "4.2.0",
+      version: "4.3.0",
     });
     expect(CORE_RULE_SET_REVISION.ruleRevisionIds).toEqual(
       CORE_RULE_REVISIONS.map(({ id }) => id),
@@ -154,7 +172,7 @@ describe("reconciliación de reglas", () => {
           evidenceRefs.length > 0 &&
           ["2026-07-18", "2026-07-19"].includes(reviewedAt) &&
           status === "active" &&
-          version === "1.0.0",
+          (version === "1.0.0" || version === "2.0.0"),
       ),
     ).toBe(true);
     expect(CORE_RULE_SET_REVISION.ruleRevisionIds).toEqual(
@@ -163,6 +181,10 @@ describe("reconciliación de reglas", () => {
         "rule.training-declared-limitations@1.0.0",
         "rule.mobility-modular-duration@1.0.0",
         "rule.sleep-window@1.0.0",
+        "rule.clinical-selective@2.0.0",
+        "rule.clinical-hypertension-context@1.0.0",
+        "rule.clinical-glp1-context@1.0.0",
+        "rule.clinical-physiological-context@1.0.0",
       ]),
     );
     expect(
@@ -174,6 +196,135 @@ describe("reconciliación de reglas", () => {
         "source:aasm-srs-adult-sleep-duration-consensus-2015@1.0.0",
       ]),
     );
+    expect(
+      CORE_RULE_REVISIONS.find(({ ruleId }) => ruleId === "rule.clinical-selective")
+        ?.evidenceRefs,
+    ).toEqual([
+      "contract:t12-clinical-selective-v2",
+      "source:aemps-cima-medicines-catalog@1.0.0",
+    ]);
+    expect(HISTORICAL_CLINICAL_RULE_REVISION).toEqual({
+      evidenceRefs: ["contract:t12-clinical-selective-v1"],
+      id: "rule.clinical-selective@1.0.0",
+      kind: "conditional",
+      reviewedAt: "2026-07-19",
+      ruleId: "rule.clinical-selective",
+      scope: ["hydration", "nutrition", "training", "mobility", "supplements"],
+      status: "active",
+      version: "1.0.0",
+    });
+    expect(
+      CORE_SOURCE_REVISIONS.filter(({ evidenceType }) =>
+        ["joint_advisory", "regulatory_product_information"].includes(evidenceType),
+      ).map(({ hierarchy }) => hierarchy),
+    ).toEqual(["advisory", "regulatory", "regulatory", "regulatory"]);
+  });
+
+  it("valida el descriptor clínico compilado y lo incorpora al hash y validación", async () => {
+    const descriptor = createClinicalCatalogDescriptor();
+    const result = await runDeterministicEngine({
+      baseContext: null,
+      baseModuleResults: null,
+      change: null,
+      clinicalCatalogDescriptor: descriptor,
+      context,
+    });
+
+    expect(result.validation).toMatchObject({
+      checks: expect.arrayContaining(["clinical_catalog_descriptor_exact_match"]),
+      clinicalCatalogDescriptor: descriptor,
+    });
+    await expect(
+      runDeterministicEngine({
+        baseContext: null,
+        baseModuleResults: null,
+        change: null,
+        clinicalCatalogDescriptor: {
+          ...descriptor,
+          descriptorHash: "0".repeat(64),
+        },
+        context,
+      }),
+    ).rejects.toThrow("clinical_catalog_descriptor_mismatch");
+  });
+
+  it("usa AEMPS/CIMA como autoridad y no el nombre libre cuando existe aempsId", async () => {
+    const clinicalContext = {
+      ...context,
+      answers: {
+        ...context.answers,
+        activeModules: ["hydration" as const],
+        hasConditions: false,
+        hasMedications: true,
+        habitualWaterMl: 2_000,
+        hydrationFluidRestriction: "none" as const,
+        hydrationSweat: "low" as const,
+        medications: [{ aempsId: "117251002", name: "Nombre manipulado" }],
+      },
+    };
+    const canonicalIdentity = {
+      activeIngredients: ["semaglutida"],
+      administrationRoutes: ["VÍA SUBCUTÁNEA"],
+      aempsId: "117251002",
+      canonicalName: "OZEMPIC 0,25 MG SOLUCION INYECTABLE",
+      commercialized: true,
+      prescriptionRequired: true,
+      retrievedAt: "2026-07-19T18:00:00.000Z",
+      sourceHash: "ab".repeat(32),
+      sourceVersion: "CIMA_REST_API_1_23" as const,
+    };
+    const resolved = await runDeterministicEngine({
+      baseContext: null,
+      baseModuleResults: null,
+      canonicalMedicationIdentities: [canonicalIdentity],
+      change: null,
+      context: clinicalContext,
+    });
+    expect(resolved.safetyFindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "GLP1_CONTEXT_PARTIAL" }),
+      ]),
+    );
+    expect(resolved.validation).toMatchObject({
+      medicationIdentityResolution: {
+        declaredCount: 1,
+        resolvedCount: 1,
+        unresolvedCount: 0,
+      },
+    });
+    expect(JSON.stringify(resolved)).not.toContain("Nombre manipulado");
+    const refreshed = await runDeterministicEngine({
+      baseContext: null,
+      baseModuleResults: null,
+      canonicalMedicationIdentities: [
+        { ...canonicalIdentity, retrievedAt: "2026-07-20T18:00:00.000Z" },
+      ],
+      change: null,
+      context: clinicalContext,
+    });
+    expect(refreshed.inputHash).toBe(resolved.inputHash);
+    expect(refreshed.outputHash).toBe(resolved.outputHash);
+
+    const unresolved = await runDeterministicEngine({
+      baseContext: null,
+      baseModuleResults: null,
+      canonicalMedicationIdentities: [],
+      change: null,
+      context: {
+        ...clinicalContext,
+        answers: {
+          ...clinicalContext.answers,
+          medications: [{ aempsId: "117251002", name: "Semaglutida" }],
+        },
+      },
+    });
+    expect(unresolved.safetyFindings.map(({ code }) => code)).not.toContain(
+      "GLP1_CONTEXT_PARTIAL",
+    );
+    expect(unresolved.safetyFindings.map(({ code }) => code)).toContain(
+      "CLINICAL_CONTEXT_UNMODELED",
+    );
+    expect(unresolved.completeness).toBe("provisional");
   });
 
   it("conserva un snapshot histórico literal para replay de engine-v3", () => {
@@ -203,6 +354,24 @@ describe("reconciliación de reglas", () => {
         version: "core-with-training-mobility-v1",
       },
     });
+  });
+
+  it("conserva el snapshot T12 inicial sin mutar su revisión clínica 1.0.0", () => {
+    expect(T12_INITIAL_ENGINE_SNAPSHOT).toMatchObject({
+      engineVersion: "engine-v4",
+      ruleSetRevision: {
+        id: "a4b0f4bd-2bb9-4b79-98c3-22ad65b07f27",
+        ruleRevisionIds: expect.arrayContaining(["rule.clinical-selective@1.0.0"]),
+        version: "4.2.0",
+      },
+      sourceManifest: {
+        id: "c7aa1da4-2fa1-4e7b-86b4-5e03f44e7f4c",
+        version: "core-with-training-mobility-hydration-sleep-supplements-v1",
+      },
+    });
+    expect(T12_INITIAL_ENGINE_SNAPSHOT.ruleSetRevision.ruleRevisionIds).not.toContain(
+      "rule.clinical-selective@2.0.0",
+    );
   });
 
   it("una preferencia no puede reabrir una opción excluida por una obligatoria", () => {
@@ -346,6 +515,99 @@ describe("pipeline determinista T8", () => {
       ]),
     );
   });
+
+  it("reconcilia hallazgos clínicos por cada módulo solicitado sin filtrar nombres", async () => {
+    const result = await runDeterministicEngine({
+      baseContext: null,
+      baseModuleResults: null,
+      change: null,
+      context: {
+        ...context,
+        answers: {
+          ...context.answers,
+          activeModules: ["hydration", "sleep", "mobility"],
+          conditions: [{ name: "Hipertensión" }],
+          hasConditions: true,
+          hasMedications: true,
+          hydrationFluidRestriction: "none",
+          hydrationSweat: "low",
+          habitualWaterMl: 2_000,
+          medications: [{ name: "Semaglutida" }],
+          mobilityAreas: ["shoulders"],
+          mobilityDiscomfortStatus: "none",
+          mobilityMinutes: 5,
+          pregnancyLactation: "pregnant",
+          sleepHours: 8,
+          sleepQuality: "good",
+          sleepRegularity: "regular",
+        },
+      },
+    });
+
+    expect(result.safetyFindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "HYPERTENSION_CONTEXT_PARTIAL",
+          module: "sleep",
+        }),
+        expect.objectContaining({
+          code: "GLP1_CONTEXT_PARTIAL",
+          module: "hydration",
+        }),
+        expect.objectContaining({
+          code: "PREGNANCY_CONTEXT_PARTIAL",
+          module: "mobility",
+        }),
+      ]),
+    );
+    expect(JSON.stringify(result)).not.toContain("Semaglutida");
+    expect(JSON.stringify(result)).not.toContain("Hipertensión");
+    expect(PlanEngineResultSchema.parse(result)).toEqual(result);
+    expect(result.completeness).toBe("provisional");
+    expect(result.validation).toMatchObject({
+      completeness: "provisional",
+      provisionalReasons: expect.arrayContaining(["clinical_context_partial"]),
+    });
+  });
+
+  it.each([
+    ["sleep", { sleepHours: 8, sleepQuality: "good", sleepRegularity: "regular" }],
+    [
+      "hydration",
+      {
+        habitualWaterMl: 2_000,
+        hydrationFluidRestriction: "none",
+        hydrationSweat: "low",
+      },
+    ],
+  ] as const)(
+    "mantiene provisional un plan %s aislado ante embarazo parcial",
+    async (module, moduleAnswers) => {
+      const result = await runDeterministicEngine({
+        baseContext: null,
+        baseModuleResults: null,
+        change: null,
+        context: {
+          ...context,
+          answers: {
+            ...context.answers,
+            ...moduleAnswers,
+            activeModules: [module],
+            hasConditions: false,
+            hasMedications: false,
+            pregnancyLactation: "pregnant",
+          },
+        },
+      });
+
+      expect(result.completeness).toBe("provisional");
+      expect(result.safetyFindings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: "PREGNANCY_CONTEXT_PARTIAL", module }),
+        ]),
+      );
+    },
+  );
 
   it("produce hashes idénticos para Unicode equivalente y excluye timestamps volátiles", async () => {
     const first = await runDeterministicEngine({

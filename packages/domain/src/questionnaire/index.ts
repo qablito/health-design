@@ -67,6 +67,8 @@ export type QuestionnaireBlockId = (typeof QUESTIONNAIRE_BLOCK_IDS)[number];
 
 export type NamedEntry = { name: string; note?: string | undefined };
 export type MedicationEntry = NamedEntry & {
+  /** Número de registro CIMA confirmado; ausente cuando la entrada es libre. */
+  aempsId?: string | undefined;
   dose?: string | undefined;
   frequency?: string | undefined;
   route?: string | undefined;

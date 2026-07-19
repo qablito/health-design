@@ -17,7 +17,7 @@ export const ClinicalCoverageSchema = z.enum(CLINICAL_COVERAGE);
 export const ClinicalRuleKindSchema = z.enum(CLINICAL_RULE_KINDS);
 export const ActionLevelSchema = z.enum(ACTION_LEVELS);
 export const ClinicalActionLevelSchema = ActionLevelSchema;
-export const CLINICAL_CATALOG_VERSION = "clinical-selective-v1" as const;
+export const CLINICAL_CATALOG_VERSION = "clinical-selective-v2" as const;
 
 export const ClinicalRuleSchema = z
   .object({
@@ -38,8 +38,13 @@ const ClinicalDetectedFlagsSchema = z
     diuretic: z.boolean(),
     fluidRestriction: z.boolean(),
     glp1: z.boolean(),
+    hypertension: z.boolean(),
     hyponatremia: z.boolean(),
+    lactation: z.boolean(),
     magnesiumInteraction: z.boolean(),
+    menopause: z.boolean(),
+    preconception: z.boolean(),
+    pregnancy: z.boolean(),
     renal: z.boolean(),
     retatrutide: z.boolean(),
   })
@@ -75,6 +80,29 @@ export const ClinicalResultSchema = z
   })
   .strict();
 
+const AempsIdentifierSchema = z.string().regex(/^[0-9A-Z]{1,32}$/);
+export const AempsMedicationSearchResultSchema = z
+  .object({
+    activeIngredients: z.array(z.string().min(1).max(200)).max(20),
+    administrationRoutes: z.array(z.string().min(1).max(200)).max(20),
+    aempsId: AempsIdentifierSchema,
+    commercialized: z.boolean().nullable(),
+    name: z.string().min(1).max(500),
+    prescriptionCondition: z.string().min(1).max(500).nullable(),
+    prescriptionRequired: z.boolean().nullable(),
+    registrationNumber: AempsIdentifierSchema,
+  })
+  .strict()
+  .refine(({ aempsId, registrationNumber }) => aempsId === registrationNumber, {
+    message: "aemps_identifier_mismatch",
+  });
+export const AempsMedicationSearchResponseSchema = z
+  .object({
+    results: z.array(AempsMedicationSearchResultSchema).max(20),
+    source: z.literal("AEMPS_CIMA"),
+  })
+  .strict();
+
 export type ClinicalCoverage = z.infer<typeof ClinicalCoverageSchema>;
 export type ClinicalRuleKind = z.infer<typeof ClinicalRuleKindSchema>;
 export type ActionLevel = z.infer<typeof ActionLevelSchema>;
@@ -82,6 +110,12 @@ export type ClinicalRule = z.infer<typeof ClinicalRuleSchema>;
 export type ClinicalUncertainty = z.infer<typeof ClinicalUncertaintySchema>;
 export type ClinicalSafetyFinding = z.infer<typeof ClinicalSafetyFindingSchema>;
 export type ClinicalResult = z.infer<typeof ClinicalResultSchema>;
+export type AempsMedicationSearchResult = z.infer<
+  typeof AempsMedicationSearchResultSchema
+>;
+export type AempsMedicationSearchResponse = z.infer<
+  typeof AempsMedicationSearchResponseSchema
+>;
 
 export type ClinicalCatalogEntry = Readonly<{
   aliases: readonly string[];
@@ -128,6 +162,19 @@ export const CLINICAL_CATALOG = [
   },
   {
     aliases: [
+      "hipertension",
+      "hipertension arterial",
+      "presion arterial alta",
+      "hypertension",
+      "high blood pressure",
+    ],
+    code: "HYPERTENSION_CONTEXT_PARTIAL",
+    coverage: "partial",
+    kind: "conditional",
+    actionLevel: "priority_review",
+  },
+  {
+    aliases: [
       "semaglutida",
       "semaglutide",
       "ozempic",
@@ -138,6 +185,34 @@ export const CLINICAL_CATALOG = [
       "mounjaro",
     ],
     code: "GLP1_CONTEXT_PARTIAL",
+    coverage: "partial",
+    kind: "conditional",
+    actionLevel: "adjustment",
+  },
+  {
+    aliases: [],
+    code: "PREGNANCY_CONTEXT_PARTIAL",
+    coverage: "partial",
+    kind: "conditional",
+    actionLevel: "priority_review",
+  },
+  {
+    aliases: [],
+    code: "LACTATION_CONTEXT_PARTIAL",
+    coverage: "partial",
+    kind: "conditional",
+    actionLevel: "priority_review",
+  },
+  {
+    aliases: [],
+    code: "PRECONCEPTION_CONTEXT_PARTIAL",
+    coverage: "partial",
+    kind: "conditional",
+    actionLevel: "adjustment",
+  },
+  {
+    aliases: [],
+    code: "MENOPAUSE_CONTEXT_PARTIAL",
     coverage: "partial",
     kind: "conditional",
     actionLevel: "adjustment",

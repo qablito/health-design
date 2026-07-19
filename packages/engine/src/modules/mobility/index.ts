@@ -6,6 +6,7 @@ import {
   analyzeMovementLimitations,
   conflictsWithMovementLimitations,
 } from "../movement-limitations.ts";
+import { clinicalContextReviewCodes } from "../clinical-context.ts";
 
 const mobilityCatalog = EXERCISE_CATALOG.filter((entry) =>
   entry.phases.includes("mobility"),
@@ -33,17 +34,6 @@ function isMobilityAnchor(value: string): value is MobilityAnchor {
 
 function isMobilityArea(value: string): boolean {
   return MOBILITY_AREAS.some((area) => area === value);
-}
-
-function hasClinicalContextPendingT12(answers: QuestionnaireAnswers): boolean {
-  return (
-    answers.hasConditions === true ||
-    answers.hasMedications === true ||
-    ["pregnant", "lactating", "trying_to_conceive", "unknown"].includes(
-      answers.pregnancyLactation ?? "",
-    ) ||
-    ["peri", "post", "unknown"].includes(answers.menopauseStage ?? "")
-  );
 }
 
 function isFunctionalAlternative(
@@ -243,15 +233,13 @@ export function generateMobilityPlan(
       messageKey: "mobility.uncertainty.training_limitations_missing",
     });
   }
-  if (answers.hasConditions === undefined || answers.hasMedications === undefined) {
+  for (const code of clinicalContextReviewCodes(answers).filter(
+    (value) => value !== "MAGNESIUM_INTERACTION_PARTIAL",
+  )) {
+    if (uncertainties.some((uncertainty) => uncertainty.code === code)) continue;
     uncertainties.push({
-      code: "CLINICAL_CONTEXT_MISSING",
-      messageKey: "mobility.uncertainty.clinical_context_missing",
-    });
-  } else if (hasClinicalContextPendingT12(answers)) {
-    uncertainties.push({
-      code: "CLINICAL_RULES_PENDING_T12",
-      messageKey: "mobility.uncertainty.clinical_rules_pending_t12",
+      code,
+      messageKey: `mobility.uncertainty.${code.toLowerCase()}`,
     });
   }
   const coreEntries = selectExercises(selectedAreas, excludedAreas);

@@ -10,6 +10,7 @@ import {
   analyzeMovementLimitations,
   conflictsWithMovementLimitations,
 } from "../movement-limitations.ts";
+import { clinicalContextReviewCodes } from "../clinical-context.ts";
 
 const WEEK_PROGRESSION = [
   {
@@ -446,15 +447,20 @@ function fitSessionToAvailability(
   return { ...fitted, durationMinutes: estimateTrainingSessionMinutes(fitted) };
 }
 
-function hasClinicalContextPendingT12(answers: QuestionnaireAnswers): boolean {
-  return (
-    answers.hasConditions === true ||
-    answers.hasMedications === true ||
-    ["pregnant", "lactating", "trying_to_conceive", "unknown"].includes(
-      answers.pregnancyLactation ?? "",
-    ) ||
-    ["peri", "post", "unknown"].includes(answers.menopauseStage ?? "")
+function appendClinicalReviewUncertainties(
+  answers: QuestionnaireAnswers,
+  uncertainties: Array<{ code: string; messageKey: string }>,
+): void {
+  const codes = clinicalContextReviewCodes(answers).filter(
+    (code) => code !== "MAGNESIUM_INTERACTION_PARTIAL",
   );
+  for (const code of codes) {
+    if (uncertainties.some((uncertainty) => uncertainty.code === code)) continue;
+    uncertainties.push({
+      code,
+      messageKey: `training.uncertainty.${code.toLowerCase()}`,
+    });
+  }
 }
 
 function candidateOrder(level: TrainingExperience, equipment: readonly string[]) {
@@ -583,17 +589,7 @@ function generatedPlan(answers: QuestionnaireAnswers): TrainingPlanContract {
       messageKey: "training.uncertainty.limitations_missing",
     });
   }
-  if (answers.hasConditions === undefined || answers.hasMedications === undefined) {
-    uncertainties.push({
-      code: "CLINICAL_CONTEXT_MISSING",
-      messageKey: "training.uncertainty.clinical_context_missing",
-    });
-  } else if (hasClinicalContextPendingT12(answers)) {
-    uncertainties.push({
-      code: "CLINICAL_RULES_PENDING_T12",
-      messageKey: "training.uncertainty.clinical_rules_pending_t12",
-    });
-  }
+  appendClinicalReviewUncertainties(answers, uncertainties);
 
   const availableCatalog = EXERCISE_CATALOG.filter(
     (entry) =>
@@ -817,17 +813,7 @@ export function generateTrainingPlan(
         messageKey: "training.uncertainty.limitations_missing",
       });
     }
-    if (answers.hasConditions === undefined || answers.hasMedications === undefined) {
-      uncertainties.push({
-        code: "CLINICAL_CONTEXT_MISSING",
-        messageKey: "training.uncertainty.clinical_context_missing",
-      });
-    } else if (hasClinicalContextPendingT12(answers)) {
-      uncertainties.push({
-        code: "CLINICAL_RULES_PENDING_T12",
-        messageKey: "training.uncertainty.clinical_rules_pending_t12",
-      });
-    }
+    appendClinicalReviewUncertainties(answers, uncertainties);
     const days = answers.ownTrainingDaysPerWeek;
     const minutes = answers.ownTrainingSessionMinutes;
     const intensity = answers.ownTrainingIntensity;

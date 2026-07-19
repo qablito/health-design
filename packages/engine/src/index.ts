@@ -1,4 +1,5 @@
 import {
+  CLINICAL_CATALOG_VERSION,
   HydrationPlanSchema,
   MobilityPlanSchema,
   SleepPlanSchema,
@@ -313,7 +314,7 @@ export const HISTORICAL_ENGINE_VERSION = "engine-v3" as const;
 export const ENGINE_VERSION = "engine-v4" as const;
 export const HISTORICAL_SOURCE_MANIFEST_ID =
   "cb644399-1275-47de-86b6-195711946f66" as const;
-export const SOURCE_MANIFEST_ID = "c7aa1da4-2fa1-4e7b-86b4-5e03f44e7f4c" as const;
+export const SOURCE_MANIFEST_ID = "d46591cd-ae2a-4330-a037-c39436cae923" as const;
 
 export type RuleRevision = Readonly<{
   evidenceRefs: readonly string[];
@@ -333,13 +334,20 @@ export type ScientificSourceRevision = Readonly<{
   doi?: string;
   evidenceType:
     | "consensus_statement"
+    | "joint_advisory"
     | "position_stand_overview_of_reviews"
     | "public_health_guideline"
+    | "regulatory_product_information"
     | "systematic_review"
     | "systematic_review_meta_analysis"
     | "systematic_review_meta_analysis_meta_regression";
   exclusions: readonly string[];
-  hierarchy: "guideline" | "systematic_review" | "systematic_review_meta_analysis";
+  hierarchy:
+    | "advisory"
+    | "guideline"
+    | "regulatory"
+    | "systematic_review"
+    | "systematic_review_meta_analysis";
   id: string;
   population: string;
   reviewedAt: string;
@@ -375,6 +383,12 @@ const PUBMED_BETA_ALANINE_SOURCE_ID =
 const PUBMED_GLYCINE_SOURCE_ID = "source:pubmed-glycine-sleep-review@1.0.0" as const;
 const PUBMED_THEANINE_SOURCE_ID = "source:pubmed-theanine-sleep-review@1.0.0" as const;
 const PUBMED_ASHWAGANDHA_SOURCE_ID = "source:pubmed-ashwagandha-review@1.0.0" as const;
+const WHO_SODIUM_SOURCE_ID = "source:who-sodium-intake-guideline-2012@1.0.0" as const;
+const GLP1_NUTRITION_ADVISORY_SOURCE_ID =
+  "source:glp1-nutrition-joint-advisory-2025@1.0.0" as const;
+const EMA_OZEMPIC_SOURCE_ID = "source:ema-ozempic-product-information@1.0.0" as const;
+const EMA_MOUNJARO_SOURCE_ID = "source:ema-mounjaro-product-information@1.0.0" as const;
+const AEMPS_CIMA_SOURCE_ID = "source:aemps-cima-medicines-catalog@1.0.0" as const;
 
 export const CORE_SOURCE_REVISIONS = [
   {
@@ -672,7 +686,112 @@ export const CORE_SOURCE_REVISIONS = [
     status: "active",
     url: "https://pubmed.ncbi.nlm.nih.gov/34559859/",
   },
+  {
+    applicability: [
+      "Contexto poblacional de sodio para personas adultas, incluida la reducción de presión arterial; la pauta individual sigue subordinada al contexto clínico.",
+    ],
+    citation:
+      "World Health Organization. Guideline: Sodium intake for adults and children. Geneva: WHO; 2012.",
+    confidence: "high",
+    evidenceType: "public_health_guideline",
+    exclusions: [
+      "No autoriza a inferir sodio dietético a partir de un cuestionario incompleto.",
+      "No sustituye una indicación clínica individual ni valida por sí sola una dieta generada.",
+    ],
+    hierarchy: "guideline",
+    id: WHO_SODIUM_SOURCE_ID,
+    population:
+      "Personas adultas y niñas y niños; T12 usa únicamente el contexto adulto.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://www.who.int/publications/i/item/9789241504836",
+  },
+  {
+    applicability: [
+      "Contexto nutricional, tolerancia gastrointestinal, masa magra e hidratación durante el tratamiento con agonistas GLP-1 en personas adultas.",
+    ],
+    citation:
+      "Mozaffarian D, Agarwal M, Aggarwal M, et al. Nutritional priorities to support GLP-1 therapy for obesity: a joint advisory. Am J Clin Nutr. 2025.",
+    confidence: "moderate",
+    evidenceType: "joint_advisory",
+    exclusions: [
+      "No prescribe, suspende ni modifica medicación.",
+      "No permite asumir síntomas, dosis, frecuencia ni tolerancia que la persona no haya declarado.",
+    ],
+    hierarchy: "advisory",
+    id: GLP1_NUTRITION_ADVISORY_SOURCE_ID,
+    population: "Personas adultas que reciben tratamiento GLP-1 para obesidad.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://pubmed.ncbi.nlm.nih.gov/40445127/",
+  },
+  {
+    applicability: [
+      "Identidad regulatoria y contexto de seguridad de semaglutida cuando el nombre declarado coincide con Ozempic.",
+    ],
+    citation: "European Medicines Agency. Ozempic: EPAR product information.",
+    confidence: "high",
+    evidenceType: "regulatory_product_information",
+    exclusions: [
+      "No constituye un verificador farmacológico exhaustivo.",
+      "No autoriza cambios de dosis, frecuencia, vía, horario ni tratamiento.",
+    ],
+    hierarchy: "regulatory",
+    id: EMA_OZEMPIC_SOURCE_ID,
+    population: "Personas adultas dentro de la indicación regulatoria del producto.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://www.ema.europa.eu/en/medicines/human/EPAR/ozempic",
+  },
+  {
+    applicability: [
+      "Identidad regulatoria y contexto de seguridad de tirzepatida cuando el nombre declarado coincide con Mounjaro.",
+    ],
+    citation: "European Medicines Agency. Mounjaro: EPAR product information.",
+    confidence: "high",
+    evidenceType: "regulatory_product_information",
+    exclusions: [
+      "No constituye un verificador farmacológico exhaustivo.",
+      "No autoriza cambios de dosis, frecuencia, vía, horario ni tratamiento.",
+    ],
+    hierarchy: "regulatory",
+    id: EMA_MOUNJARO_SOURCE_ID,
+    population: "Personas adultas dentro de la indicación regulatoria del producto.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://www.ema.europa.eu/en/medicines/human/EPAR/mounjaro",
+  },
+  {
+    applicability: [
+      "Catálogo canónico de identidades de medicamentos autorizados en España y acceso a sus fichas técnicas oficiales.",
+    ],
+    citation:
+      "Agencia Española de Medicamentos y Productos Sanitarios. CIMA REST API v1.23 y Centro de Información online de Medicamentos.",
+    confidence: "high",
+    evidenceType: "regulatory_product_information",
+    exclusions: [
+      "La cobertura selectiva de reglas T12 no equivale a validar todas las interacciones del catálogo CIMA.",
+      "La identidad del medicamento no autoriza cambios de tratamiento ni inferencias de dosis o frecuencia.",
+    ],
+    hierarchy: "regulatory",
+    id: AEMPS_CIMA_SOURCE_ID,
+    population: "Medicamentos de uso humano autorizados y registrados en España.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://cima.aemps.es/cima/resources/docs/CIMA_REST_API.pdf",
+  },
 ] as const satisfies readonly ScientificSourceRevision[];
+
+export const HISTORICAL_CLINICAL_RULE_REVISION = {
+  evidenceRefs: ["contract:t12-clinical-selective-v1"],
+  id: "rule.clinical-selective@1.0.0",
+  kind: "conditional",
+  reviewedAt: "2026-07-19",
+  ruleId: "rule.clinical-selective",
+  scope: ["hydration", "nutrition", "training", "mobility", "supplements"],
+  status: "active",
+  version: "1.0.0",
+} as const satisfies RuleRevision;
 
 export const CORE_RULE_REVISIONS = [
   {
@@ -763,14 +882,14 @@ export const CORE_RULE_REVISIONS = [
     version: "1.0.0",
   },
   {
-    evidenceRefs: ["contract:t12-clinical-selective-v1"],
-    id: "rule.clinical-selective@1.0.0",
+    evidenceRefs: ["contract:t12-clinical-selective-v2", AEMPS_CIMA_SOURCE_ID],
+    id: "rule.clinical-selective@2.0.0",
     kind: "conditional",
     reviewedAt: "2026-07-19",
     ruleId: "rule.clinical-selective",
-    scope: ["hydration", "nutrition", "training", "mobility", "supplements"],
+    scope: ["hydration", "nutrition", "training", "mobility", "sleep", "supplements"],
     status: "active",
-    version: "1.0.0",
+    version: "2.0.0",
   },
   {
     evidenceRefs: ["contract:t12-sleep-window-v1", AASM_SRS_SLEEP_SOURCE_ID],
@@ -828,6 +947,41 @@ export const CORE_RULE_REVISIONS = [
     status: "active",
     version: "1.0.0",
   },
+  {
+    evidenceRefs: ["contract:t12-hypertension-context-v1", WHO_SODIUM_SOURCE_ID],
+    id: "rule.clinical-hypertension-context@1.0.0",
+    kind: "conditional",
+    reviewedAt: "2026-07-19",
+    ruleId: "rule.clinical-hypertension-context",
+    scope: ["nutrition", "hydration", "training", "mobility", "sleep", "supplements"],
+    status: "active",
+    version: "1.0.0",
+  },
+  {
+    evidenceRefs: [
+      "contract:t12-glp1-context-v1",
+      GLP1_NUTRITION_ADVISORY_SOURCE_ID,
+      EMA_OZEMPIC_SOURCE_ID,
+      EMA_MOUNJARO_SOURCE_ID,
+    ],
+    id: "rule.clinical-glp1-context@1.0.0",
+    kind: "conditional",
+    reviewedAt: "2026-07-19",
+    ruleId: "rule.clinical-glp1-context",
+    scope: ["nutrition", "hydration", "training", "mobility", "sleep", "supplements"],
+    status: "active",
+    version: "1.0.0",
+  },
+  {
+    evidenceRefs: ["contract:t12-physiological-context-v1"],
+    id: "rule.clinical-physiological-context@1.0.0",
+    kind: "conditional",
+    reviewedAt: "2026-07-19",
+    ruleId: "rule.clinical-physiological-context",
+    scope: ["nutrition", "hydration", "training", "mobility", "sleep", "supplements"],
+    status: "active",
+    version: "1.0.0",
+  },
 ] as const satisfies readonly RuleRevision[];
 
 export const HISTORICAL_RULE_SET_REVISION = {
@@ -858,19 +1012,211 @@ export const HISTORICAL_ENGINE_SNAPSHOT = {
   ruleSetRevision: HISTORICAL_RULE_SET_REVISION,
   sourceManifest: HISTORICAL_SOURCE_MANIFEST,
 } as const;
-export const CORE_RULE_SET_REVISION = {
+export const T12_INITIAL_RULE_SET_REVISION = {
   id: "a4b0f4bd-2bb9-4b79-98c3-22ad65b07f27",
-  ruleRevisionIds: CORE_RULE_REVISIONS.map(({ id }) => id),
+  ruleRevisionIds: [
+    "rule.module-selection@1.0.0",
+    "rule.training-none@1.0.0",
+    "rule.nutrition-targets@1.0.0",
+    "rule.nutrition-substitutions@1.0.0",
+    "rule.training-generated-block@1.0.0",
+    "rule.training-declared-limitations@1.0.0",
+    "rule.mobility-modular-duration@1.0.0",
+    "rule.hydration-reference@1.0.0",
+    "rule.clinical-selective@1.0.0",
+    "rule.sleep-window@1.0.0",
+    "rule.supplements-catalog@1.0.0",
+    "rule.supplements-experimental@1.0.0",
+    "rule.supplements-lab-context@1.0.0",
+  ],
   status: "active",
   version: "4.2.0",
+} as const;
+export const T12_INITIAL_SOURCE_MANIFEST = {
+  id: "c7aa1da4-2fa1-4e7b-86b4-5e03f44e7f4c",
+  sourceRevisionIds: [
+    "source:who-physical-activity-guidelines-2020@1.0.0",
+    "source:acsm-resistance-training-position-2026@1.0.0",
+    "source:ingram-static-stretching-meta-analysis-2025@1.0.0",
+    "source:efsa-dietary-reference-values-water-2010@1.0.0",
+    "source:aasm-srs-adult-sleep-duration-consensus-2015@1.0.0",
+    "source:nih-ods-vitamin-b12-fact-sheet@1.0.0",
+    "source:who-cdc-folic-acid-preconception@1.0.0",
+    "source:nih-ods-exercise-creatine-issn-position@1.0.0",
+    "source:nih-ods-omega-3-fact-sheet@1.0.0",
+    "source:efsa-caffeine-scientific-opinion@1.0.0",
+    "source:acsm-hydration-exercise-position@1.0.0",
+    "source:aemps-ema-nccih-melatonin-safety@1.0.0",
+    "source:nih-ods-magnesium-fact-sheet@1.0.0",
+    "source:pubmed-beta-alanine-review@1.0.0",
+    "source:pubmed-glycine-sleep-review@1.0.0",
+    "source:pubmed-theanine-sleep-review@1.0.0",
+    "source:pubmed-ashwagandha-review@1.0.0",
+  ],
+  version: "core-with-training-mobility-hydration-sleep-supplements-v1",
+} as const;
+export const T12_INITIAL_ENGINE_SNAPSHOT = {
+  engineVersion: ENGINE_VERSION,
+  ruleSetRevision: T12_INITIAL_RULE_SET_REVISION,
+  sourceManifest: T12_INITIAL_SOURCE_MANIFEST,
+} as const;
+export const CORE_RULE_SET_REVISION = {
+  id: "9cf98aae-0f9f-452f-9577-72283eeff4d5",
+  ruleRevisionIds: CORE_RULE_REVISIONS.map(({ id }) => id),
+  status: "active",
+  version: "4.3.0",
 } as const;
 export const RULE_SET_REVISION_ID = CORE_RULE_SET_REVISION.id;
 
 export const CORE_SOURCE_MANIFEST = {
   id: SOURCE_MANIFEST_ID,
   sourceRevisionIds: CORE_SOURCE_REVISIONS.map(({ id }) => id),
-  version: "core-with-training-mobility-hydration-sleep-supplements-v1",
+  version: "core-with-contextual-wellness-v1",
 } as const;
+
+export const CLINICAL_CATALOG_DESCRIPTOR_HASH =
+  "af2fb4b04376b25e6054e0c12bc9df144a5ee8a0df585813c871f9505530752e" as const;
+
+export type ClinicalCatalogDescriptor = Readonly<{
+  canonicalizationVersion: typeof CONTEXT_CANONICALIZATION_VERSION;
+  clinicalCatalogVersion: typeof CLINICAL_CATALOG_VERSION;
+  descriptorHash: string;
+  hashAlgorithm: "sha256";
+  ruleSetRevisionId: typeof RULE_SET_REVISION_ID;
+  schemaVersion: 1;
+  sourceManifestId: typeof SOURCE_MANIFEST_ID;
+}>;
+
+export type CanonicalMedicationIdentity = Readonly<{
+  activeIngredients: readonly string[];
+  administrationRoutes: readonly string[];
+  aempsId: string;
+  canonicalName: string;
+  commercialized: boolean | null;
+  prescriptionRequired: boolean | null;
+  retrievedAt: string;
+  sourceHash: string;
+  sourceVersion: "CIMA_REST_API_1_23";
+}>;
+
+function clinicalCatalogDescriptorCore() {
+  return {
+    canonicalizationVersion: CONTEXT_CANONICALIZATION_VERSION,
+    clinicalCatalogVersion: CLINICAL_CATALOG_VERSION,
+    hashAlgorithm: "sha256" as const,
+    ruleSetRevisionId: RULE_SET_REVISION_ID,
+    schemaVersion: 1 as const,
+    sourceManifestId: SOURCE_MANIFEST_ID,
+  };
+}
+
+export function createClinicalCatalogDescriptor(): ClinicalCatalogDescriptor {
+  return {
+    ...clinicalCatalogDescriptorCore(),
+    descriptorHash: CLINICAL_CATALOG_DESCRIPTOR_HASH,
+  };
+}
+
+async function assertClinicalCatalogDescriptor(
+  descriptor: ClinicalCatalogDescriptor,
+): Promise<void> {
+  const expected = createClinicalCatalogDescriptor();
+  if (
+    descriptor.canonicalizationVersion !== expected.canonicalizationVersion ||
+    descriptor.clinicalCatalogVersion !== expected.clinicalCatalogVersion ||
+    descriptor.hashAlgorithm !== expected.hashAlgorithm ||
+    descriptor.ruleSetRevisionId !== expected.ruleSetRevisionId ||
+    descriptor.schemaVersion !== expected.schemaVersion ||
+    descriptor.sourceManifestId !== expected.sourceManifestId ||
+    descriptor.descriptorHash !== expected.descriptorHash ||
+    (await sha256CanonicalJson(clinicalCatalogDescriptorCore())) !==
+      expected.descriptorHash
+  ) {
+    throw new Error("clinical_catalog_descriptor_mismatch");
+  }
+}
+
+function resolveCanonicalMedicationContext(
+  context: ContextSnapshotInternal,
+  identities: readonly CanonicalMedicationIdentity[] | undefined,
+) {
+  const byId = new Map<string, CanonicalMedicationIdentity>();
+  for (const identity of identities ?? []) {
+    const valid =
+      /^[0-9A-Z]{1,32}$/.test(identity.aempsId) &&
+      identity.canonicalName.trim().length > 0 &&
+      identity.canonicalName.length <= 500 &&
+      identity.activeIngredients.length <= 20 &&
+      identity.activeIngredients.every(
+        (value) => value.trim().length > 0 && value.length <= 200,
+      ) &&
+      identity.administrationRoutes.length <= 20 &&
+      identity.administrationRoutes.every(
+        (value) => value.trim().length > 0 && value.length <= 200,
+      ) &&
+      /^[0-9a-f]{64}$/.test(identity.sourceHash) &&
+      identity.sourceVersion === "CIMA_REST_API_1_23" &&
+      Number.isFinite(Date.parse(identity.retrievedAt)) &&
+      !byId.has(identity.aempsId);
+    if (!valid) throw new Error("canonical_medication_identity_invalid");
+    byId.set(identity.aempsId, identity);
+  }
+
+  const medications = context.answers.medications ?? [];
+  let declaredCount = 0;
+  let resolvedCount = 0;
+  let unresolvedCount = 0;
+  const resolvedMedications = medications.map((medication) => {
+    if (!medication.aempsId) return medication;
+    declaredCount += 1;
+    const identity = byId.get(medication.aempsId);
+    if (!identity) {
+      unresolvedCount += 1;
+      return { ...medication, name: "aemps identity unresolved" };
+    }
+    resolvedCount += 1;
+    return {
+      ...medication,
+      name: [identity.canonicalName, ...identity.activeIngredients].join(" "),
+    };
+  });
+
+  return {
+    context: {
+      ...context,
+      answers: { ...context.answers, medications: resolvedMedications },
+    },
+    hashInput: [...byId.values()]
+      .map(
+        ({
+          activeIngredients,
+          administrationRoutes,
+          aempsId,
+          canonicalName,
+          commercialized,
+          prescriptionRequired,
+          sourceHash,
+          sourceVersion,
+        }) => ({
+          activeIngredients: [...activeIngredients].sort(),
+          administrationRoutes: [...administrationRoutes].sort(),
+          aempsId,
+          canonicalName,
+          commercialized,
+          prescriptionRequired,
+          sourceHash,
+          sourceVersion,
+        }),
+      )
+      .sort((left, right) => left.aempsId.localeCompare(right.aempsId)),
+    summary: {
+      declaredCount,
+      resolvedCount,
+      sourceVersion: "CIMA_REST_API_1_23" as const,
+      unresolvedCount,
+    },
+  };
+}
 
 const ACTION_LEVELS = [
   "information",
@@ -957,7 +1303,9 @@ export function resolveChoice<Choice extends string>(input: {
 export type DeterministicEngineInput = Readonly<{
   baseContext: ContextSnapshotInternal | null;
   baseModuleResults: readonly PlanModuleResultInput[] | null;
+  canonicalMedicationIdentities?: readonly CanonicalMedicationIdentity[];
   change: PlanContextChange | null;
+  clinicalCatalogDescriptor?: ClinicalCatalogDescriptor;
   context: ContextSnapshotInternal;
   nutritionCatalog?: readonly EffectiveNutritionFood[];
 }>;
@@ -1268,6 +1616,14 @@ function normativeContext(context: ContextSnapshotInternal) {
 export async function runDeterministicEngine(
   input: DeterministicEngineInput,
 ): Promise<PlanEngineResult> {
+  if (input.clinicalCatalogDescriptor !== undefined) {
+    await assertClinicalCatalogDescriptor(input.clinicalCatalogDescriptor);
+  }
+  const medicationResolution = resolveCanonicalMedicationContext(
+    input.context,
+    input.canonicalMedicationIdentities,
+  );
+  const effectiveContext = medicationResolution.context;
   const affectedModules = new Set(
     input.change?.affectedModules ?? QUESTIONNAIRE_MODULES,
   );
@@ -1277,12 +1633,12 @@ export async function runDeterministicEngine(
   const preservedModules: QuestionnaireModule[] = [];
   const recalculatedModules: QuestionnaireModule[] = [];
   let generatedTrainingLoad: GeneratedTrainingLoad | null | undefined;
-  if (input.context.answers.trainingMode === "generated") {
+  if (effectiveContext.answers.trainingMode === "generated") {
     generatedTrainingLoad = null;
-    if (moduleChoice("training", input.context) === "requested") {
+    if (moduleChoice("training", effectiveContext) === "requested") {
       try {
         const trainingPlan = TrainingPlanSchema.parse(
-          generateTrainingPlan(input.context.answers),
+          generateTrainingPlan(effectiveContext.answers),
         );
         if (trainingPlan.mode === "generated") {
           generatedTrainingLoad = {
@@ -1310,7 +1666,7 @@ export async function runDeterministicEngine(
     recalculatedModules.push(module);
     return provisionalModuleResult(
       module,
-      input.context,
+      effectiveContext,
       input.nutritionCatalog,
       generatedTrainingLoad,
     );
@@ -1320,45 +1676,11 @@ export async function runDeterministicEngine(
     : ["modules_required"];
   const validationStatus: "invalid" | "valid" =
     errors.length === 0 ? "valid" : "invalid";
-  const completeness =
+  const moduleCompleteness =
     input.context.completeness === "provisional" ||
     moduleResults.some(({ status }) => status === "provisional")
       ? ("provisional" as const)
       : ("complete" as const);
-  const provisionalReasons = [
-    ...new Set(
-      moduleResults.flatMap(({ uncertainties }) =>
-        uncertainties.flatMap((uncertainty) => {
-          if (
-            uncertainty !== null &&
-            typeof uncertainty === "object" &&
-            "code" in uncertainty &&
-            typeof uncertainty.code === "string"
-          ) {
-            return [uncertainty.code.toLowerCase()];
-          }
-          return [];
-        }),
-      ),
-    ),
-  ];
-  if (input.context.completeness === "provisional") {
-    provisionalReasons.push("context_snapshot_provisional");
-  }
-  const validation = {
-    checks: [
-      "canonical_input",
-      "module_coverage",
-      "nutrition_catalog_effective_only",
-      "training_optional",
-    ],
-    completeness,
-    errors,
-    preservedModules,
-    provisionalReasons,
-    recalculatedModules,
-    warnings: [],
-  };
   const inputHash = await sha256CanonicalJson({
     base:
       input.baseContext === null
@@ -1373,58 +1695,67 @@ export async function runDeterministicEngine(
       engineVersion: ENGINE_VERSION,
       ruleSetRevision: CORE_RULE_SET_REVISION,
       sourceManifest: CORE_SOURCE_MANIFEST,
+      clinicalCatalogDescriptor: input.clinicalCatalogDescriptor ?? null,
+      canonicalMedicationIdentities: medicationResolution.hashInput,
       nutritionCatalog: input.nutritionCatalog ?? null,
     },
     context: normativeContext(input.context),
   });
-  const hydrationResult = moduleResults.find(({ module }) => module === "hydration");
-  const supplementsResult = moduleResults.find(
-    ({ module }) => module === "supplements",
+  const selectedClinicalModules = new Set(
+    moduleResults
+      .filter(({ status }) => status !== "not_requested")
+      .map(({ module }) => module),
   );
   const clinical =
-    hydrationResult?.status === "not_requested" &&
-    supplementsResult?.status === "not_requested"
+    selectedClinicalModules.size === 0
       ? null
-      : detectClinicalContext(input.context.answers);
+      : detectClinicalContext(effectiveContext.answers);
   const safetyFindings = clinical
     ? (() => {
-        const hydrationCodes = new Set([
+        const commonContextCodes = [
           "FLUID_RESTRICTION_ACTIVE",
           "RENAL_CONTEXT_PARTIAL",
           "CARDIAC_CONTEXT_PARTIAL",
           "HYPONATREMIA_CONTEXT_PARTIAL",
+          "HYPERTENSION_CONTEXT_PARTIAL",
           "DIURETIC_CONTEXT_PARTIAL",
           "ANABOLIC_CONTEXT_PARTIAL",
           "GLP1_CONTEXT_PARTIAL",
-          "CLINICAL_CONTEXT_UNMODELED",
-          "RETATRUTIDE_CONTEXT_UNMODELED",
-        ]);
-        const supplementCodes = new Set([
           "ANTICOAGULANT_CONTEXT_PARTIAL",
-          "MAGNESIUM_INTERACTION_PARTIAL",
-          "ANABOLIC_CONTEXT_PARTIAL",
-          "GLP1_CONTEXT_PARTIAL",
+          "PREGNANCY_CONTEXT_PARTIAL",
+          "LACTATION_CONTEXT_PARTIAL",
+          "PRECONCEPTION_CONTEXT_PARTIAL",
+          "MENOPAUSE_CONTEXT_PARTIAL",
           "CLINICAL_CONTEXT_UNMODELED",
           "RETATRUTIDE_CONTEXT_UNMODELED",
-          "RENAL_CONTEXT_PARTIAL",
-          "CARDIAC_CONTEXT_PARTIAL",
-          "HYPONATREMIA_CONTEXT_PARTIAL",
-          "DIURETIC_CONTEXT_PARTIAL",
-          "FLUID_RESTRICTION_ACTIVE",
-        ]);
-        const hydrationSelected = hydrationResult?.status !== "not_requested";
-        const supplementsSelected = supplementsResult?.status !== "not_requested";
+        ];
+        const moduleCodes: Record<QuestionnaireModule, ReadonlySet<string>> = {
+          hydration: new Set([
+            "FLUID_RESTRICTION_ACTIVE",
+            "RENAL_CONTEXT_PARTIAL",
+            "CARDIAC_CONTEXT_PARTIAL",
+            "HYPONATREMIA_CONTEXT_PARTIAL",
+            "DIURETIC_CONTEXT_PARTIAL",
+            "ANABOLIC_CONTEXT_PARTIAL",
+            "GLP1_CONTEXT_PARTIAL",
+            "PREGNANCY_CONTEXT_PARTIAL",
+            "LACTATION_CONTEXT_PARTIAL",
+            "CLINICAL_CONTEXT_UNMODELED",
+            "RETATRUTIDE_CONTEXT_UNMODELED",
+          ]),
+          mobility: new Set(commonContextCodes),
+          nutrition: new Set(commonContextCodes),
+          sleep: new Set(commonContextCodes),
+          supplements: new Set([
+            ...commonContextCodes,
+            "MAGNESIUM_INTERACTION_PARTIAL",
+          ]),
+          training: new Set(commonContextCodes),
+        };
         const findings: PlanEngineResult["safetyFindings"] = [];
         for (const finding of clinical.safetyFindings) {
-          const targets = [
-            ...(hydrationSelected && hydrationCodes.has(finding.code)
-              ? (["hydration"] as const)
-              : []),
-            ...(supplementsSelected && supplementCodes.has(finding.code)
-              ? (["supplements"] as const)
-              : []),
-          ];
-          for (const module of targets) {
+          for (const module of selectedClinicalModules) {
+            if (!moduleCodes[module].has(finding.code)) continue;
             if (
               findings.some(
                 (item) => item.module === module && item.code === finding.code,
@@ -1432,12 +1763,67 @@ export async function runDeterministicEngine(
             ) {
               continue;
             }
-            findings.push({ ...finding, module });
+            findings.push({
+              actionLevel: finding.actionLevel,
+              code: finding.code,
+              evidenceRef: finding.evidenceRef,
+              messageKey: finding.messageKey,
+              module,
+            });
           }
         }
         return findings;
       })()
     : [];
+  const clinicalRequiresProvisional =
+    clinical !== null && clinical.coverage !== "modeled" && safetyFindings.length > 0;
+  const completeness =
+    moduleCompleteness === "provisional" || clinicalRequiresProvisional
+      ? ("provisional" as const)
+      : ("complete" as const);
+  const provisionalReasons = [
+    ...new Set([
+      ...moduleResults.flatMap(({ uncertainties }) =>
+        uncertainties.flatMap((uncertainty) => {
+          if (
+            uncertainty !== null &&
+            typeof uncertainty === "object" &&
+            "code" in uncertainty &&
+            typeof uncertainty.code === "string"
+          ) {
+            return [uncertainty.code.toLowerCase()];
+          }
+          return [];
+        }),
+      ),
+      ...safetyFindings.map(({ code }) => code.toLowerCase()),
+      ...(clinicalRequiresProvisional && clinical
+        ? [`clinical_context_${clinical.coverage}`]
+        : []),
+    ]),
+  ];
+  if (input.context.completeness === "provisional") {
+    provisionalReasons.push("context_snapshot_provisional");
+  }
+  const validation = {
+    checks: [
+      "canonical_input",
+      "module_coverage",
+      "nutrition_catalog_effective_only",
+      "training_optional",
+      ...(input.clinicalCatalogDescriptor === undefined
+        ? []
+        : ["clinical_catalog_descriptor_exact_match"]),
+    ],
+    clinicalCatalogDescriptor: input.clinicalCatalogDescriptor ?? null,
+    medicationIdentityResolution: medicationResolution.summary,
+    completeness,
+    errors,
+    preservedModules,
+    provisionalReasons,
+    recalculatedModules,
+    warnings: [],
+  };
   const normativeOutput = {
     canonicalizationVersion: CONTEXT_CANONICALIZATION_VERSION,
     completeness,

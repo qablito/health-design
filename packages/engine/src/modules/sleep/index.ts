@@ -1,6 +1,8 @@
 import type { QuestionnaireAnswers } from "@health-design/domain";
 import type { SleepPlanContract } from "@health-design/contracts";
 
+import { clinicalContextReviewCodes } from "../clinical-context.ts";
+
 type Answers = Partial<QuestionnaireAnswers> & Record<string, unknown>;
 type SleepEngineInput = Answers | Readonly<{ answers: Answers }>;
 
@@ -130,9 +132,23 @@ export function generateSleepPlan(input: SleepEngineInput): SleepPlanContract {
     strategies.push("record_schedule");
     confidenceFactors.push("schedule_missing");
   }
+  const explicitClinicalContext = clinicalContextReviewCodes(answers).filter(
+    (code) => code !== "CLINICAL_CONTEXT_MISSING",
+  );
+  if (explicitClinicalContext.length > 0) {
+    strategies.push("clinical_context_review");
+    confidenceFactors.push("clinical_context_partial");
+    uncertainties.push({
+      code: "CLINICAL_CONTEXT_PARTIAL",
+      messageKey: "sleep.uncertainty.clinical_context_partial",
+    });
+  }
 
+  const criticalSleepDataMissing = uncertainties.some(({ code }) =>
+    code.startsWith("SLEEP_"),
+  );
   const confidence =
-    uncertainties.length > 0
+    criticalSleepDataMissing
       ? "low"
       : confidenceFactors.some((factor) =>
             [
@@ -140,6 +156,7 @@ export function generateSleepPlan(input: SleepEngineInput): SleepPlanContract {
               "regularity_variable",
               "manual_phases",
               "long_duration_context",
+              "clinical_context_partial",
             ].includes(factor),
           )
         ? "medium"

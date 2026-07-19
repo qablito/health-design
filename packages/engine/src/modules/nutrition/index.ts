@@ -22,6 +22,7 @@ import {
   subtractDecimals,
   sumDecimals,
 } from "../../decimal.ts";
+import { clinicalContextReviewCodes } from "../clinical-context.ts";
 
 const PAL_BANDS = {
   high: { center: "1.9", maximum: "2.05", minimum: "1.75" },
@@ -170,8 +171,24 @@ function clinicalBoundary(answers: QuestionnaireAnswers): boolean {
       pregnancy !== "none" &&
       pregnancy !== "not_applicable") ||
     answers.menopauseStage === "peri" ||
-    answers.menopauseStage === "post"
+    answers.menopauseStage === "post" ||
+    answers.menopauseStage === "unknown"
   );
+}
+
+function nutritionClinicalCodes(answers: QuestionnaireAnswers): string[] {
+  if (!clinicalBoundary(answers)) return [];
+  const codes = clinicalContextReviewCodes(answers).filter(
+    (code) => code !== "MAGNESIUM_INTERACTION_PARTIAL",
+  );
+  codes.push("NUTRITION_CLINICAL_CONTEXT_REVIEW");
+  if (codes.includes("HYPERTENSION_CONTEXT_PARTIAL")) {
+    codes.push("NUTRITION_SODIUM_NOT_VERIFIED");
+  }
+  if (codes.includes("GLP1_CONTEXT_PARTIAL")) {
+    codes.push("NUTRITION_GLP1_TOLERANCE_REVIEW");
+  }
+  return [...new Set(codes)];
 }
 
 function aggressiveTarget(answers: QuestionnaireAnswers): boolean {
@@ -295,10 +312,12 @@ export function calculateNutritionTargets(
   const pal = PAL_BANDS[answers.activityLevel];
   const conservative = clinicalBoundary(answers) || aggressiveTarget(answers);
   if (clinicalBoundary(answers)) {
-    uncertainties.push({
-      code: "CLINICAL_RULES_PENDING_T12",
-      messageKey: "nutrition.uncertainty.clinical_rules_pending",
-    });
+    uncertainties.push(
+      ...nutritionClinicalCodes(answers).map((code) => ({
+        code,
+        messageKey: `nutrition.uncertainty.${code.toLowerCase()}`,
+      })),
+    );
   }
   if (aggressiveTarget(answers)) {
     uncertainties.push({
@@ -1178,7 +1197,7 @@ export function generateNutritionWeek(input: {
       totals: addTotals(dayMeals.map(({ totals }) => totals)),
     };
   });
-  const strategies =
+  const foodAnxietyStrategies =
     input.answers.nutritionFoodAnxiety === "frequent" ||
     input.answers.nutritionFoodAnxiety === "sometimes"
       ? [
@@ -1187,6 +1206,17 @@ export function generateNutritionWeek(input: {
           "planned_satiating_alternatives",
         ]
       : [];
+  const strategies = [
+    ...foodAnxietyStrategies,
+    ...nutritionClinicalCodes(input.answers).flatMap((code) => {
+      if (code === "NUTRITION_SODIUM_NOT_VERIFIED")
+        return ["sodium_target_not_verified"];
+      if (code === "NUTRITION_GLP1_TOLERANCE_REVIEW") return ["glp1_tolerance_review"];
+      if (code === "NUTRITION_CLINICAL_CONTEXT_REVIEW")
+        return ["clinical_context_only"];
+      return [];
+    }),
+  ];
   const base: NutritionWeek = {
     catalogManifestIds: [
       ...new Set(eligible.map(({ manifestId }) => manifestId)),

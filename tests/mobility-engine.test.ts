@@ -575,7 +575,7 @@ describe("motor de movilidad T11", () => {
         hasMedications: false,
         mobilityDiscomfortStatus: "none" as const,
       },
-      expectedCode: "CLINICAL_RULES_PENDING_T12",
+      expectedCode: "CONDITIONS_DETAILS_MISSING",
     },
     {
       extra: {
@@ -584,7 +584,7 @@ describe("motor de movilidad T11", () => {
         pregnancyLactation: "lactating" as const,
         mobilityDiscomfortStatus: "none" as const,
       },
-      expectedCode: "CLINICAL_RULES_PENDING_T12",
+      expectedCode: "LACTATION_CONTEXT_PARTIAL",
     },
   ])(
     "mantiene provisionalidad cuando falta modelado: $expectedCode",

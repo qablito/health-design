@@ -135,6 +135,24 @@ describe("contratos del cuestionario", () => {
     expect(result.success).toBe(false);
   });
 
+  it("conserva una identidad AEMPS/CIMA confirmada y rechaza identificadores libres", () => {
+    expect(
+      QuestionnaireAnswersSchema.safeParse({
+        medications: [
+          {
+            aempsId: "117251002",
+            name: "OZEMPIC 0,25 MG SOLUCION INYECTABLE EN PLUMA PRECARGADA",
+          },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      QuestionnaireAnswersSchema.safeParse({
+        medications: [{ aempsId: "../../inventado", name: "Entrada libre" }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("limita el peso objetivo al mismo dominio humano que el peso actual", () => {
     expect(QuestionnaireAnswersSchema.safeParse({ targetWeightKg: 70 }).success).toBe(
       true,

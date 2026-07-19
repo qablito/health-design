@@ -1068,7 +1068,7 @@ describe("motor de entrenamiento T11", () => {
         hasMedications: true,
         trainingLimitationsStatus: "none" as const,
       },
-      expectedCode: "CLINICAL_RULES_PENDING_T12",
+      expectedCode: "MEDICATIONS_DETAILS_MISSING",
     },
     {
       extra: {
@@ -1077,7 +1077,7 @@ describe("motor de entrenamiento T11", () => {
         pregnancyLactation: "pregnant" as const,
         trainingLimitationsStatus: "none" as const,
       },
-      expectedCode: "CLINICAL_RULES_PENDING_T12",
+      expectedCode: "PREGNANCY_CONTEXT_PARTIAL",
     },
   ])(
     "degrada a provisional cuando falta modelado: $expectedCode",

@@ -108,12 +108,17 @@ export function detectClinicalContext(input: ClinicalContextInput): ClinicalResu
   const renalRule = catalogEntry("RENAL_CONTEXT_PARTIAL");
   const cardiacRule = catalogEntry("CARDIAC_CONTEXT_PARTIAL");
   const sodiumRule = catalogEntry("HYPONATREMIA_CONTEXT_PARTIAL");
+  const hypertensionRule = catalogEntry("HYPERTENSION_CONTEXT_PARTIAL");
   const glp1Rule = catalogEntry("GLP1_CONTEXT_PARTIAL");
   const diureticRule = catalogEntry("DIURETIC_CONTEXT_PARTIAL");
   const anticoagulantRule = catalogEntry("ANTICOAGULANT_CONTEXT_PARTIAL");
   const magnesiumRule = catalogEntry("MAGNESIUM_INTERACTION_PARTIAL");
   const retatrutideRule = catalogEntry("RETATRUTIDE_CONTEXT_UNMODELED");
   const anabolicRule = catalogEntry("ANABOLIC_CONTEXT_PARTIAL");
+  const pregnancyRule = catalogEntry("PREGNANCY_CONTEXT_PARTIAL");
+  const lactationRule = catalogEntry("LACTATION_CONTEXT_PARTIAL");
+  const preconceptionRule = catalogEntry("PRECONCEPTION_CONTEXT_PARTIAL");
+  const menopauseRule = catalogEntry("MENOPAUSE_CONTEXT_PARTIAL");
   const fluidRestriction =
     answers.hydrationFluidRestriction === true ||
     answers.hydrationFluidRestriction === "declared" ||
@@ -123,12 +128,20 @@ export function detectClinicalContext(input: ClinicalContextInput): ClinicalResu
   const renal = hasAlias(conditionTexts, renalRule.aliases);
   const cardiac = hasAlias(conditionTexts, cardiacRule.aliases);
   const hyponatremia = hasAlias(conditionTexts, sodiumRule.aliases);
+  const hypertension = hasAlias(conditionTexts, hypertensionRule.aliases);
   const glp1 = hasAlias(medicationTexts, glp1Rule.aliases);
   const diuretic = hasAlias(medicationTexts, diureticRule.aliases);
   const anticoagulant = hasAlias(medicationTexts, anticoagulantRule.aliases);
   const magnesiumInteraction = hasAlias(medicationTexts, magnesiumRule.aliases);
   const retatrutide = hasAlias(medicationTexts, retatrutideRule.aliases);
   const anabolic = hasAlias(medicationTexts, anabolicRule.aliases);
+  const pregnancy = answers.pregnancyLactation === "pregnant";
+  const lactation = answers.pregnancyLactation === "lactating";
+  const preconception = answers.pregnancyLactation === "trying_to_conceive";
+  const menopause =
+    answers.menopauseStage === "peri" || answers.menopauseStage === "post";
+  const physiologicalContextUnmodeled =
+    answers.pregnancyLactation === "unknown" || answers.menopauseStage === "unknown";
 
   const safetyFindings: ClinicalSafetyFinding[] = [];
   const uncertainties: ClinicalUncertainty[] = [];
@@ -156,6 +169,13 @@ export function detectClinicalContext(input: ClinicalContextInput): ClinicalResu
     const finding = findingFor(sodiumRule);
     safetyFindings.push(finding);
     strictestActionLevel = actionMax(strictestActionLevel, finding.actionLevel);
+  }
+  if (hypertension) {
+    const finding = findingFor(hypertensionRule);
+    safetyFindings.push(finding);
+    strictestActionLevel = actionMax(strictestActionLevel, finding.actionLevel);
+    pushUnique(uncertainties, uncertainty("HYPERTENSION_CONTEXT_PARTIAL"));
+    strategies.push("sodium_target_not_verified");
   }
   if ((renal || cardiac || hyponatremia) && !fluidRestriction) {
     pushUnique(uncertainties, uncertainty("CLINICAL_FLUID_LIMIT_MISSING"));
@@ -203,6 +223,38 @@ export function detectClinicalContext(input: ClinicalContextInput): ClinicalResu
     pushUnique(uncertainties, uncertainty("ANABOLIC_CONTEXT_PARTIAL"));
     strategies.push("high_side_only");
   }
+  if (pregnancy) {
+    const finding = findingFor(pregnancyRule);
+    safetyFindings.push(finding);
+    strictestActionLevel = actionMax(strictestActionLevel, finding.actionLevel);
+    strategies.push("pregnancy_context_only");
+  }
+  if (lactation) {
+    const finding = findingFor(lactationRule);
+    safetyFindings.push(finding);
+    strictestActionLevel = actionMax(strictestActionLevel, finding.actionLevel);
+    strategies.push("lactation_context_only");
+  }
+  if (preconception) {
+    const finding = findingFor(preconceptionRule);
+    safetyFindings.push(finding);
+    strictestActionLevel = actionMax(strictestActionLevel, finding.actionLevel);
+    strategies.push("preconception_context_only");
+  }
+  if (menopause) {
+    const finding = findingFor(menopauseRule);
+    safetyFindings.push(finding);
+    strictestActionLevel = actionMax(strictestActionLevel, finding.actionLevel);
+    strategies.push("menopause_context_only");
+  }
+  if (answers.pregnancyLactation === "unknown") {
+    pushUnique(uncertainties, uncertainty("PREGNANCY_LACTATION_STATUS_UNKNOWN"));
+    strategies.push("pregnancy_lactation_status_required");
+  }
+  if (answers.menopauseStage === "unknown") {
+    pushUnique(uncertainties, uncertainty("MENOPAUSE_STATUS_UNKNOWN"));
+    strategies.push("menopause_status_required");
+  }
 
   if (conditionsConfirmed === undefined) {
     pushUnique(uncertainties, uncertainty("CONDITIONS_CONFIRMATION_MISSING"));
@@ -247,6 +299,7 @@ export function detectClinicalContext(input: ClinicalContextInput): ClinicalResu
         : "modeled";
   const coverage =
     hasUnknownContext ||
+    physiologicalContextUnmodeled ||
     contextCoverage === "unmodeled" ||
     safetyFindings.some(
       ({ coverage: findingCoverage }) => findingCoverage === "unmodeled",
@@ -267,8 +320,13 @@ export function detectClinicalContext(input: ClinicalContextInput): ClinicalResu
       diuretic,
       fluidRestriction,
       glp1,
+      hypertension,
       hyponatremia,
+      lactation,
       magnesiumInteraction,
+      menopause,
+      preconception,
+      pregnancy,
       renal,
       retatrutide,
     },

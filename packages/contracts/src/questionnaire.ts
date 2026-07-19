@@ -71,6 +71,11 @@ const NamedEntrySchema = z
   .strict();
 
 const MedicationEntrySchema = NamedEntrySchema.extend({
+  aempsId: z
+    .string()
+    .trim()
+    .regex(/^[0-9A-Z]{1,32}$/)
+    .optional(),
   dose: SearchTextSchema.optional(),
   frequency: SearchTextSchema.optional(),
   route: SearchTextSchema.optional(),

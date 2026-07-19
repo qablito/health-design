@@ -77,7 +77,57 @@ describe("reglas clínicas selectivas", () => {
     expect(result.uncertainties.map(({ code }) => code)).toEqual(
       expect.arrayContaining(["GLP1_CONTEXT_PARTIAL", "DIURETIC_CONTEXT_PARTIAL"]),
     );
-    expect(CLINICAL_CATALOG_VERSION).toBe("clinical-selective-v1");
+    expect(CLINICAL_CATALOG_VERSION).toBe("clinical-selective-v2");
+  });
+
+  it("detecta hipertensión sin fingir que el sodio ya está validado", () => {
+    const result = detectClinicalContext({
+      conditions: [{ name: "Hipertensión arterial" }],
+      hasConditions: true,
+      hasMedications: false,
+    });
+
+    expect(result.detected.hypertension).toBe(true);
+    expect(result.safetyFindings.map(({ code }) => code)).toContain(
+      "HYPERTENSION_CONTEXT_PARTIAL",
+    );
+    expect(result.strategies).toContain("sodium_target_not_verified");
+    expect(result.coverage).toBe("partial");
+  });
+
+  it.each([
+    ["pregnant", "pregnancy", "PREGNANCY_CONTEXT_PARTIAL"],
+    ["lactating", "lactation", "LACTATION_CONTEXT_PARTIAL"],
+    ["trying_to_conceive", "preconception", "PRECONCEPTION_CONTEXT_PARTIAL"],
+  ] as const)(
+    "registra el contexto fisiológico %s como cobertura selectiva",
+    (pregnancyLactation, flag, code) => {
+      const result = detectClinicalContext({
+        hasConditions: false,
+        hasMedications: false,
+        pregnancyLactation,
+      });
+
+      expect(result.detected[flag]).toBe(true);
+      expect(
+        result.safetyFindings.map(({ code: findingCode }) => findingCode),
+      ).toContain(code);
+      expect(result.coverage).toBe("partial");
+    },
+  );
+
+  it("registra peri y postmenopausia sin diagnosticar ni prescribir", () => {
+    const result = detectClinicalContext({
+      hasConditions: false,
+      hasMedications: false,
+      menopauseStage: "post",
+    });
+
+    expect(result.detected.menopause).toBe(true);
+    expect(result.safetyFindings.map(({ code }) => code)).toContain(
+      "MENOPAUSE_CONTEXT_PARTIAL",
+    );
+    expect(JSON.stringify(result)).not.toMatch(/diagnos|prescri|dosis/i);
   });
 
   it("reconoce alias internos selectivos sin confundir subcadenas", () => {

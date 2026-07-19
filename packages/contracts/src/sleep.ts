@@ -25,6 +25,7 @@ const SleepStrategySchema = z.enum([
   "review_routine_and_environment",
   "trend_manual_estimates_only",
   "record_schedule",
+  "clinical_context_review",
 ]);
 
 const ClockTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
@@ -38,6 +39,7 @@ const SleepConfidenceFactorSchema = z.enum([
   "manual_phases",
   "long_duration_context",
   "schedule_missing",
+  "clinical_context_partial",
 ]);
 
 export const SleepPlanSchema = z

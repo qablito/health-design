@@ -89,9 +89,47 @@ describe("objetivos nutricionales T10", () => {
 
     expect(result.completeness).toBe("provisional");
     expect(result.energy.goalApplied).toBe("maintenance_conservative");
-    expect(result.uncertainties.map(({ code }) => code)).toContain(
+    expect(result.uncertainties.map(({ code }) => code)).toEqual(
+      expect.arrayContaining([
+        "RENAL_CONTEXT_PARTIAL",
+        "NUTRITION_CLINICAL_CONTEXT_REVIEW",
+      ]),
+    );
+    expect(result.uncertainties.map(({ code }) => code)).not.toContain(
       "CLINICAL_RULES_PENDING_T12",
     );
+  });
+
+  it("declara que la hipertensión requiere revisión de sodio aún no validada", () => {
+    const result = calculateNutritionTargets({
+      ...baseAnswers,
+      conditions: [{ name: "Presión arterial alta" }],
+      hasConditions: true,
+    });
+
+    expect(result.completeness).toBe("provisional");
+    expect(result.uncertainties.map(({ code }) => code)).toEqual(
+      expect.arrayContaining([
+        "HYPERTENSION_CONTEXT_PARTIAL",
+        "NUTRITION_SODIUM_NOT_VERIFIED",
+      ]),
+    );
+  });
+
+  it("mantiene GLP-1 como revisión de tolerancia sin inventar una adaptación", () => {
+    const result = calculateNutritionTargets({
+      ...baseAnswers,
+      hasMedications: true,
+      medications: [{ name: "Semaglutida" }],
+    });
+
+    expect(result.uncertainties.map(({ code }) => code)).toEqual(
+      expect.arrayContaining([
+        "GLP1_CONTEXT_PARTIAL",
+        "NUTRITION_GLP1_TOLERANCE_REVIEW",
+      ]),
+    );
+    expect(result.energy.goalApplied).toBe("maintenance_conservative");
   });
 
   it("propone conservación provisional si el objetivo de peso es agresivo", () => {
