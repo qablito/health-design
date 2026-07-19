@@ -245,6 +245,26 @@ const QuestionnaireAnswersObjectSchema = z
   })
   .strict()
   .superRefine((answers, context) => {
+    const declaredCollections = [
+      ["hasConditions", "conditions", answers.hasConditions, answers.conditions],
+      ["hasMedications", "medications", answers.hasMedications, answers.medications],
+      [
+        "hasCurrentSupplements",
+        "currentSupplements",
+        answers.hasCurrentSupplements,
+        answers.currentSupplements,
+      ],
+      ["hasLabValues", "labValues", answers.hasLabValues, answers.labValues],
+    ] as const;
+    for (const [flag, entries, declared, values] of declaredCollections) {
+      if (declared === false && values !== undefined && values.length > 0) {
+        context.addIssue({
+          code: "custom",
+          message: `${entries}_conflict_with_${flag}_false`,
+          path: [entries],
+        });
+      }
+    }
     if (
       answers.generatedTrainingEquipment?.includes("none") &&
       answers.generatedTrainingEquipment.length > 1

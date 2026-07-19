@@ -135,6 +135,24 @@ describe("contratos del cuestionario", () => {
     expect(result.success).toBe(false);
   });
 
+  it.each([
+    ["hasConditions", "conditions", [{ name: "Hipertensión" }]],
+    ["hasMedications", "medications", [{ name: "Furosemida" }]],
+    ["hasCurrentSupplements", "currentSupplements", [{ name: "Multivitamínico" }]],
+    [
+      "hasLabValues",
+      "labValues",
+      [{ dateApproximate: "2026-07", name: "eGFR", unit: "mL/min", value: "55" }],
+    ],
+  ] as const)("rechaza %s=false cuando %s contiene datos", (flag, entries, value) => {
+    expect(
+      QuestionnaireAnswersSchema.safeParse({
+        [entries]: value,
+        [flag]: false,
+      }).success,
+    ).toBe(false);
+  });
+
   it("conserva una identidad AEMPS/CIMA confirmada y rechaza identificadores libres", () => {
     expect(
       QuestionnaireAnswersSchema.safeParse({
