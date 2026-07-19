@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { sha256CanonicalJson } from "@health-design/engine";
 
 import { hydrateActiveClinicalCatalog } from "../supabase/functions/plans/clinical-catalog.ts";
 
@@ -17,6 +18,15 @@ const descriptor = {
 } as const;
 
 describe("descriptor clínico activo para planes", () => {
+  it("reproduce el hash SQL con el canonicalizador real del motor", async () => {
+    await expect(sha256CanonicalJson(descriptorPayload)).resolves.toBe(
+      descriptor.descriptorHash,
+    );
+    await expect(
+      hydrateActiveClinicalCatalog(descriptor, sha256CanonicalJson),
+    ).resolves.toEqual(descriptor);
+  });
+
   it("acepta solo la revisión compilada y comprueba su hash reproducible", async () => {
     const hashCanonical = vi.fn().mockResolvedValue(descriptor.descriptorHash);
 
