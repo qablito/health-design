@@ -295,8 +295,17 @@ const UNIT_CONVERSIONS: Record<string, Record<string, number>> = {
   "mg/dL": { "mg/dL": 1, "mmol/L": 0.4114 },
   "mmol/L": { "mmol/L": 1, "mg/dL": 1 / 0.4114 },
   "mg/L": { "mg/L": 1 },
-  "umol/L": { "umol/L": 1, "mg/dL": 1 / 88.4 },
+  "umol/L": { "umol/L": 1 },
   "mL/min/1.73m²": { "mL/min/1.73m²": 1 },
+};
+
+const ANALYTE_UNIT_CONVERSIONS: Readonly<
+  Partial<Record<Analyte, Record<string, Record<string, number>>>>
+> = {
+  creatinine: {
+    "mg/dL": { "mg/dL": 1, "umol/L": 88.4 },
+    "umol/L": { "umol/L": 1, "mg/dL": 1 / 88.4 },
+  },
 };
 
 function parseNumber(value: unknown): number | null {
@@ -323,8 +332,14 @@ function parseRange(
   return minimum <= maximum ? { minimum, maximum, unit } : null;
 }
 
-function convert(value: number, from: string, to: string): number | null {
-  const factor = UNIT_CONVERSIONS[from]?.[to];
+function convert(
+  value: number,
+  analyte: Analyte,
+  from: string,
+  to: string,
+): number | null {
+  const factor =
+    ANALYTE_UNIT_CONVERSIONS[analyte]?.[from]?.[to] ?? UNIT_CONVERSIONS[from]?.[to];
   return factor === undefined ? null : value * factor;
 }
 
@@ -338,6 +353,20 @@ function normalizeLabs(answers: Answers): LabSummary[] {
         : "Analítica sin nombre";
     const analyte = analyteFor(record.name);
     if (!analyte) return { name, reason: "analyte", status: "unrecognized" } as const;
+    const rawValue = record.value;
+    if (
+      rawValue === undefined ||
+      rawValue === null ||
+      (typeof rawValue === "string" && rawValue.trim().length === 0)
+    )
+      return { name, reason: "missing_value", status: "incomplete" } as const;
+    const rawUnit = record.unit;
+    if (
+      rawUnit === undefined ||
+      rawUnit === null ||
+      (typeof rawUnit === "string" && rawUnit.trim().length === 0)
+    )
+      return { name, reason: "missing_unit", status: "incomplete" } as const;
     const value = parseNumber(record.value);
     if (value === null || value < 0)
       return { name, reason: "value", status: "unrecognized" } as const;
@@ -356,7 +385,7 @@ function normalizeLabs(answers: Answers): LabSummary[] {
       } as const;
     if (!ANALYTE_UNITS[analyte].includes(range.unit))
       return { name, reason: "unit", status: "unrecognized" } as const;
-    const convertedValue = convert(value, unit, range.unit);
+    const convertedValue = convert(value, analyte, unit, range.unit);
     const finalValue = convertedValue ?? (unit === range.unit ? value : null);
     if (finalValue === null)
       return { name, reason: "unit", status: "unrecognized" } as const;
@@ -489,6 +518,9 @@ export function generateSupplementsPlan(input: Input): SupplementsPlanContract {
 
   const deficiencyB12 = answers.dietaryPattern === "vegan" || lowB12;
   const preconception = answers.pregnancyLactation === "trying_to_conceive";
+  const pregnancyOrLactation =
+    answers.pregnancyLactation === "pregnant" ||
+    answers.pregnancyLactation === "lactating";
   const healthy = healthyClinicalContext(clinical) && !renalLabConcern;
   const foodFirst =
     "Alimentos fortificados primero; no se automatiza una dosis sin revisión de la analítica y el contexto.";
@@ -796,6 +828,26 @@ export function generateSupplementsPlan(input: Input): SupplementsPlanContract {
       experimentalOptions.push(experimentalOption(option));
     }
   }
+  if (pregnancyOrLactation) {
+    uncertainties.push("pregnancy_or_lactation_context_requires_review");
+    const blockedIds = new Set([
+      "creatine_monohydrate",
+      "caffeine_performance",
+      "electrolytes_contextual",
+    ]);
+    recommendations.splice(
+      0,
+      recommendations.length,
+      ...recommendations
+        .filter(({ id }) => !blockedIds.has(id))
+        .map((item) =>
+          item.tier === "contextual"
+            ? { ...item, action: "review_required" as const, doseReference: null }
+            : item,
+        ),
+    );
+    experimentalOptions.length = 0;
+  }
   if (preference === "none") {
     recommendations.length = 0;
     experimentalOptions.length = 0;
@@ -804,10 +856,17 @@ export function generateSupplementsPlan(input: Input): SupplementsPlanContract {
     preference === "only_deficiencies"
       ? recommendations.filter(({ tier }) => tier === "deficiency")
       : recommendations;
+  const preconceptionFolateTrialAllowed =
+    preconception &&
+    clinicalUnmodeled &&
+    clinical.safetyFindings.length === 1 &&
+    clinical.safetyFindings[0]?.code === "PRECONCEPTION_CONTEXT_PARTIAL" &&
+    uncertainties.every((code) => code === "clinical_coverage_partial_or_unmodeled");
   const conservativeRecommendations =
     clinicalUnmodeled || relevantIncompleteLab
       ? filteredRecommendations.map((item) =>
-          item.action === "trial_candidate"
+          item.action === "trial_candidate" &&
+          !(preconceptionFolateTrialAllowed && item.id === "folic_acid_preconception")
             ? { ...item, action: "review_required" as const }
             : item,
         )

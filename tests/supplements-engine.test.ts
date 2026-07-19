@@ -7,6 +7,7 @@ import {
 import {
   CORE_SOURCE_REVISIONS,
   generateSupplementsPlan,
+  normalizeLabs,
   runDeterministicEngine,
 } from "@health-design/engine";
 
@@ -145,6 +146,7 @@ describe("núcleo determinista de suplementos T12", () => {
     const folate = result.recommendations.find(
       ({ id }) => id === "folic_acid_preconception",
     );
+    expect(folate?.action).toBe("trial_candidate");
     expect(folate?.doseReference).toContain("400 µg");
     expect(JSON.stringify(folate)).not.toContain("5 mg");
   });
@@ -383,6 +385,184 @@ describe("núcleo determinista de suplementos T12", () => {
         .filter(({ id }) => ["omega_3_epa_dha", "melatonin_sleep_context"].includes(id))
         .every(({ action }) => action === "review_required"),
     ).toBe(true);
+  });
+
+  it.each(["pregnant", "lactating"] as const)(
+    "bloquea trials contextuales y experimentales durante %s, pero conserva B12 food-first",
+    (pregnancyLactation) => {
+      const result = generateSupplementsPlan({
+        activeModules: ["supplements"],
+        dietaryPattern: "vegan",
+        hasConditions: false,
+        hasMedications: false,
+        hydrationClimate: "hot",
+        hydrationSweat: "high",
+        ownTrainingSessionMinutes: 90,
+        pregnancyLactation,
+        primaryObjective: "performance_strength",
+        sleepQuality: "poor",
+        supplementRecommendationPreference: "contextual",
+        trainingMode: "own",
+      });
+
+      expect(result.status).toBe("provisional");
+      expect(result.uncertainties).toContain(
+        "pregnancy_or_lactation_context_requires_review",
+      );
+      expect(result.recommendations.map(({ id }) => id)).not.toEqual(
+        expect.arrayContaining([
+          "creatine_monohydrate",
+          "caffeine_performance",
+          "electrolytes_contextual",
+        ]),
+      );
+      expect(result.experimentalOptions).toEqual([]);
+      const b12 = result.recommendations.find(({ id }) => id === "vitamin_b12");
+      expect(b12).toMatchObject({ id: "vitamin_b12", doseReference: null });
+      expect(b12?.form).toContain("Alimentos fortificados primero");
+      expect(
+        result.recommendations
+          .filter(({ tier }) => tier === "contextual")
+          .every(
+            ({ action, doseReference }) =>
+              action === "review_required" && doseReference === null,
+          ),
+      ).toBe(true);
+    },
+  );
+
+  it("distingue campos de laboratorio ausentes de valores o unidades inválidos", () => {
+    const summary = normalizeLabs({
+      labValues: [
+        {
+          dateApproximate: "hoy",
+          name: "Creatinina",
+          referenceRange: "0.6-1.2 mg/dL",
+          unit: "mg/dL",
+          value: undefined,
+        },
+        {
+          dateApproximate: "hoy",
+          name: "Creatinina",
+          referenceRange: "0.6-1.2 mg/dL",
+          unit: undefined,
+          value: "1",
+        },
+        {
+          dateApproximate: "hoy",
+          name: "Creatinina",
+          referenceRange: "0.6-1.2 mg/dL",
+          unit: "mg/dL",
+          value: "n/a",
+        },
+        {
+          dateApproximate: "hoy",
+          name: "Creatinina",
+          referenceRange: "0.6-1.2 mg/dL",
+          unit: "desconocida",
+          value: "1",
+        },
+      ] as never,
+    });
+
+    expect(summary).toEqual([
+      { name: "Creatinina", reason: "missing_value", status: "incomplete" },
+      { name: "Creatinina", reason: "missing_unit", status: "incomplete" },
+      { name: "Creatinina", reason: "value", status: "unrecognized" },
+      { name: "Creatinina", reason: "unit", status: "unrecognized" },
+    ]);
+  });
+
+  it("convierte creatinina en ambos sentidos con 88.4 sin aplicar el factor de magnesio", () => {
+    const summary = normalizeLabs({
+      labValues: [
+        {
+          dateApproximate: "hoy",
+          name: "Creatinina",
+          referenceRange: "0.6-1.2 mg/dL",
+          unit: "umol/L",
+          value: "88.4",
+        },
+        {
+          dateApproximate: "hoy",
+          name: "Creatinina",
+          referenceRange: "53-106 umol/L",
+          unit: "mg/dL",
+          value: "1",
+        },
+        {
+          dateApproximate: "hoy",
+          name: "Magnesio",
+          referenceRange: "0.7-1.0 mmol/L",
+          unit: "mg/dL",
+          value: "1",
+        },
+      ],
+    });
+
+    expect(summary).toHaveLength(3);
+    expect(summary[0]).toMatchObject({
+      analyte: "creatinine",
+      interpretation: "within_range",
+      unit: "mg/dL",
+      value: 1,
+      status: "recognized",
+    });
+    expect(summary[1]).toMatchObject({
+      analyte: "creatinine",
+      interpretation: "within_range",
+      unit: "umol/L",
+      value: 88.4,
+      status: "recognized",
+    });
+    expect(summary[2]).toMatchObject({
+      analyte: "magnesium",
+      interpretation: "below_range",
+      unit: "mmol/L",
+      status: "recognized",
+    });
+    expect(summary[2]?.status === "recognized" ? summary[2].value : null).toBeCloseTo(
+      0.4114,
+      6,
+    );
+  });
+
+  it("bloquea creatina cuando la creatinina convertida supera el rango", () => {
+    const result = generateSupplementsPlan({
+      activeModules: ["supplements"],
+      hasConditions: false,
+      hasMedications: false,
+      labValues: [
+        {
+          dateApproximate: "hoy",
+          name: "Creatinina",
+          referenceRange: "53-106 umol/L",
+          unit: "mg/dL",
+          value: "2",
+        },
+      ],
+      ownTrainingSessionMinutes: 90,
+      primaryObjective: "performance_strength",
+      supplementRecommendationPreference: "contextual",
+      trainingMode: "own",
+    });
+
+    expect(result.labSummary).toEqual([
+      expect.objectContaining({
+        analyte: "creatinine",
+        interpretation: "above_range",
+        status: "recognized",
+      }),
+    ]);
+    expect(result.recommendations.some(({ id }) => id === "creatine_monohydrate")).toBe(
+      false,
+    );
+    expect(result.uncertainties).toEqual(
+      expect.arrayContaining([
+        "renal_lab_context_requires_review",
+        "creatine_blocked_by_clinical_or_renal_uncertainty",
+      ]),
+    );
   });
 
   it("mapea findings a ambos módulos solo cuando ambos están seleccionados", async () => {
