@@ -61,6 +61,20 @@ describe("reglas clínicas selectivas", () => {
     expect(result.detected.renal).toBe(true);
   });
 
+  it("no oculta una parte farmacológica desconocida junto a un alias conocido", () => {
+    const result = detectClinicalContext({
+      hasConditions: false,
+      hasMedications: true,
+      medications: [{ name: "Semaglutida + fármaco no identificado" }],
+    });
+
+    expect(result.detected.glp1).toBe(true);
+    expect(result.coverage).toBe("unmodeled");
+    expect(result.uncertainties.map(({ code }) => code)).toContain(
+      "CLINICAL_CONTEXT_UNMODELED",
+    );
+  });
+
   it("marca GLP-1 y diuréticos como parciales sin usar dosis", () => {
     const result = detectClinicalContext({
       hasConditions: false,

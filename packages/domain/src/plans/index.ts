@@ -131,19 +131,30 @@ function modulesForField(
     return selectedModules(active, ["nutrition", "training", "hydration"]);
   }
   if (NUTRITION_FIELDS.has(field) || field.startsWith("nutrition")) {
-    return selectedModules(active, ["nutrition"]);
+    return selectedModules(
+      active,
+      field === "dietaryPattern" ? ["nutrition", "supplements"] : ["nutrition"],
+    );
   }
   if (
     field.startsWith("generatedTraining") ||
     field.startsWith("ownTraining") ||
     field.startsWith("training")
   ) {
-    return selectedModules(active, ["nutrition", "training", "hydration", "mobility"]);
+    return selectedModules(active, [
+      "nutrition",
+      "training",
+      "hydration",
+      "mobility",
+      "supplements",
+    ]);
   }
   if (field.startsWith("hydration") || field === "habitualWaterMl") {
-    return selectedModules(active, ["hydration"]);
+    return selectedModules(active, ["hydration", "supplements"]);
   }
-  if (field.startsWith("sleep")) return selectedModules(active, ["sleep"]);
+  if (field.startsWith("sleep")) {
+    return selectedModules(active, ["sleep", "supplements"]);
+  }
   if (field.startsWith("mobility")) {
     return selectedModules(active, ["training", "mobility"]);
   }

@@ -213,6 +213,25 @@ describe("motor de hidratación", () => {
     },
   );
 
+  it.each(["Enfermedad renal", "Enfermedad cardiaca", "Hiponatremia"] as const)(
+    "no presenta electrolitos como revisión contradictoria con %s",
+    (condition) => {
+      const plan = generateHydrationPlan({
+        answers: {
+          ...base,
+          conditions: [{ name: condition }],
+          hasConditions: true,
+          hydrationClimate: "hot",
+          hydrationSweat: "high",
+          physiologicalSex: "female",
+        },
+      });
+
+      expect(plan.electrolyteStrategy).toBe("not_indicated");
+      expect(plan.beverageBandMl).toBeNull();
+    },
+  );
+
   it("marca sudor ausente y restricción desconocida como incertidumbre conservadora", () => {
     const plan = generateHydrationPlan({
       answers: {
@@ -359,7 +378,7 @@ describe("motor de hidratación", () => {
     ).toThrow();
   });
 
-  it("no añade volumen por GLP-1 o diurético y limita electrolitos al contexto permitido", () => {
+  it("no fija una banda ni propone bebidas con diurético y limita electrolitos al contexto permitido", () => {
     const baseline = generateHydrationPlan({
       answers: {
         ...base,
@@ -379,7 +398,10 @@ describe("motor de hidratación", () => {
         medications: [{ name: "Semaglutida" }, { name: "Furosemida" }],
       },
     });
-    expect(pharmacology.beverageBandMl).toEqual(baseline.beverageBandMl);
+    expect(baseline.beverageBandMl).not.toBeNull();
+    expect(pharmacology.beverageBandMl).toBeNull();
+    expect(pharmacology.proposedBeverages).toEqual([]);
+    expect(pharmacology.completeness).toBe("provisional");
     expect(pharmacology.electrolyteStrategy).toBe("not_indicated");
     const heat = generateHydrationPlan({
       answers: {

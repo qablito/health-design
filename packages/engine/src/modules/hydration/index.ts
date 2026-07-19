@@ -297,6 +297,12 @@ export function generateHydrationPlan(
   const electrolyteActive =
     (answers.hydrationClimate === "hot" && answers.hydrationSweat === "high") ||
     prolongedTraining(answers);
+  const electrolyteBlocked =
+    clinical.detected.renal ||
+    clinical.detected.cardiac ||
+    clinical.detected.hyponatremia ||
+    clinical.detected.fluidRestriction ||
+    clinical.detected.diuretic;
   const limitMissing =
     clinical.detected.renal ||
     clinical.detected.cardiac ||
@@ -304,6 +310,7 @@ export function generateHydrationPlan(
   const bandUnavailable =
     restrictionUnknown ||
     clinical.detected.fluidRestriction ||
+    clinical.detected.diuretic ||
     (limitMissing && !clinical.detected.fluidRestriction);
   const strictestActionLevel =
     restrictionUnknown && hydrationClinical.strictestActionLevel === "information"
@@ -369,7 +376,8 @@ export function generateHydrationPlan(
         : hydrationClinical.coverage,
     completeness,
     countedBeverages,
-    electrolyteStrategy: electrolyteActive ? "contextual_review" : "not_indicated",
+    electrolyteStrategy:
+      electrolyteActive && !electrolyteBlocked ? "contextual_review" : "not_indicated",
     foodWaterEstimate: { center: 0.25, maximum: 0.3, minimum: 0.2 },
     proposedBeverages: beverageBandMl === null ? [] : ["agua"],
     reminders: answers.hydrationReminders === true,

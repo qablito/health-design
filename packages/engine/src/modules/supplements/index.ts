@@ -453,6 +453,12 @@ export function generateSupplementsPlan(input: Input): SupplementsPlanContract {
           status: "recorded_context" as const,
         }))
     : [];
+  const opaqueCurrentSupplement = currentSupplements.some(
+    ({ classification }) => classification === "opaque_context",
+  );
+  if (opaqueCurrentSupplement) {
+    uncertainties.push("opaque_current_supplement_requires_review");
+  }
   const clinicalUnmodeled = clinical.coverage !== "modeled";
   if (clinicalUnmodeled) uncertainties.push("clinical_coverage_partial_or_unmodeled");
   if (
@@ -704,6 +710,7 @@ export function generateSupplementsPlan(input: Input): SupplementsPlanContract {
       (answers.hydrationClimate === "hot" && answers.hydrationSweat === "high") ||
       (typeof longTraining === "number" && longTraining > 60);
     const electrolyteBlocked =
+      renalLabConcern ||
       clinical.detected.renal ||
       clinical.detected.cardiac ||
       clinical.detected.hyponatremia ||
@@ -785,6 +792,7 @@ export function generateSupplementsPlan(input: Input): SupplementsPlanContract {
       (lowMagnesium ||
         hasText(answers, ["bajo magnesio", "insuficiencia de magnesio"]) ||
         ppiContext) &&
+      !renalLabConcern &&
       !clinical.detected.renal &&
       !hasCurrent(["magnesio", "magnesium"])
     ) {
@@ -863,14 +871,23 @@ export function generateSupplementsPlan(input: Input): SupplementsPlanContract {
     clinical.safetyFindings[0]?.code === "PRECONCEPTION_CONTEXT_PARTIAL" &&
     uncertainties.every((code) => code === "clinical_coverage_partial_or_unmodeled");
   const conservativeRecommendations =
-    clinicalUnmodeled || relevantIncompleteLab
+    clinicalUnmodeled || relevantIncompleteLab || opaqueCurrentSupplement
       ? filteredRecommendations.map((item) =>
-          item.action === "trial_candidate" &&
-          !(preconceptionFolateTrialAllowed && item.id === "folic_acid_preconception")
+          opaqueCurrentSupplement ||
+          (item.action === "trial_candidate" &&
+            !(
+              preconceptionFolateTrialAllowed && item.id === "folic_acid_preconception"
+            ))
             ? { ...item, action: "review_required" as const }
             : item,
         )
       : filteredRecommendations;
+  const conservativeExperimentalOptions = opaqueCurrentSupplement
+    ? experimentalOptions.map((item) => ({
+        ...item,
+        action: "review_required" as const,
+      }))
+    : experimentalOptions;
   const status =
     uncertainties.length > 0 || clinicalUnmodeled || relevantIncompleteLab
       ? "provisional"
@@ -879,7 +896,7 @@ export function generateSupplementsPlan(input: Input): SupplementsPlanContract {
     clinicalCoverage: clinical.coverage,
     completeness: status === "complete" ? "complete" : "provisional",
     currentSupplements,
-    experimentalOptions,
+    experimentalOptions: conservativeExperimentalOptions,
     labSummary: labs,
     notRecommended: NOT_RECOMMENDED.map(({ evidenceRefs, id, reason }) => ({
       evidenceRefs: [...evidenceRefs],

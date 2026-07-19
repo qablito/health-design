@@ -71,6 +71,33 @@ describe("ciclo de vida de planes", () => {
     });
   });
 
+  it.each([
+    ["dietaryPattern", "vegan"],
+    ["sleepQuality", "poor"],
+    ["hydrationClimate", "hot"],
+    ["ownTrainingSessionMinutes", 90],
+  ] as const)(
+    "recalcula suplementos cuando cambia %s para no reutilizar un resultado obsoleto",
+    (field, value) => {
+      const previous: QuestionnaireAnswers = {
+        ...base,
+        activeModules: [
+          "nutrition",
+          "training",
+          "hydration",
+          "sleep",
+          "mobility",
+          "supplements",
+        ],
+      };
+      const current: QuestionnaireAnswers = { ...previous, [field]: value };
+
+      expect(detectContextChange(previous, current).affectedModules).toContain(
+        "supplements",
+      );
+    },
+  );
+
   it("propaga un cambio corporal a los módulos dependientes activos", () => {
     const current = { ...base, weightKg: 80 };
 

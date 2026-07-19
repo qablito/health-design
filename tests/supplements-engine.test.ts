@@ -235,6 +235,33 @@ describe("núcleo determinista de suplementos T12", () => {
     ).toThrow("supplements_only_one_trial_candidate");
   });
 
+  it("degrada toda propuesta nueva cuando un suplemento actual tiene composición opaca", () => {
+    const result = generateSupplementsPlan({
+      activeModules: ["supplements"],
+      currentSupplements: [{ name: "Mezcla propietaria nocturna" }],
+      dietaryPattern: "vegan",
+      hasConditions: false,
+      hasCurrentSupplements: true,
+      hasMedications: false,
+      sleepQuality: "poor",
+      supplementRecommendationPreference: "contextual",
+    });
+
+    expect(result.currentSupplements).toEqual([
+      { classification: "opaque_context", status: "recorded_context" },
+    ]);
+    expect(result.uncertainties).toContain("opaque_current_supplement_requires_review");
+    expect([...result.recommendations, ...result.experimentalOptions]).not.toHaveLength(
+      0,
+    );
+    expect(
+      [...result.recommendations, ...result.experimentalOptions].every(
+        ({ action }) => action === "review_required",
+      ),
+    ).toBe(true);
+    expect(result.status).toBe("provisional");
+  });
+
   it("no recomienda anabolizantes/SARMs y conserva revisión de interacción farmacológica", () => {
     const result = generateSupplementsPlan({
       activeModules: ["supplements"],
@@ -259,6 +286,25 @@ describe("núcleo determinista de suplementos T12", () => {
     ).toMatchObject({ id: "magnesium_context" });
     expect(result.uncertainties).toEqual(
       expect.arrayContaining(["clinical_coverage_partial_or_unmodeled"]),
+    );
+  });
+
+  it("mantiene provisional un plan con alias farmacológico conocido y parte desconocida", () => {
+    const result = generateSupplementsPlan({
+      activeModules: ["supplements"],
+      dietaryPattern: "vegan",
+      hasConditions: false,
+      hasMedications: true,
+      medications: [{ name: "Semaglutida + fármaco no identificado" }],
+      supplementRecommendationPreference: "only_deficiencies",
+    });
+
+    expect(result.clinicalCoverage).toBe("unmodeled");
+    expect(result.status).toBe("provisional");
+    expect(result.recommendations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "vitamin_b12", action: "review_required" }),
+      ]),
     );
   });
 
@@ -528,7 +574,7 @@ describe("núcleo determinista de suplementos T12", () => {
     );
   });
 
-  it("bloquea creatina cuando la creatinina convertida supera el rango", () => {
+  it("bloquea creatina, magnesio y electrolitos ante señal renal de laboratorio", () => {
     const result = generateSupplementsPlan({
       activeModules: ["supplements"],
       hasConditions: false,
@@ -544,6 +590,7 @@ describe("núcleo determinista de suplementos T12", () => {
       ],
       ownTrainingSessionMinutes: 90,
       primaryObjective: "performance_strength",
+      supplementGoals: ["bajo magnesio"],
       supplementRecommendationPreference: "contextual",
       trainingMode: "own",
     });
@@ -557,6 +604,9 @@ describe("núcleo determinista de suplementos T12", () => {
     ]);
     expect(result.recommendations.some(({ id }) => id === "creatine_monohydrate")).toBe(
       false,
+    );
+    expect(result.recommendations.map(({ id }) => id)).not.toEqual(
+      expect.arrayContaining(["magnesium_context", "electrolytes_contextual"]),
     );
     expect(result.uncertainties).toEqual(
       expect.arrayContaining([

@@ -61,6 +61,13 @@ function hasAlias(texts: readonly string[], aliases: readonly string[]): boolean
   return texts.some((text) => aliases.some((alias) => phraseMatches(text, alias)));
 }
 
+function clinicalEntryParts(value: string): string[] {
+  return value
+    .split(/\s+(?:y|and|con|\/)\s+|\s*[+;|&]\s*/iu)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 function pushUnique<T extends { code: string }>(items: T[], item: T): void {
   if (!items.some(({ code }) => code === item.code)) items.push(item);
 }
@@ -93,8 +100,10 @@ export type ClinicalContextInput = unknown;
 
 export function detectClinicalContext(input: ClinicalContextInput): ClinicalResult {
   const answers = unwrapAnswers(input);
-  const conditionTexts = entries(answers, "conditions").map(normalizeClinicalText);
-  const medicationTexts = entries(answers, "medications").map(normalizeClinicalText);
+  const conditionEntries = entries(answers, "conditions");
+  const medicationEntries = entries(answers, "medications");
+  const conditionTexts = conditionEntries.map(normalizeClinicalText);
+  const medicationTexts = medicationEntries.map(normalizeClinicalText);
   const conditionsConfirmed = answers.hasConditions;
   const medicationsConfirmed = answers.hasMedications;
   const conditionsDetailsMissing =
@@ -274,7 +283,10 @@ export function detectClinicalContext(input: ClinicalContextInput): ClinicalResu
   const knownTexts = CLINICAL_CATALOG.flatMap(({ aliases }) => aliases).map(
     normalizeClinicalText,
   );
-  const hasUnknownContext = allTexts.some(
+  const contextParts = [...conditionEntries, ...medicationEntries].flatMap(
+    clinicalEntryParts,
+  );
+  const hasUnknownContext = contextParts.some(
     (text) => !knownTexts.some((alias) => phraseMatches(text, alias)),
   );
   if (hasUnknownContext) {
