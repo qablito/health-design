@@ -298,6 +298,7 @@ export function generateHydrationPlan(
     (answers.hydrationClimate === "hot" && answers.hydrationSweat === "high") ||
     prolongedTraining(answers);
   const electrolyteBlocked =
+    restrictionUnknown ||
     clinical.detected.renal ||
     clinical.detected.cardiac ||
     clinical.detected.hyponatremia ||

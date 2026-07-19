@@ -27,6 +27,10 @@ const EXPERIMENTAL_SOURCES = [
   "source:pubmed-theanine-sleep-review@1.0.0",
   "source:pubmed-ashwagandha-review@1.0.0",
 ] as const;
+const KNOWN_SUPPLEMENT_PATTERN =
+  /creatina|creatine|omega|melatonina|magnesio|b12|folato|cafeina|caffeine/i;
+const OPAQUE_SUPPLEMENT_PATTERN =
+  /\b(?:mezcla|blend|propietari[oa]|complex|complejo)\b/i;
 
 const NOT_RECOMMENDED = [
   {
@@ -443,15 +447,19 @@ export function generateSupplementsPlan(input: Input): SupplementsPlanContract {
           (entry): entry is { name: string; note?: string } =>
             !!entry && typeof entry.name === "string" && entry.name.trim().length > 0,
         )
-        .map((entry) => ({
-          classification:
-            /creatina|creatine|omega|melatonina|magnesio|b12|folato|cafeina|caffeine/i.test(
-              entry.name,
-            )
-              ? ("known_context" as const)
-              : ("opaque_context" as const),
-          status: "recorded_context" as const,
-        }))
+        .map((entry) => {
+          const context = normalizeClinicalText(
+            `${entry.name} ${typeof entry.note === "string" ? entry.note : ""}`,
+          );
+          return {
+            classification:
+              !OPAQUE_SUPPLEMENT_PATTERN.test(context) &&
+              KNOWN_SUPPLEMENT_PATTERN.test(entry.name)
+                ? ("known_context" as const)
+                : ("opaque_context" as const),
+            status: "recorded_context" as const,
+          };
+        })
     : [];
   const opaqueCurrentSupplement = currentSupplements.some(
     ({ classification }) => classification === "opaque_context",
@@ -709,7 +717,9 @@ export function generateSupplementsPlan(input: Input): SupplementsPlanContract {
     const electrolytesTrigger =
       (answers.hydrationClimate === "hot" && answers.hydrationSweat === "high") ||
       (typeof longTraining === "number" && longTraining > 60);
+    const fluidRestrictionUnknown = answers.hydrationFluidRestriction === "unknown";
     const electrolyteBlocked =
+      fluidRestrictionUnknown ||
       renalLabConcern ||
       clinical.detected.renal ||
       clinical.detected.cardiac ||
@@ -747,7 +757,11 @@ export function generateSupplementsPlan(input: Input): SupplementsPlanContract {
         }),
       );
     } else if (electrolytesTrigger && electrolyteBlocked) {
-      uncertainties.push("electrolytes_clinical_override");
+      uncertainties.push(
+        fluidRestrictionUnknown
+          ? "electrolytes_fluid_restriction_status_unknown"
+          : "electrolytes_clinical_override",
+      );
     }
     const shiftOrPoorSleep =
       answers.dailySchedule === "shift_work" ||

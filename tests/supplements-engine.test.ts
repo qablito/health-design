@@ -235,31 +235,63 @@ describe("núcleo determinista de suplementos T12", () => {
     ).toThrow("supplements_only_one_trial_candidate");
   });
 
-  it("degrada toda propuesta nueva cuando un suplemento actual tiene composición opaca", () => {
+  it.each([
+    [{ name: "Mezcla propietaria de magnesio" }],
+    [{ name: "blend de omega" }],
+    [{ name: "Magnesio", note: "complex sin composición detallada" }],
+    [{ name: "complejo de omega" }],
+  ] as const)(
+    "degrada toda propuesta nueva cuando el suplemento actual %j tiene composición opaca",
+    (currentSupplement) => {
+      const result = generateSupplementsPlan({
+        activeModules: ["supplements"],
+        currentSupplements: [currentSupplement],
+        dietaryPattern: "vegan",
+        hasConditions: false,
+        hasCurrentSupplements: true,
+        hasMedications: false,
+        sleepQuality: "poor",
+        supplementRecommendationPreference: "contextual",
+      });
+
+      expect(result.currentSupplements).toEqual([
+        { classification: "opaque_context", status: "recorded_context" },
+      ]);
+      expect(result.uncertainties).toContain(
+        "opaque_current_supplement_requires_review",
+      );
+      expect([
+        ...result.recommendations,
+        ...result.experimentalOptions,
+      ]).not.toHaveLength(0);
+      expect(
+        [...result.recommendations, ...result.experimentalOptions].every(
+          ({ action }) => action === "review_required",
+        ),
+      ).toBe(true);
+      expect(result.status).toBe("provisional");
+    },
+  );
+
+  it("excluye electrolitos con restricción hídrica desconocida y conserva incertidumbre", () => {
     const result = generateSupplementsPlan({
       activeModules: ["supplements"],
-      currentSupplements: [{ name: "Mezcla propietaria nocturna" }],
-      dietaryPattern: "vegan",
+      dietaryPattern: "omnivore",
       hasConditions: false,
-      hasCurrentSupplements: true,
       hasMedications: false,
-      sleepQuality: "poor",
+      hydrationClimate: "hot",
+      hydrationFluidRestriction: "unknown",
+      hydrationSweat: "high",
       supplementRecommendationPreference: "contextual",
     });
 
-    expect(result.currentSupplements).toEqual([
-      { classification: "opaque_context", status: "recorded_context" },
-    ]);
-    expect(result.uncertainties).toContain("opaque_current_supplement_requires_review");
-    expect([...result.recommendations, ...result.experimentalOptions]).not.toHaveLength(
-      0,
+    expect(result.recommendations.map(({ id }) => id)).not.toContain(
+      "electrolytes_contextual",
     );
-    expect(
-      [...result.recommendations, ...result.experimentalOptions].every(
-        ({ action }) => action === "review_required",
-      ),
-    ).toBe(true);
     expect(result.status).toBe("provisional");
+    expect(result.uncertainties).toContain(
+      "electrolytes_fluid_restriction_status_unknown",
+    );
   });
 
   it("no recomienda anabolizantes/SARMs y conserva revisión de interacción farmacológica", () => {

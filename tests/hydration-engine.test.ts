@@ -250,6 +250,26 @@ describe("motor de hidratación", () => {
     );
   });
 
+  it("bloquea electrolitos con restricción desconocida aunque haya calor y sudor alto", () => {
+    const plan = generateHydrationPlan({
+      answers: {
+        ...base,
+        habitualWaterMl: 1_500,
+        hydrationClimate: "hot",
+        hydrationFluidRestriction: "unknown",
+        hydrationSweat: "high",
+        physiologicalSex: "female",
+      },
+    });
+
+    expect(plan.beverageBandMl).toBeNull();
+    expect(plan.electrolyteStrategy).toBe("not_indicated");
+    expect(plan.status).toBe("provisional");
+    expect(plan.uncertainties.map(({ code }) => code)).toContain(
+      "FLUID_RESTRICTION_STATUS_UNKNOWN",
+    );
+  });
+
   it("cuenta bebidas declaradas, registra alcohol y nunca lo propone", () => {
     const plan = generateHydrationPlan({
       answers: {
