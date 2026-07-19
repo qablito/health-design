@@ -825,6 +825,9 @@ export function TrainingApp() {
           <a className="text-button" href="/nutrition">
             Ver alimentación
           </a>
+          <a className="text-button" href="/wellness">
+            Ver bienestar
+          </a>
         </div>
       </header>
 

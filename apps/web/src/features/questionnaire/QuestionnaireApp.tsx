@@ -422,6 +422,14 @@ export function QuestionnaireApp() {
               Abrir movimiento
             </a>
           ) : null}
+          {answers.activeModules?.some(
+            (module) =>
+              module === "hydration" || module === "sleep" || module === "supplements",
+          ) ? (
+            <a className="text-button" href="/wellness">
+              Abrir bienestar
+            </a>
+          ) : null}
         </div>
       ) : null}
 
