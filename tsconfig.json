@@ -2,9 +2,13 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "paths": {
+      "@health-design/catalog/nutrition": ["./packages/catalog/src/nutrition/index.ts"],
       "@health-design/contracts": ["./packages/contracts/src/index.ts"],
       "@health-design/domain": ["./packages/domain/src/index.ts"],
-      "@health-design/engine": ["./packages/engine/src/index.ts"]
+      "@health-design/engine": ["./packages/engine/src/index.ts"],
+      "@health-design/test-fixtures/nutrition": [
+        "./packages/test-fixtures/src/nutrition/index.ts"
+      ]
     },
     "types": ["node"]
   },
@@ -13,12 +17,15 @@
     "apps/web/vite.config.ts",
     "packages/*/src",
     "playwright.config.ts",
+    "scripts/import-nutrition/index.ts",
     "supabase/functions/_shared/*.ts",
     "supabase/functions/_shared/generated/contracts.d.ts",
     "supabase/functions/_shared/turnstile.ts",
     "supabase/functions/access/index.ts",
     "supabase/functions/admin/index.ts",
     "supabase/functions/admin-reconciler/index.ts",
+    "supabase/functions/catalogs/index.ts",
+    "supabase/functions/catalogs/nutrition.ts",
     "supabase/functions/plans/index.ts",
     "supabase/functions/plans/lifecycle.ts",
     "supabase/functions/plans/questionnaire.ts",

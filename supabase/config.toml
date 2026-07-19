@@ -79,3 +79,9 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/plans/deno.json"
 entrypoint = "./functions/plans/index.ts"
+
+[functions.catalogs]
+enabled = true
+verify_jwt = true
+import_map = "./functions/catalogs/deno.json"
+entrypoint = "./functions/catalogs/index.ts"

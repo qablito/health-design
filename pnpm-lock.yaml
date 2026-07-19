@@ -11,6 +11,9 @@ importers:
       '@eslint/js':
         specifier: 10.0.1
         version: 10.0.1(eslint@10.7.0)
+      '@health-design/catalog':
+        specifier: workspace:*
+        version: link:packages/catalog
       '@health-design/contracts':
         specifier: workspace:*
         version: link:packages/contracts
@@ -20,6 +23,9 @@ importers:
       '@health-design/engine':
         specifier: workspace:*
         version: link:packages/engine
+      '@health-design/test-fixtures':
+        specifier: workspace:*
+        version: link:packages/test-fixtures
       '@playwright/test':
         specifier: 1.58.2
         version: 1.58.2
@@ -94,6 +100,12 @@ importers:
         specifier: 8.1.4
         version: 8.1.4(@types/node@24.13.3)(esbuild@0.28.1)
 
+  packages/catalog:
+    dependencies:
+      '@health-design/engine':
+        specifier: workspace:*
+        version: link:../engine
+
   packages/contracts:
     dependencies:
       '@health-design/domain':
@@ -113,6 +125,8 @@ importers:
       '@health-design/domain':
         specifier: workspace:*
         version: link:../domain
+
+  packages/test-fixtures: {}
 
 packages:
 
