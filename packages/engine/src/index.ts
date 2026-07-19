@@ -1,6 +1,7 @@
 import {
   HydrationPlanSchema,
   MobilityPlanSchema,
+  SleepPlanSchema,
   TrainingPlanSchema,
   type ContextSnapshotInternal,
   type PlanContextChange,
@@ -25,6 +26,7 @@ import {
 import { generateMobilityPlan } from "./modules/mobility/index.ts";
 import { generateNutritionWeek } from "./modules/nutrition/index.ts";
 import { generateHydrationPlan } from "./modules/hydration/index.ts";
+import { generateSleepPlan } from "./modules/sleep/index.ts";
 import { detectClinicalContext } from "./clinical/index.ts";
 import type { GeneratedTrainingLoad } from "./modules/nutrition/index.ts";
 import { generateTrainingPlan } from "./modules/training/index.ts";
@@ -309,7 +311,7 @@ export const HISTORICAL_ENGINE_VERSION = "engine-v3" as const;
 export const ENGINE_VERSION = "engine-v4" as const;
 export const HISTORICAL_SOURCE_MANIFEST_ID =
   "cb644399-1275-47de-86b6-195711946f66" as const;
-export const SOURCE_MANIFEST_ID = "f187e4cc-3149-4a55-8b80-e260f8d6d84f" as const;
+export const SOURCE_MANIFEST_ID = "8f8063a7-3be8-4c6a-90bd-40b7b6cfb8f7" as const;
 
 export type RuleRevision = Readonly<{
   evidenceRefs: readonly string[];
@@ -328,6 +330,7 @@ export type ScientificSourceRevision = Readonly<{
   confidence: "low" | "moderate" | "moderate_high" | "high";
   doi?: string;
   evidenceType:
+    | "consensus_statement"
     | "position_stand_overview_of_reviews"
     | "public_health_guideline"
     | "systematic_review_meta_analysis_meta_regression";
@@ -348,6 +351,8 @@ const INGRAM_STATIC_STRETCHING_SOURCE_ID =
   "source:ingram-static-stretching-meta-analysis-2025@1.0.0" as const;
 const EFSA_WATER_SOURCE_ID =
   "source:efsa-dietary-reference-values-water-2010@1.0.0" as const;
+const AASM_SRS_SLEEP_SOURCE_ID =
+  "source:aasm-srs-adult-sleep-duration-consensus-2015@1.0.0" as const;
 
 export const CORE_SOURCE_REVISIONS = [
   {
@@ -427,6 +432,25 @@ export const CORE_SOURCE_REVISIONS = [
     reviewedAt: "2026-07-19",
     status: "active",
     url: "https://doi.org/10.2903/j.efsa.2010.1459",
+  },
+  {
+    applicability: [
+      "Ventana poblacional de sueño para personas adultas y su interpretación contextual.",
+    ],
+    citation:
+      "Watson NF, Badr MS, Belenky G, et al. Recommended Amount of Sleep for a Healthy Adult: A Joint Consensus Statement of the American Academy of Sleep Medicine and Sleep Research Society. Sleep. 2015;38(6):843-844.",
+    confidence: "moderate_high",
+    evidenceType: "consensus_statement",
+    exclusions: [
+      "La recomendación de 7 o más horas no diagnostica trastornos del sueño ni sustituye una evaluación clínica.",
+      "Dormir más de 9 horas puede ser apropiado en algunas personas y no es por sí mismo una patología.",
+    ],
+    hierarchy: "guideline",
+    id: AASM_SRS_SLEEP_SOURCE_ID,
+    population: "Personas adultas sanas; consenso AASM/SRS.",
+    reviewedAt: "2026-07-19",
+    status: "active",
+    url: "https://aasm.org/resources/pdf/pressroom/adult-sleep-duration-consensus.pdf",
   },
 ] as const satisfies readonly ScientificSourceRevision[];
 
@@ -528,6 +552,16 @@ export const CORE_RULE_REVISIONS = [
     status: "active",
     version: "1.0.0",
   },
+  {
+    evidenceRefs: ["contract:t12-sleep-window-v1", AASM_SRS_SLEEP_SOURCE_ID],
+    id: "rule.sleep-window@1.0.0",
+    kind: "mandatory",
+    reviewedAt: "2026-07-19",
+    ruleId: "rule.sleep-window",
+    scope: ["sleep"],
+    status: "active",
+    version: "1.0.0",
+  },
 ] as const satisfies readonly RuleRevision[];
 
 export const HISTORICAL_RULE_SET_REVISION = {
@@ -559,17 +593,17 @@ export const HISTORICAL_ENGINE_SNAPSHOT = {
   sourceManifest: HISTORICAL_SOURCE_MANIFEST,
 } as const;
 export const CORE_RULE_SET_REVISION = {
-  id: "d1bd58fd-54dc-4358-9242-43b1fdf20dc4",
+  id: "15d71ddc-765e-427b-86e0-63e5a5f2e191",
   ruleRevisionIds: CORE_RULE_REVISIONS.map(({ id }) => id),
   status: "active",
-  version: "4.0.0",
+  version: "4.1.0",
 } as const;
 export const RULE_SET_REVISION_ID = CORE_RULE_SET_REVISION.id;
 
 export const CORE_SOURCE_MANIFEST = {
   id: SOURCE_MANIFEST_ID,
   sourceRevisionIds: CORE_SOURCE_REVISIONS.map(({ id }) => id),
-  version: "core-with-training-mobility-hydration-v1",
+  version: "core-with-training-mobility-hydration-sleep-v1",
 } as const;
 
 const ACTION_LEVELS = [
@@ -860,6 +894,35 @@ function provisionalModuleResult(
         };
       }
     }
+    if (module === "sleep") {
+      try {
+        const plan = SleepPlanSchema.parse(generateSleepPlan(context.answers));
+        return {
+          confidence: plan.confidence,
+          module,
+          payload: { ...plan },
+          status: plan.status,
+          uncertainties: plan.uncertainties.map((uncertainty) => ({
+            ...uncertainty,
+            module,
+          })),
+        };
+      } catch {
+        return {
+          confidence: "unknown",
+          module,
+          payload: { requested: true, stage: "sleep_engine" },
+          status: "provisional",
+          uncertainties: [
+            {
+              code: "SLEEP_ENGINE_UNAVAILABLE",
+              messageKey: "sleep.uncertainty.engine_unavailable",
+              module,
+            },
+          ],
+        };
+      }
+    }
     return {
       confidence: "unknown",
       module,
@@ -1056,4 +1119,5 @@ export async function runDeterministicEngine(
 export * from "./modules/nutrition/index.ts";
 export * from "./modules/hydration/index.ts";
 export * from "./modules/mobility/index.ts";
+export * from "./modules/sleep/index.ts";
 export * from "./modules/training/index.ts";

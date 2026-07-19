@@ -45,6 +45,32 @@ describe("ciclo de vida de planes", () => {
     });
   });
 
+  it("limita cambios de horas, fases y horario al módulo de sueño", () => {
+    const previous: QuestionnaireAnswers = {
+      ...base,
+      activeModules: ["nutrition", "training", "hydration", "sleep"],
+      sleepHours: 8,
+      sleepQuality: "good",
+      sleepRegularity: "regular",
+      sleepTracking: true,
+      sleepRemMinutes: 90,
+      sleepBedTime: "23:00",
+      sleepWakeTime: "07:00",
+    };
+    const current: QuestionnaireAnswers = {
+      ...previous,
+      sleepHours: 7,
+      sleepRemMinutes: 75,
+      sleepBedTime: "23:30",
+    };
+
+    expect(detectContextChange(previous, current)).toEqual({
+      affectedModules: ["sleep"],
+      changedFields: ["sleepBedTime", "sleepHours", "sleepRemMinutes"],
+      impact: "module_only",
+    });
+  });
+
   it("propaga un cambio corporal a los módulos dependientes activos", () => {
     const current = { ...base, weightKg: 80 };
 

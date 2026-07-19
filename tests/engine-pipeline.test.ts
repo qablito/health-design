@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { ContextSnapshotInternal } from "@health-design/contracts";
+import {
+  SleepPlanSchema,
+  type ContextSnapshotInternal,
+} from "@health-design/contracts";
 
 import {
   CORE_RULE_REVISIONS,
@@ -53,6 +56,7 @@ describe("reconciliación de reglas", () => {
       "source:acsm-resistance-training-position-2026@1.0.0",
       "source:ingram-static-stretching-meta-analysis-2025@1.0.0",
       "source:efsa-dietary-reference-values-water-2010@1.0.0",
+      "source:aasm-srs-adult-sleep-duration-consensus-2015@1.0.0",
     ];
 
     expect(CORE_SOURCE_REVISIONS.map(({ id }) => id)).toEqual(expectedSourceIds);
@@ -125,9 +129,9 @@ describe("reconciliación de reglas", () => {
   it("versiona el conjunto activo y exige evidencia trazable por revisión", () => {
     expect(ENGINE_VERSION).toBe("engine-v4");
     expect(CORE_RULE_SET_REVISION).toMatchObject({
-      id: "d1bd58fd-54dc-4358-9242-43b1fdf20dc4",
+      id: "15d71ddc-765e-427b-86e0-63e5a5f2e191",
       status: "active",
-      version: "4.0.0",
+      version: "4.1.0",
     });
     expect(CORE_RULE_SET_REVISION.ruleRevisionIds).toEqual(
       CORE_RULE_REVISIONS.map(({ id }) => id),
@@ -146,6 +150,16 @@ describe("reconciliación de reglas", () => {
         "rule.training-generated-block@1.0.0",
         "rule.training-declared-limitations@1.0.0",
         "rule.mobility-modular-duration@1.0.0",
+        "rule.sleep-window@1.0.0",
+      ]),
+    );
+    expect(
+      CORE_RULE_REVISIONS.find(({ ruleId }) => ruleId === "rule.sleep-window")
+        ?.evidenceRefs,
+    ).toEqual(
+      expect.arrayContaining([
+        "contract:t12-sleep-window-v1",
+        "source:aasm-srs-adult-sleep-duration-consensus-2015@1.0.0",
       ]),
     );
   });
@@ -292,6 +306,35 @@ describe("pipeline determinista T8", () => {
     ).toMatchObject({ status: "not_requested" });
   });
 
+  it("integra sueño seleccionado como contrato válido sin MODULE_PENDING", async () => {
+    const result = await runDeterministicEngine({
+      baseContext: null,
+      baseModuleResults: null,
+      change: null,
+      context: {
+        ...context,
+        answers: {
+          ...context.answers,
+          activeModules: ["sleep"],
+          sleepHours: 8,
+          sleepQuality: "good",
+          sleepRegularity: "regular",
+        },
+      },
+    });
+
+    const sleep = result.moduleResults.find(({ module }) => module === "sleep");
+    expect(sleep).toMatchObject({ confidence: "high", status: "valid" });
+    expect(SleepPlanSchema.parse(sleep?.payload)).toMatchObject({ status: "valid" });
+    expect(
+      result.moduleResults.flatMap(({ uncertainties }) => uncertainties),
+    ).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "MODULE_IMPLEMENTATION_PENDING" }),
+      ]),
+    );
+  });
+
   it("produce hashes idénticos para Unicode equivalente y excluye timestamps volátiles", async () => {
     const first = await runDeterministicEngine({
       baseContext: null,
@@ -398,5 +441,49 @@ describe("pipeline determinista T8", () => {
       preservedModules: ["training", "hydration", "sleep", "mobility", "supplements"],
       recalculatedModules: ["nutrition"],
     });
+  });
+
+  it("preserva sueño literalmente cuando cambia solo nutrición", async () => {
+    const sleepBase = {
+      confidence: "high" as const,
+      module: "sleep" as const,
+      payload: { marker: "base-sleep" },
+      status: "valid" as const,
+      uncertainties: [],
+    };
+    const result = await runDeterministicEngine({
+      baseContext: {
+        ...context,
+        answers: {
+          ...context.answers,
+          activeModules: ["nutrition", "sleep"],
+          sleepHours: 8,
+          sleepQuality: "good",
+          sleepRegularity: "regular",
+        },
+      },
+      baseModuleResults: [sleepBase],
+      change: {
+        affectedModules: ["nutrition"],
+        changedFields: ["mealsPerDay"],
+        impact: "module_only",
+      },
+      context: {
+        ...context,
+        answers: {
+          ...context.answers,
+          activeModules: ["nutrition", "sleep"],
+          mealsPerDay: 5,
+          sleepHours: 7,
+          sleepQuality: "poor",
+          sleepRegularity: "very_variable",
+        },
+      },
+    });
+
+    expect(result.moduleResults.find(({ module }) => module === "sleep")).toBe(
+      sleepBase,
+    );
+    expect(result.validation.preservedModules).toContain("sleep");
   });
 });
