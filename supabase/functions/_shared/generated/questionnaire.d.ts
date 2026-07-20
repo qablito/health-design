@@ -1336,11 +1336,11 @@ export declare const QuestionnairePublicSchemaResponseSchema: z.ZodObject<{
         kind: z.ZodEnum<{
             number: "number";
             boolean: "boolean";
+            text: "text";
             date: "date";
             entities: "entities";
             multi: "multi";
             single: "single";
-            text: "text";
             time: "time";
         }>;
         label: z.ZodString;

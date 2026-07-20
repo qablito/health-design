@@ -132,6 +132,13 @@ insert into public.plan_versions (
   'canonical-json-v1'
 );
 
+insert into public.module_results (
+  plan_version_id, module, status, confidence, payload, uncertainties
+) values (
+  '74000000-0000-4000-8000-000000014101', 'nutrition', 'valid', 'high',
+  '{"redacted":"not_returned_to_ai"}'::jsonb, '[]'::jsonb
+);
+
 insert into private.pricing_fx_revisions (
   id, provider, provider_currency, input_per_million, output_per_million,
   fx_to_eur, source_refs, observed_at, effective_from, expires_at,
@@ -144,13 +151,17 @@ insert into private.pricing_fx_revisions (
 
 insert into private.ai_provider_revisions (
   id, provider, endpoint_id, model, processing_region, retention_mode,
-  training_use, timeout_ms, retry_policy, pricing_fx_revision_id,
+  training_use, timeout_ms, retry_policy, source_refs, canonical_hash,
+  pricing_fx_revision_id,
   minimization_policy_version, reasoning_effort, max_input_tokens,
   max_output_tokens, effective_from, expires_at, status
 ) values (
   '82000000-0000-4000-8000-000000014101', 'openai',
   'openai_responses_v1', 'gpt-5.6-luna', 'global', 'standard_30_day', false,
-  8000, 'none', '81000000-0000-4000-8000-000000014101',
+  8000, 'none',
+  '["https://developers.openai.com/api/docs/models/gpt-5.6-luna"]'::jsonb,
+  decode(repeat('22', 32), 'hex'),
+  '81000000-0000-4000-8000-000000014101',
   'ai-minimization-v1', 'none', 2048, 256, now() - interval '1 hour',
   now() + interval '30 days', 'draft'
 );
@@ -174,6 +185,44 @@ select is(
   ) ->> 'status',
   'active',
   'AAL2 activa atómicamente precio y proveedor documentados'
+);
+
+select is(
+  public.internal_admin_activate_ai_provider_revision_requested(
+    '00000000-0000-4000-8000-000000014102',
+    '21000000-0000-4000-8000-000000014103',
+    '82000000-0000-4000-8000-000000014101',
+    '83000000-0000-4000-8000-000000014199'
+  ) ->> 'status',
+  'active', 'la activación solicitada es idempotente y queda registrada'
+);
+
+select is(
+  (
+    select action from private.technical_audit_events
+    where request_id = '83000000-0000-4000-8000-000000014199'
+  ),
+  'ai_provider_revision_activate', 'la activación deja registro técnico privado'
+);
+
+select is(
+  public.internal_ai_get_explanation_context(
+    '00000000-0000-4000-8000-000000014101',
+    '21000000-0000-4000-8000-000000014101',
+    '74000000-0000-4000-8000-000000014101'
+  ) #>> '{modules,0,module}',
+  'nutrition', 'el contexto minimizado expone estado, no el payload clínico'
+);
+
+select ok(
+  not (
+    public.internal_ai_get_explanation_context(
+      '00000000-0000-4000-8000-000000014101',
+      '21000000-0000-4000-8000-000000014101',
+      '74000000-0000-4000-8000-000000014101'
+    )::text like '%redacted%'
+  ),
+  'los datos normativos del módulo no salen hacia Luna'
 );
 
 create temporary table first_reservation as

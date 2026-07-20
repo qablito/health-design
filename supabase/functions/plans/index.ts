@@ -9,6 +9,12 @@ import { handlePlanLifecycle, type PlanLifecycleDependencies } from "./lifecycle
 import { hydrateActiveClinicalCatalog } from "./clinical-catalog.ts";
 import { hydrateCanonicalMedicationIdentities } from "./medication-identities.ts";
 import { hydrateEffectiveNutritionCatalog } from "./nutrition-catalog.ts";
+import {
+  handleAIExplanation,
+  handleAIProviderAdmin,
+  type AIExplanationDependencies,
+} from "./explanation.ts";
+import { createOpenAIProviderCaller } from "./openai-provider.ts";
 
 function secret(name: string, fallback?: string): string {
   const value = runtimeValue(name) ?? fallback;
@@ -36,7 +42,9 @@ function decodeSessionId(token: string): string {
   return decoded.session_id;
 }
 
-function dependencies(): QuestionnaireDependencies & PlanLifecycleDependencies {
+function dependencies(): QuestionnaireDependencies &
+  PlanLifecycleDependencies &
+  AIExplanationDependencies {
   const url = secret("SUPABASE_URL");
   const publishableKey =
     runtimeValue("SUPABASE_PUBLISHABLE_KEY") ?? secret("SUPABASE_ANON_KEY");
@@ -60,6 +68,7 @@ function dependencies(): QuestionnaireDependencies & PlanLifecycleDependencies {
       if (error || !data.user) throw new Error("unauthenticated");
       return { sessionId: decodeSessionId(token), userId: data.user.id };
     },
+    callProvider: createOpenAIProviderCaller(() => secret("OPENAI_API_KEY")),
     environment,
     now: () => new Date(),
     randomUUID: () => crypto.randomUUID(),
@@ -125,11 +134,30 @@ function isQuestionnaireRoute(request: Request): boolean {
   );
 }
 
+function isExplanationRoute(request: Request): boolean {
+  const url = new URL(request.url);
+  const versionIndex = url.pathname.lastIndexOf("/v1/");
+  if (versionIndex < 0) return false;
+  return /^\/v1\/plans\/[0-9a-f-]+\/explanation$/i.test(
+    url.pathname.slice(versionIndex),
+  );
+}
+
+function isAIAdminRoute(request: Request): boolean {
+  const url = new URL(request.url);
+  const versionIndex = url.pathname.lastIndexOf("/v1/");
+  if (versionIndex < 0) return false;
+  return /^\/v1\/admin\/ai-provider-revisions\/[0-9a-f-]+\/activate$/i.test(
+    url.pathname.slice(versionIndex),
+  );
+}
+
 export default {
   fetch(request: Request) {
     const current = dependencies();
-    return isQuestionnaireRoute(request)
-      ? handleQuestionnaire(request, current)
-      : handlePlanLifecycle(request, current);
+    if (isQuestionnaireRoute(request)) return handleQuestionnaire(request, current);
+    if (isAIAdminRoute(request)) return handleAIProviderAdmin(request, current);
+    if (isExplanationRoute(request)) return handleAIExplanation(request, current);
+    return handlePlanLifecycle(request, current);
   },
 };

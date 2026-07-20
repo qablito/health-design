@@ -39,6 +39,10 @@ create table private.ai_provider_revisions (
   training_use boolean not null check (training_use is false),
   timeout_ms integer not null check (timeout_ms = 8000),
   retry_policy text not null check (retry_policy = 'none'),
+  source_refs jsonb not null check (
+    jsonb_typeof(source_refs) = 'array' and jsonb_array_length(source_refs) > 0
+  ),
+  canonical_hash bytea not null check (octet_length(canonical_hash) = 32),
   pricing_fx_revision_id uuid not null
     references private.pricing_fx_revisions (id) on delete restrict,
   minimization_policy_version text not null
@@ -161,6 +165,35 @@ grant select, insert, update on table private.ai_budget_months to service_role;
 grant select, insert, update on table private.ai_usage_events to service_role;
 grant select, insert on table private.ai_explanations to service_role;
 
+insert into private.pricing_fx_revisions (
+  id, provider, provider_currency, input_per_million, output_per_million,
+  fx_to_eur, source_refs, observed_at, effective_from, expires_at,
+  decimal_precision, canonical_hash, status
+) values (
+  'a1400000-0000-4000-8000-000000000001', 'openai', 'USD', 1, 6,
+  0.87450809,
+  '["https://developers.openai.com/api/docs/models/gpt-5.6-luna","https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.es.html"]'::jsonb,
+  '2026-07-17T16:00:00Z', '2026-07-17T16:00:00Z',
+  '2026-08-17T16:00:00Z', 8,
+  decode('e6a2e0195077c46e436d18dff9ada55eb54db1f67c4426aaadc473e016432e83', 'hex'),
+  'draft'
+);
+
+insert into private.ai_provider_revisions (
+  id, provider, endpoint_id, model, processing_region, retention_mode,
+  training_use, timeout_ms, retry_policy, source_refs, canonical_hash,
+  pricing_fx_revision_id, minimization_policy_version, reasoning_effort,
+  max_input_tokens, max_output_tokens, effective_from, expires_at, status
+) values (
+  'a1400000-0000-4000-8000-000000000002', 'openai',
+  'openai_responses_v1', 'gpt-5.6-luna', 'global', 'standard_30_day', false,
+  8000, 'none',
+  '["https://developers.openai.com/api/docs/models/gpt-5.6-luna","https://platform.openai.com/docs/models/default-usage-policies-by-endpoint"]'::jsonb,
+  decode('658fbbb8227847d3519262286ea3ba2c1ac46f92bd95a57ca5d40e7f0cbf04ae', 'hex'),
+  'a1400000-0000-4000-8000-000000000001', 'ai-minimization-v1', 'none',
+  2048, 256, '2026-07-17T16:00:00Z', '2026-08-17T16:00:00Z', 'draft'
+);
+
 create function public.internal_admin_activate_ai_provider_revision(
   p_auth_subject uuid,
   p_auth_session_id uuid,
@@ -195,6 +228,14 @@ begin
   where pricing.id = v_revision.pricing_fx_revision_id
   for update;
 
+  if v_revision.status = 'active' then
+    return jsonb_build_object(
+      'pricingRevisionId', v_pricing.id,
+      'revisionId', v_revision.id,
+      'status', 'active'
+    );
+  end if;
+
   if v_revision.status <> 'draft'
     or v_revision.provider <> 'openai'
     or v_revision.endpoint_id <> 'openai_responses_v1'
@@ -203,6 +244,8 @@ begin
     or v_revision.timeout_ms <> 8000
     or v_revision.retry_policy <> 'none'
     or v_revision.training_use
+    or jsonb_array_length(v_revision.source_refs) = 0
+    or octet_length(v_revision.canonical_hash) <> 32
     or v_revision.effective_from > clock_timestamp()
     or v_revision.expires_at <= clock_timestamp()
     or v_pricing.status <> 'draft'
@@ -233,6 +276,59 @@ begin
     'revisionId', v_revision.id,
     'status', 'active'
   );
+end;
+$$;
+
+create function public.internal_admin_activate_ai_provider_revision_requested(
+  p_auth_subject uuid,
+  p_auth_session_id uuid,
+  p_revision_id uuid,
+  p_request_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+declare
+  v_actor_id uuid;
+  v_existing private.technical_audit_events%rowtype;
+  v_response jsonb;
+begin
+  v_actor_id := private.require_superadmin_aal2(
+    p_auth_subject,
+    p_auth_session_id
+  );
+  select event.* into v_existing
+  from private.technical_audit_events event
+  where event.request_id = p_request_id and event.phase = 'outcome';
+  if found then
+    if v_existing.action <> 'ai_provider_revision_activate'
+      or v_existing.target_type <> 'ai_provider_revision'
+      or v_existing.target_id <> p_revision_id
+      or v_existing.actor_id <> v_actor_id
+    then
+      raise exception using errcode = '23505', message = 'idempotency_key_reused';
+    end if;
+    return jsonb_build_object(
+      'revisionId', p_revision_id,
+      'status', 'active'
+    );
+  end if;
+
+  v_response := public.internal_admin_activate_ai_provider_revision(
+    p_auth_subject,
+    p_auth_session_id,
+    p_revision_id
+  );
+  insert into private.technical_audit_events (
+    actor_id, action, target_type, target_id, result, request_id, phase,
+    original_actor_id
+  ) values (
+    v_actor_id, 'ai_provider_revision_activate', 'ai_provider_revision',
+    p_revision_id, 'success', p_request_id, 'outcome', v_actor_id
+  );
+  return v_response;
 end;
 $$;
 
@@ -613,7 +709,112 @@ begin
 end;
 $$;
 
+create function public.internal_ai_get_explanation_context(
+  p_auth_subject uuid,
+  p_auth_session_id uuid,
+  p_plan_version_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+declare
+  v_profile_id uuid;
+  v_version public.plan_versions%rowtype;
+  v_modules jsonb;
+begin
+  select version.*
+  into v_version
+  from public.plan_versions version
+  where version.id = p_plan_version_id;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'plan_version_not_found';
+  end if;
+  select plan.profile_id into v_profile_id
+  from public.plans plan
+  where plan.id = v_version.plan_id;
+  perform private.require_questionnaire_access(
+    p_auth_subject,
+    p_auth_session_id,
+    v_profile_id
+  );
+  if v_version.validation_status <> 'valid' then
+    raise exception using errcode = '23514', message = 'plan_validation_failed';
+  end if;
+
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'confidence', result.confidence,
+        'module', result.module,
+        'status', result.status,
+        'uncertaintyCount', jsonb_array_length(result.uncertainties)
+      ) order by result.module
+    ),
+    '[]'::jsonb
+  ) into v_modules
+  from public.module_results result
+  where result.plan_version_id = p_plan_version_id;
+
+  return jsonb_build_object(
+    'completeness', v_version.completeness,
+    'modules', v_modules,
+    'outputHash', encode(v_version.output_hash, 'hex'),
+    'planVersionId', v_version.id,
+    'profileId', v_profile_id
+  );
+end;
+$$;
+
+create function public.internal_ai_release_usage(
+  p_event_id uuid,
+  p_request_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+declare
+  v_event private.ai_usage_events%rowtype;
+begin
+  select usage.* into v_event
+  from private.ai_usage_events usage
+  where usage.id = p_event_id
+  for update;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'usage_event_not_found';
+  end if;
+  if v_event.request_id <> p_request_id then
+    raise exception using errcode = '42501', message = 'request_identity_mismatch';
+  end if;
+  if v_event.status = 'released' then
+    return jsonb_build_object('eventId', v_event.id, 'status', 'released');
+  end if;
+  if v_event.status <> 'reserved' then
+    raise exception using errcode = '55000', message = 'usage_not_releasable';
+  end if;
+
+  perform 1 from private.ai_budget_months
+  where month = v_event.budget_month for update;
+  update private.ai_usage_events
+  set status = 'released'
+  where id = v_event.id;
+  update private.ai_budget_months
+  set reserved_upper_bound_eur = greatest(
+        0, reserved_upper_bound_eur - v_event.reserved_upper_bound_eur
+      ),
+      version = version + 1,
+      updated_at = clock_timestamp()
+  where month = v_event.budget_month;
+  return jsonb_build_object('eventId', v_event.id, 'status', 'released');
+end;
+$$;
+
 revoke all on function public.internal_admin_activate_ai_provider_revision(uuid, uuid, uuid)
+from public, anon, authenticated;
+revoke all on function public.internal_admin_activate_ai_provider_revision_requested(uuid, uuid, uuid, uuid)
 from public, anon, authenticated;
 revoke all on function public.internal_ai_reserve_explanation(uuid, uuid, uuid, uuid, bytea, uuid)
 from public, anon, authenticated;
@@ -623,8 +824,14 @@ revoke all on function public.internal_ai_mark_pending(uuid, uuid)
 from public, anon, authenticated;
 revoke all on function public.internal_ai_store_explanation(uuid, uuid, bytea, jsonb)
 from public, anon, authenticated;
+revoke all on function public.internal_ai_get_explanation_context(uuid, uuid, uuid)
+from public, anon, authenticated;
+revoke all on function public.internal_ai_release_usage(uuid, uuid)
+from public, anon, authenticated;
 
 grant execute on function public.internal_admin_activate_ai_provider_revision(uuid, uuid, uuid)
+to service_role;
+grant execute on function public.internal_admin_activate_ai_provider_revision_requested(uuid, uuid, uuid, uuid)
 to service_role;
 grant execute on function public.internal_ai_reserve_explanation(uuid, uuid, uuid, uuid, bytea, uuid)
 to service_role;
@@ -633,4 +840,8 @@ to service_role;
 grant execute on function public.internal_ai_mark_pending(uuid, uuid)
 to service_role;
 grant execute on function public.internal_ai_store_explanation(uuid, uuid, bytea, jsonb)
+to service_role;
+grant execute on function public.internal_ai_get_explanation_context(uuid, uuid, uuid)
+to service_role;
+grant execute on function public.internal_ai_release_usage(uuid, uuid)
 to service_role;
