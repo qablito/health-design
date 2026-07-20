@@ -857,7 +857,15 @@ pnpm test --filter supplements
 
 **Commit sugerido:** `feat: add contextual wellness and clinical rules`
 
-## Tarea 13 — Seguimiento, impacto y recalculo selectivo
+## Tarea 13 — Seguimiento, impacto y recálculo selectivo
+
+> **Estado 2026-07-20:** `T13_COMPLETE_REMOTE_PASS`. Revisión semanal y diario
+> opcional, historial analítico, tendencias sin predicción, vigencia
+> contextual, impacto y candidatos manuales implementados. Migración y Edge
+> Function `plans` validadas en desarrollo con dos sesiones reales, aislamiento,
+> continuidad entre dispositivos, activación/descarte y limpieza completa.
+> Producción no cambió. Evidencia en
+> [`TASK_13_VERIFICATION.md`](../quality/TASK_13_VERIFICATION.md).
 
 **Resultado:** revisión semanal mínima, diario opcional y candidatos solo para
 los módulos afectados.

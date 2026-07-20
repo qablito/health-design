@@ -1,5 +1,10 @@
 # T13 — Seguimiento, impacto y recálculo selectivo
 
+> **Estado de ejecución (2026-07-20):** `T13_COMPLETE_REMOTE_PASS`. El contrato
+> está implementado, verificado localmente y validado en el entorno remoto de
+> desarrollo. Recibo reproducible en
+> [`TASK_13_VERIFICATION.md`](../quality/TASK_13_VERIFICATION.md).
+
 > **Para Codex:** usar `executing-plans`, `supabase` y pruebas primero para
 > ejecutar este plan por bloques.
 

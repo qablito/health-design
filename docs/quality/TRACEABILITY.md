@@ -31,10 +31,13 @@ validación remota. La adaptación clínica/farmacológica selectiva, hidrataci�
 sueño, suplementos y AEMPS/CIMA tienen recibo remoto de desarrollo
 `T12_COMPLETE_REMOTE_PASS` en
 [`TASK_12_VERIFICATION.md`](TASK_12_VERIFICATION.md); su experiencia web está
-verificada localmente dentro del mismo recibo. F47/F48, vigencia, tendencias y
-seguimiento continúan en T13; PDF e impresión, en T15; y la puerta AA final, en
-T19. Los productos comerciales continúan en T16 y supermercados/precios en
-T17.
+verificada localmente dentro del mismo recibo. La revisión semanal, el diario
+opcional, F47/F48, vigencia contextual, historial, tendencias básicas y
+recálculo selectivo tienen recibo remoto de desarrollo
+`T13_COMPLETE_REMOTE_PASS` en
+[`TASK_13_VERIFICATION.md`](TASK_13_VERIFICATION.md). PDF e impresión continúan
+en T15; la puerta AA final, en T19; los productos comerciales, en T16; y
+supermercados/precios, en T17.
 
 ## 1. Bloques de producto
 

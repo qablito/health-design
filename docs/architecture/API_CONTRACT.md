@@ -125,8 +125,10 @@ huérfana y se elimina, solo el superadministrador conserva acceso técnico.
 | `PUT /v1/profiles/{id}/draft` | guarda respuestas parciales | idempotente; permite campos sugeridos dinámicamente |
 | `POST /v1/profiles/{id}/draft/submit` | valida resumen final | no genera plan todavía |
 | `POST /v1/profiles/{id}/contexts/snapshot` | normaliza y congela contexto | rechaza menor de edad o unidades inválidas |
-| `POST /v1/profiles/{id}/labs` | registra 1–4 valores manuales o más si se permite | fecha/rango/confianza; no OCR en V1 |
-| `POST /v1/profiles/{id}/follow-ups` | guarda revisión semanal o diaria opcional | omisión no bloquea; reduce precisión |
+| `GET /v1/profiles/{id}/labs` | recupera historial, tendencia, vigencia y candidatos pendientes | usa todos los valores y destaca el más reciente; sin predicción |
+| `POST /v1/profiles/{id}/labs` | registra 1–4 valores manuales | fecha/rango/confianza; no OCR en V1 |
+| `GET /v1/profiles/{id}/follow-ups` | recupera revisiones y candidatos pendientes | aislado por perfil y disponible tras vincular otro dispositivo |
+| `POST /v1/profiles/{id}/follow-ups` | guarda revisión semanal, de cuatro semanas o diaria opcional | omisión del diario no bloquea; un cambio estructural exige completar contexto |
 | `PUT /v1/profiles/{id}/reminder-preferences` | guarda anclajes y recordatorios | apagados por defecto; opt-in explícito |
 
 Una respuesta desconocida o un conflicto clínico sin contestar se conserva como
