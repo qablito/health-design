@@ -35,6 +35,7 @@ import { generateTrainingPlan } from "./modules/training/index.ts";
 import { generateSupplementsPlan } from "./modules/supplements/index.ts";
 
 export * from "./decimal.ts";
+export * from "./impact/index.ts";
 
 export const UNIT_CONVERSION_VERSION = "unit-conversion-v1" as const;
 

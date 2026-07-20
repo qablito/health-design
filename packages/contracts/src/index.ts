@@ -3,6 +3,7 @@ import { z } from "zod";
 export * from "./access";
 export * from "./admin";
 export * from "./clinical";
+export * from "./follow-up";
 export * from "./hydration";
 export * from "./mobility";
 export * from "./nutrition";

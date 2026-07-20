@@ -931,4 +931,11 @@ export function generateSupplementsPlan(input: Input): SupplementsPlanContract {
 export { normalizeLabs };
 export const normalizeCurrentLabs = normalizeLabs;
 export const normalizeLabValues = normalizeLabs;
+export {
+  ANALYTE_UNITS as LAB_ANALYTE_UNITS,
+  analyteFor as labAnalyteFor,
+  convert as convertLabValue,
+  normalizedUnit as normalizeLabUnit,
+};
+export type { Analyte as LabAnalyteKey };
 export default generateSupplementsPlan;
