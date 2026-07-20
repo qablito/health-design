@@ -1,5 +1,9 @@
 # T14 — Adaptador Luna, contrato y presupuesto
 
+> **Estado final:** `T14_COMPLETE_REMOTE_PASS` — validación local y remota en
+> desarrollo completada el 2026-07-20. Evidencia reproducible en
+> [`TASK_14_VERIFICATION.md`](../quality/TASK_14_VERIFICATION.md).
+
 ## Estado inicial
 
 - Rama: `codex/task-14-luna`

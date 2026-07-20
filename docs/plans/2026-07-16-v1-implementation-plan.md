@@ -906,6 +906,14 @@ pnpm test:e2e -- follow-up.spec.ts
 
 ## Tarea 14 — Adaptador Luna, contrato y presupuesto
 
+> **Estado 2026-07-20:** `T14_COMPLETE_REMOTE_PASS`. Contrato cerrado,
+> fallback determinista, adaptador Luna, revisión AAL2, ledger transaccional,
+> cuota diaria y corte mensual de 10 EUR implementados. Migración y Edge
+> Function `plans` validadas en desarrollo con una llamada real liquidada,
+> persistencia única, hash normativo intacto y producción sin cambios.
+> Evidencia en
+> [`TASK_14_VERIFICATION.md`](../quality/TASK_14_VERIFICATION.md).
+
 **Resultado:** Luna mejora legibilidad sin autoridad sobre el plan y la
 aplicación nunca autoriza llamadas por encima del corte mensual.
 
