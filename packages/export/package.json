@@ -1,14 +1,16 @@
 {
-  "name": "@health-design/engine",
+  "name": "@health-design/export",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./nutrition": "./src/modules/nutrition/index.ts"
+    "./model": "./src/model.ts",
+    "./pdf": "./src/pdf.ts",
+    "./xlsx": "./src/xlsx.ts"
   },
   "dependencies": {
     "@health-design/contracts": "workspace:*",
-    "@health-design/domain": "workspace:*"
+    "@health-design/engine": "workspace:*"
   }
 }

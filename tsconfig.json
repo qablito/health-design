@@ -9,6 +9,11 @@
       "@health-design/contracts": ["./packages/contracts/src/index.ts"],
       "@health-design/domain": ["./packages/domain/src/index.ts"],
       "@health-design/engine": ["./packages/engine/src/index.ts"],
+      "@health-design/engine/nutrition": [
+        "./packages/engine/src/modules/nutrition/index.ts"
+      ],
+      "@health-design/export": ["./packages/export/src/index.ts"],
+      "@health-design/export/*": ["./packages/export/src/*"],
       "@health-design/test-fixtures/nutrition": [
         "./packages/test-fixtures/src/nutrition/index.ts"
       ],

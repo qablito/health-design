@@ -23,6 +23,9 @@ importers:
       '@health-design/engine':
         specifier: workspace:*
         version: link:packages/engine
+      '@health-design/export':
+        specifier: workspace:*
+        version: link:packages/export
       '@health-design/test-fixtures':
         specifier: workspace:*
         version: link:packages/test-fixtures
@@ -131,6 +134,15 @@ importers:
       '@health-design/domain':
         specifier: workspace:*
         version: link:../domain
+
+  packages/export:
+    dependencies:
+      '@health-design/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@health-design/engine':
+        specifier: workspace:*
+        version: link:../engine
 
   packages/test-fixtures: {}
 

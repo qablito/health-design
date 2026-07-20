@@ -5,6 +5,7 @@ export * from "./ai";
 export * from "./admin";
 export * from "./clinical";
 export * from "./follow-up";
+export * from "./exports";
 export * from "./hydration";
 export * from "./mobility";
 export * from "./nutrition";

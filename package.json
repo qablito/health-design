@@ -41,6 +41,7 @@
     "@health-design/contracts": "workspace:*",
     "@health-design/domain": "workspace:*",
     "@health-design/engine": "workspace:*",
+    "@health-design/export": "workspace:*",
     "@health-design/test-fixtures": "workspace:*",
     "@playwright/test": "1.58.2",
     "@supabase/supabase-js": "2.110.6",

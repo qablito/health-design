@@ -27,6 +27,7 @@ import {
 import { clinicalContextReviewCodes } from "../clinical-context.ts";
 import { PREPARATION_RULE_SET_VERSION, resolveFoodPreparation } from "./preparation.ts";
 
+export { addDecimals };
 export {
   LEGACY_PREPARATION_RULE_SET_VERSION,
   PREPARATION_RULE_SET_VERSION,
