@@ -15,8 +15,8 @@ la canonicalización, los hashes, la resolución mínima de restricciones y el
 corte cuestionario→borrador tienen recibo remoto de desarrollo
 `T8_COMPLETE_REMOTE_PASS` en
 [`TASK_08_VERIFICATION.md`](TASK_08_VERIFICATION.md). Los catálogos, fórmulas
-nutricionales y reglas clínicas completas continúan en T9–T12. El núcleo del
-catálogo federado genérico, su procedencia, cuarentena, revisión manual e
+nutricionales y reglas clínicas selectivas se distribuyen entre T9–T12. El
+núcleo del catálogo federado genérico, su procedencia, cuarentena, revisión manual e
 historia efectiva tiene recibo remoto de desarrollo `T9_COMPLETE_REMOTE_PASS`
 en [`TASK_09_VERIFICATION.md`](TASK_09_VERIFICATION.md): cierra el núcleo de
 REQ-DAT-001 y REQ-DAT-002, y la parte genérica de REQ-DAT-004 y REQ-DAT-007.
@@ -27,10 +27,14 @@ equivale al catálogo completo, cuya activación queda diferida como T10.1 sin
 bloquear el resto del plan. Entrenamiento opcional, movilidad modular y los 20
 activos visuales tienen recibo local `T11_COMPLETE_LOCAL_PASS` en
 [`TASK_11_VERIFICATION.md`](TASK_11_VERIFICATION.md); no hubo despliegue ni
-validación remota. La adaptación clínica, farmacológica, hidratación, sueño y
-suplementos continúan en T12; F47/F48 y el seguimiento, en T13; PDF e impresión,
-en T15; y la puerta AA final, en T19. Los productos comerciales continúan en
-T16 y supermercados/precios en T17.
+validación remota. La adaptación clínica/farmacológica selectiva, hidratación,
+sueño, suplementos y AEMPS/CIMA tienen recibo remoto de desarrollo
+`T12_COMPLETE_REMOTE_PASS` en
+[`TASK_12_VERIFICATION.md`](TASK_12_VERIFICATION.md); su experiencia web está
+verificada localmente dentro del mismo recibo. F47/F48, vigencia, tendencias y
+seguimiento continúan en T13; PDF e impresión, en T15; y la puerta AA final, en
+T19. Los productos comerciales continúan en T16 y supermercados/precios en
+T17.
 
 ## 1. Bloques de producto
 

@@ -803,6 +803,15 @@ CI=true pnpm exec playwright test tests/e2e/training-plan.spec.ts
 
 ## Tarea 12 — Hidratación, sueño, suplementos y reglas clínicas
 
+> **Estado 2026-07-20:** `T12_COMPLETE_REMOTE_PASS`. Hidratación, sueño,
+> suplementación, reglas clínicas/farmacológicas selectivas, búsqueda canónica
+> AEMPS/CIMA y experiencia web implementadas y validadas en desarrollo. La
+> completitud efectiva falla cerrado y cualquier cambio posterior del catálogo
+> clínico requiere activación manual. Producción no cambió. T13 conserva
+> seguimiento, vigencia, tendencias y recálculo selectivo; T15, PDF/impresión;
+> y T19, la puerta AA final. Véase
+> [`TASK_12_VERIFICATION.md`](../quality/TASK_12_VERIFICATION.md).
+
 **Resultado:** módulos reconciliados con contexto clínico/farmacológico
 selectivo y provisionalidad explícita.
 

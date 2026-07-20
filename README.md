@@ -4,10 +4,10 @@ Especificación de una aplicación web privada, por invitación, para generar y 
 
 ## Estado del proyecto
 
-- Estado actual: **Tareas 1–11 implementadas**. T1–T10 conservan sus recibos remotos cuando corresponde; T11 está verificada localmente y no requiere migraciones ni despliegue remoto.
-- Implementación funcional disponible: **acceso privado, vinculación de dispositivos, administración con impersonación, cuestionario adaptativo, ciclo de vida de planes, motor determinista, catálogo nutricional federado, alimentación, entrenamiento y movilidad**.
-- Evidencia: los recibos [T1](docs/quality/TASK_01_VERIFICATION.md)–[T10](docs/quality/TASK_10_VERIFICATION.md) y [T11](docs/quality/TASK_11_VERIFICATION.md) distinguen las pruebas locales de los recursos remotos realmente comprobados.
-- Próxima frontera: **T12**. La ampliación del catálogo CIQUAL completo queda diferida como **T10.1** y no bloquea esa tarea.
+- Estado actual: **Tareas 1–12 implementadas**. T1–T10 conservan sus recibos remotos cuando corresponde; T11 está verificada localmente y T12 tiene recibo remoto de desarrollo.
+- Implementación funcional disponible: **acceso privado, vinculación de dispositivos, administración con impersonación, cuestionario adaptativo, ciclo de vida de planes, motor determinista, catálogo nutricional federado, alimentación, entrenamiento, movilidad, hidratación, sueño, suplementación y adaptación clínica/farmacológica selectiva**.
+- Evidencia: los recibos [T1](docs/quality/TASK_01_VERIFICATION.md)–[T12](docs/quality/TASK_12_VERIFICATION.md) distinguen las pruebas locales de los recursos remotos realmente comprobados.
+- Próxima frontera: **T13**, seguimiento, impacto y recálculo selectivo. La ampliación del catálogo CIQUAL completo queda diferida como **T10.1** y no bloquea esa tarea.
 - Público inicial: adultos de 18 años o más, con España como contexto geográfico de V1.
 - Acceso inicial previsto: hasta 10 usuarios invitados.
 - Los scripts y datos de `supermercados/` y `datos/` son material exploratorio; no constituyen todavía un catálogo de producción ni demuestran cobertura comercial.
@@ -55,7 +55,7 @@ Ningún prototipo, prueba, dato extraído o texto generado por IA puede modifica
 - [docs/quality/SCENARIO_CATALOG.md](docs/quality/SCENARIO_CATALOG.md): banco inicial de 92 escenarios.
 - [docs/quality/TRACEABILITY.md](docs/quality/TRACEABILITY.md): bloques, requisitos, escenarios y puertas.
 - [docs/quality/ACCEPTANCE_GATES.md](docs/quality/ACCEPTANCE_GATES.md): ocho puertas obligatorias de salida.
-- [docs/quality/TASK_01_VERIFICATION.md](docs/quality/TASK_01_VERIFICATION.md)–[TASK_11_VERIFICATION.md](docs/quality/TASK_11_VERIFICATION.md): recibos reproducibles por tarea.
+- [docs/quality/TASK_01_VERIFICATION.md](docs/quality/TASK_01_VERIFICATION.md)–[TASK_12_VERIFICATION.md](docs/quality/TASK_12_VERIFICATION.md): recibos reproducibles por tarea.
 
 ### Entrega
 
