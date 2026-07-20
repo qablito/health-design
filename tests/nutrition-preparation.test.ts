@@ -4,7 +4,10 @@ import {
   LEGACY_FOOD_PREPARATION,
   NutritionWeekV2Schema,
 } from "@health-design/contracts";
-import type { EffectiveNutritionFood, QuestionnaireAnswers } from "@health-design/domain";
+import type {
+  EffectiveNutritionFood,
+  QuestionnaireAnswers,
+} from "@health-design/domain";
 import {
   PREPARATION_RULE_SET_VERSION,
   generateNutritionWeek,
@@ -112,9 +115,7 @@ describe("reglas deterministas de preparación T15A", () => {
       expect(food.preparation.status).toBe("complete");
       expect(food.substitutes).toHaveLength(2);
       expect(
-        food.substitutes.every(
-          ({ preparation }) => preparation.status === "complete",
-        ),
+        food.substitutes.every(({ preparation }) => preparation.status === "complete"),
       ).toBe(true);
     }
   });

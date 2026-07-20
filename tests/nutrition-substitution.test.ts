@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { LEGACY_FOOD_PREPARATION, NutritionWeekV2Schema } from "@health-design/contracts";
+import {
+  LEGACY_FOOD_PREPARATION,
+  NutritionWeekV2Schema,
+} from "@health-design/contracts";
 import type {
   NutritionDay,
   NutritionMeal,
@@ -85,17 +88,13 @@ function legacyWeek(plan: NutritionWeekV2): NutritionWeek {
   void preparation;
   return {
     ...legacy,
-    days: plan.days.map(
-      (day): NutritionDay => ({
-        ...day,
-        meals: day.meals.map(
-          (meal): NutritionMeal => ({
-            ...meal,
-            foods: meal.foods.map(legacyFood),
-          }),
-        ),
-      }),
-    ),
+    days: plan.days.map((day): NutritionDay => ({
+      ...day,
+      meals: day.meals.map((meal): NutritionMeal => ({
+        ...meal,
+        foods: meal.foods.map(legacyFood),
+      })),
+    })),
   };
 }
 

@@ -25,10 +25,7 @@ import {
   sumDecimals,
 } from "../../decimal.ts";
 import { clinicalContextReviewCodes } from "../clinical-context.ts";
-import {
-  PREPARATION_RULE_SET_VERSION,
-  resolveFoodPreparation,
-} from "./preparation.ts";
+import { PREPARATION_RULE_SET_VERSION, resolveFoodPreparation } from "./preparation.ts";
 
 export {
   LEGACY_PREPARATION_RULE_SET_VERSION,
@@ -1035,9 +1032,7 @@ function assignValidatedSubstitutes(
   return aggregateWeek({ ...plan, days });
 }
 
-function plannedFunctionsAreMeaningful(
-  foods: readonly PreparedPlannedFood[],
-): boolean {
+function plannedFunctionsAreMeaningful(foods: readonly PreparedPlannedFood[]): boolean {
   for (const function_ of ["protein", "carbohydrate_base", "fat"] as const) {
     const nutrient = nutrientForFunction(function_);
     const primary = foods.find((food) => food.function === function_);
@@ -1287,9 +1282,7 @@ export function generateNutritionWeek(input: {
   return assignValidatedSubstitutes(aggregated, input.answers, eligible);
 }
 
-function withoutSubstitutes(
-  food: PreparedPlannedFood,
-): PreparedPlannedFoodAlternative {
+function withoutSubstitutes(food: PreparedPlannedFood): PreparedPlannedFoodAlternative {
   const { substitutes, ...alternative_ } = food;
   if (substitutes.length !== 2) throw new Error("invalid_nutrition_substitutes");
   return alternative_;

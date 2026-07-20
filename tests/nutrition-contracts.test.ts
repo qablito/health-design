@@ -120,8 +120,7 @@ describe("contrato nutricional versionado T15A", () => {
     const current = v2Week();
     const firstFood = current.days[0]!.meals[0]!.foods[0]!;
     const firstSubstitute = firstFood.substitutes[0]!;
-    const { preparation, ...substituteWithoutPreparation } =
-      firstSubstitute;
+    const { preparation, ...substituteWithoutPreparation } = firstSubstitute;
     void preparation;
     const partial = {
       ...current,
