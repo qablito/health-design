@@ -8,6 +8,6 @@
     "@health-design/export/xlsx": "../../../packages/export/src/xlsx.ts",
     "@supabase/supabase-js": "npm:@supabase/supabase-js@2.110.6",
     "pdf-lib": "npm:pdf-lib@1.17.1",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs"
+    "xlsx": "../../../node_modules/xlsx/xlsx.mjs"
   }
 }

@@ -255,17 +255,18 @@ type InternalArtifact = Readonly<{
 
 function parseArtifact(value: unknown): InternalArtifact {
   const record = asRecord(firstRow(value));
+  const status = textField(record, "status");
   const artifact = {
     artifactId: textField(record, "artifactId"),
     createdAt: textField(record, "createdAt"),
     detail: textField(record, "detail"),
     format: textField(record, "format"),
     mimeType: textField(record, "mimeType"),
-    outcome: textField(record, "outcome"),
+    outcome: typeof record.outcome === "string" ? record.outcome : status,
     planVersionId: textField(record, "planVersionId"),
     presentation: textField(record, "presentation"),
     schemaVersion: record.schemaVersion,
-    status: textField(record, "status"),
+    status,
     storagePath: textField(record, "storagePath"),
   };
   if (
@@ -430,6 +431,7 @@ async function createArtifact(
   }
 
   let uploaded = false;
+  let stage: "model" | "render" | "upload" | "complete" = "model";
   try {
     const model = createExportModel({
       config,
@@ -438,6 +440,7 @@ async function createArtifact(
       planVersionId: route.planVersionId,
       rendererVersion: EXPORT_RENDERER_VERSION,
     });
+    stage = "render";
     const bytes =
       config.format === "pdf"
         ? await dependencies.renderPdf(model)
@@ -445,8 +448,10 @@ async function createArtifact(
     if (bytes.byteLength < 1 || bytes.byteLength > EXPORT_MAX_ARTIFACT_BYTES) {
       throw new ExportHttpError("ARTIFACT_TOO_LARGE", 422);
     }
+    stage = "upload";
     await dependencies.upload(reserved.storagePath, reserved.mimeType, bytes);
     uploaded = true;
+    stage = "complete";
     const completed = parseArtifact(
       await rpc(dependencies, "internal_complete_plan_export", {
         ...authArgs(auth),
@@ -468,6 +473,14 @@ async function createArtifact(
       }
     }
     await safeFail(dependencies, auth, reserved.artifactId);
+    console.error(
+      JSON.stringify({
+        error:
+          error instanceof ExportHttpError ? error.code : "UNEXPECTED_DEPENDENCY_ERROR",
+        event: "export_create_failed",
+        stage,
+      }),
+    );
     if (error instanceof ExportHttpError) throw error;
     throw new ExportHttpError("DEPENDENCY_UNAVAILABLE", 503);
   }

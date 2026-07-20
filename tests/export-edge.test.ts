@@ -116,10 +116,12 @@ function setup(options: SetupOptions = {}) {
         return Promise.resolve({ data: null, error: options.rpcError });
       }
       const data: Record<string, unknown> = {
-        internal_complete_plan_export: [{ ...ready, sizeBytes: args.p_size_bytes }],
+        internal_complete_plan_export: [
+          { ...ready, outcome: undefined, sizeBytes: args.p_size_bytes },
+        ],
         internal_confirm_profile_export_purge: [2],
         internal_fail_plan_export: [null],
-        internal_get_plan_export: [ready],
+        internal_get_plan_export: [{ ...ready, outcome: undefined }],
         internal_get_plan_export_source: [source],
         internal_list_profile_export_purge_paths: [
           [

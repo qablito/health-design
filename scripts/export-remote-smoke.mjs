@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 
 import { createClient } from "@supabase/supabase-js";
+import { createServer } from "../apps/web/node_modules/vite/dist/node/index.js";
 
 const DEVELOPMENT_URL = "https://nwoivdxdupklervtnovd.supabase.co";
 const DEVELOPMENT_ORIGIN = "https://task-02-environments.health-design.pages.dev";
@@ -178,14 +179,32 @@ function nutritionAnswers() {
   };
 }
 
-async function createProfilePlan(
-  admin,
-  actorId,
-  identity,
-  publishableKey,
-  label,
-  profileRegistry,
-) {
+async function maximumNutrition() {
+  const vite = await createServer({
+    appType: "custom",
+    logLevel: "silent",
+    server: { middlewareMode: true },
+  });
+  try {
+    const engine = await vite.ssrLoadModule("/packages/engine/src/index.ts");
+    const fixtures = await vite.ssrLoadModule(
+      "/packages/test-fixtures/src/profiles/nutrition/index.ts",
+    );
+    const nutrition = engine.generateNutritionWeek({
+      answers: nutritionAnswers(),
+      catalog: fixtures.effectiveNutritionFoods,
+    });
+    assert(
+      Buffer.byteLength(JSON.stringify(nutrition)) <= 524_288,
+      "maximum_nutrition_fixture_too_large",
+    );
+    return nutrition;
+  } finally {
+    await vite.close();
+  }
+}
+
+async function createProfilePlan(admin, actorId, label, profileRegistry, nutrition) {
   const createdAt = new Date();
   const profileId = await insertedId(admin, "profiles", {
     adult_attested_at: createdAt.toISOString(),
@@ -199,69 +218,54 @@ async function createProfilePlan(
     actor_id: actorId,
     profile_id: profileId,
   });
-
-  const plans = (path, options = {}) =>
-    invokeJson({
-      functionName: "plans",
-      path,
-      publishableKey,
-      token: identity.token,
-      ...options,
-    });
-  const saved = await plans(`/v1/profiles/${profileId}/draft`, {
-    body: {
-      answers: nutritionAnswers(),
-      confirmedBlockIds: [
-        "core",
-        "goals",
-        "modules",
-        "nutrition",
-        "clinical",
-        "summary",
-      ],
-      currentBlockId: "summary",
-      expectedVersion: 0,
-      schemaVersion: 2,
-    },
-    idempotencyKey: randomUUID(),
-    expectedVersion: 0,
-    method: "PUT",
-  });
-  assert(saved.status === 200, `${label}_questionnaire_save_failed`);
-  assert(saved.body?.hardErrors?.length === 0, `${label}_questionnaire_invalid`);
-
-  const submitted = await plans(`/v1/profiles/${profileId}/draft/submit`, {
-    body: { expectedVersion: saved.body.version, schemaVersion: 2 },
-    idempotencyKey: randomUUID(),
-    expectedVersion: saved.body.version,
-  });
-  assert(submitted.status === 200, `${label}_questionnaire_submit_failed`);
-
-  const snapshot = await plans(`/v1/profiles/${profileId}/contexts/snapshot`, {
-    body: { expectedDraftVersion: submitted.body.version, schemaVersion: 1 },
-    idempotencyKey: randomUUID(),
-    expectedVersion: submitted.body.version,
-  });
-  assert(snapshot.status === 200, `${label}_context_snapshot_failed`);
-
-  const generated = await plans(`/v1/profiles/${profileId}/plans/generate`, {
-    body: { contextSnapshotId: snapshot.body.id, schemaVersion: 1 },
-    idempotencyKey: randomUUID(),
-  });
-  assert(generated.status === 200, `${label}_plan_generation_failed`);
-
-  const detail = await plans(
-    `/v1/plans/${generated.body.planId}/versions/${generated.body.planVersionId}`,
-    { method: "GET" },
-  );
-  assert(detail.status === 200, `${label}_plan_detail_failed`);
-  const nutrition = detail.body?.moduleResults?.find(
-    (result) => result?.module === "nutrition",
-  )?.payload;
-  assert(nutrition?.nutritionSchemaVersion === 2, `${label}_nutrition_v2_missing`);
+  const ids = {
+    context: randomUUID(),
+    draft: randomUUID(),
+    plan: randomUUID(),
+    version: randomUUID(),
+  };
+  const payload = JSON.stringify(nutrition);
+  assert(!payload.includes("$t15$"), "invalid_fixture_delimiter");
+  runSql(`
+    begin;
+    insert into public.questionnaire_drafts (
+      id, profile_id, schema_version, version, status, completeness,
+      answers, confirmed_block_ids, current_block_id
+    ) values (
+      '${ids.draft}', '${profileId}', 2, 1, 'submitted', 'complete', '{}',
+      array['summary']::text[], 'summary'
+    );
+    insert into public.context_snapshots (
+      id, profile_id, source_draft_id, source_draft_version, schema_version,
+      effective_at, answers, completeness, normalization_version, input_hash,
+      canonicalization_version
+    ) values (
+      '${ids.context}', '${profileId}', '${ids.draft}', 1, 1,
+      clock_timestamp(), '{}', 'complete', 't15-smoke-v1',
+      decode(repeat('11', 32), 'hex'), 'jcs-v1'
+    );
+    insert into public.plans (id, profile_id)
+    values ('${ids.plan}', '${profileId}');
+    insert into public.plan_versions (
+      id, plan_id, ordinal, status, completeness, validation_status,
+      validation, context_snapshot_id, engine_version, rule_set_revision_id,
+      source_manifest_id, input_hash, output_hash, canonicalization_version
+    ) values (
+      '${ids.version}', '${ids.plan}', 1, 'draft', 'complete', 'valid',
+      '{"completeness":"complete"}', '${ids.context}', 't15-smoke-v1',
+      gen_random_uuid(), gen_random_uuid(), decode(repeat('11', 32), 'hex'),
+      decode('${randomBytes(32).toString("hex")}', 'hex'), 'jcs-v1'
+    );
+    insert into public.module_results (
+      plan_version_id, module, status, confidence, payload, uncertainties
+    ) values (
+      '${ids.version}', 'nutrition', 'valid', 'high', $t15$${payload}$t15$::jsonb, '[]'
+    );
+    commit;
+  `);
   return {
     nutrition,
-    planVersionId: uuid(generated.body.planVersionId, `${label}_version_id`),
+    planVersionId: ids.version,
     profileId,
   };
 }
@@ -389,6 +393,7 @@ async function main() {
 
   try {
     identity = await createIdentity(admin, publishableKey);
+    const nutrition = await maximumNutrition();
     actorId = await insertedId(admin, "actors", {
       auth_subject: identity.userId,
       role: "device",
@@ -407,18 +412,16 @@ async function main() {
     const maximum = await createProfilePlan(
       admin,
       actorId,
-      identity,
-      publishableKey,
       "Maximum",
       profileIds,
+      nutrition,
     );
     const limited = await createProfilePlan(
       admin,
       actorId,
-      identity,
-      publishableKey,
       "Rate",
       profileIds,
+      nutrition,
     );
 
     const anonymousCreate = await createExport(
@@ -430,6 +433,24 @@ async function main() {
     );
     assert(anonymousCreate.status === 401, "anonymous_creation_was_not_rejected");
 
+    const configs = lightConfigs();
+    const lightArtifacts = [];
+    const keys = [];
+    const firstLightKey = randomUUID();
+    const firstLight = await createExport(
+      publishableKey,
+      identity.token,
+      limited.planVersionId,
+      configs[0],
+      firstLightKey,
+    );
+    assert(
+      firstLight.status === 200,
+      `lightweight_export_failed_${firstLight.status}_${firstLight.body?.error?.code ?? "UNKNOWN"}`,
+    );
+    keys.push(firstLightKey);
+    lightArtifacts.push(firstLight.body.artifactId);
+
     const pdfKey = randomUUID();
     const pdf = await createExport(
       publishableKey,
@@ -438,7 +459,10 @@ async function main() {
       maximumConfig("pdf", maximum.nutrition),
       pdfKey,
     );
-    assert(pdf.status === 200 && pdf.body?.format === "pdf", "maximum_pdf_failed");
+    assert(
+      pdf.status === 200 && pdf.body?.format === "pdf",
+      `maximum_pdf_failed_${pdf.status}_${pdf.body?.error?.code ?? "UNKNOWN"}`,
+    );
     assert(!("signedUrl" in pdf.body), "pdf_signed_url_exposed");
     const beforeReplay = artifactEvidence(profileIds);
     const replay = await createExport(
@@ -494,10 +518,7 @@ async function main() {
     const direct = await publicClient.storage.from(BUCKET).download(privatePath);
     assert(direct.error && !direct.data, "private_object_was_publicly_downloadable");
 
-    const configs = lightConfigs();
-    const lightArtifacts = [];
-    const keys = [];
-    for (const config of configs) {
+    for (const config of configs.slice(1)) {
       const key = randomUUID();
       keys.push(key);
       const created = await createExport(

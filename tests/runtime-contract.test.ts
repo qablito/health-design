@@ -135,9 +135,7 @@ describe("contrato compartido entre runtimes", () => {
 
     expect(config).toMatch(/\[functions\.exports\][\s\S]*?verify_jwt\s*=\s*true/);
     expect(denoConfig.imports?.["pdf-lib"]).toBe("npm:pdf-lib@1.17.1");
-    expect(denoConfig.imports?.xlsx).toBe(
-      "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs",
-    );
+    expect(denoConfig.imports?.xlsx).toBe("../../../node_modules/xlsx/xlsx.mjs");
   });
 
   it("aplica CORS exacto y rechaza orígenes ajenos", async () => {
