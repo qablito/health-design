@@ -88,10 +88,10 @@ legible, controles accesibles y ausencia de desbordamiento horizontal.
 | SHA-256 interno de datos | `4dfdb5c111af281f60ffdaeb983e0c88788d7377137da9d757a1595a412347a5` |
 | Verificación | PASS con `hdiutil verify`, montaje de solo lectura y checksums internos |
 
-Existen cinco DMG precríticos (`T8`, `T9`, `T10`, `T12` y `T13`). La rotación
-contractual es de cuatro, pero no se eliminó `T8` porque esa eliminación
-permanente requiere confirmación explícita del usuario. No afecta al código,
-al despliegue ni a la reversibilidad de T13.
+La copia precrítica de `T8` se eliminó permanentemente tras la autorización
+explícita del usuario. La rotación contractual queda satisfecha con cuatro DMG
+precríticos (`T9`, `T10`, `T12` y `T13`), sin afectar al código, al despliegue
+ni a la reversibilidad de T13.
 
 ## Despliegue remoto de desarrollo
 
