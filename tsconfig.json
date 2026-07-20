@@ -17,6 +17,9 @@
       "@health-design/test-fixtures/nutrition": [
         "./packages/test-fixtures/src/nutrition/index.ts"
       ],
+      "@health-design/test-fixtures/exports": [
+        "./packages/test-fixtures/src/exports/index.ts"
+      ],
       "@health-design/test-fixtures/nutrition-plan": [
         "./packages/test-fixtures/src/profiles/nutrition/index.ts"
       ]

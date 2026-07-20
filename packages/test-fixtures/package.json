@@ -4,7 +4,12 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./exports": "./src/exports/index.ts",
     "./nutrition": "./src/nutrition/index.ts",
     "./nutrition-plan": "./src/profiles/nutrition/index.ts"
+  },
+  "dependencies": {
+    "@health-design/engine": "workspace:*",
+    "@health-design/export": "workspace:*"
   }
 }
