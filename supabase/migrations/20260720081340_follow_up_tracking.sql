@@ -41,6 +41,7 @@ create table public.lab_batches (
   base_plan_version_id uuid not null
     references public.plan_versions (id) on delete restrict,
   schema_version integer not null default 1 check (schema_version = 1),
+  request_recalculation boolean not null default false,
   created_at timestamptz not null default clock_timestamp()
 );
 
@@ -278,11 +279,13 @@ declare
   v_response jsonb;
 begin
   if p_scope not in ('daily', 'weekly', 'four_week')
+    or p_observed_at is null
     or p_observed_at > clock_timestamp() + interval '1 day'
     or jsonb_typeof(p_values) <> 'object'
     or p_values = '{}'::jsonb
     or octet_length(p_values::text) > 131072
     or p_completeness not in ('complete', 'provisional')
+    or p_request_recalculation is null
     or octet_length(p_idempotency_key_digest) <> 32
     or octet_length(p_request_digest) <> 32
   then
@@ -361,6 +364,7 @@ create function private.record_lab_batch(
   p_auth_session_id uuid,
   p_profile_id uuid,
   p_base_plan_version_id uuid,
+  p_request_recalculation boolean,
   p_observations jsonb,
   p_idempotency_key_digest bytea,
   p_request_digest bytea
@@ -387,6 +391,7 @@ begin
     or octet_length(p_observations::text) > 65536
     or octet_length(p_idempotency_key_digest) <> 32
     or octet_length(p_request_digest) <> 32
+    or p_request_recalculation is null
   then
     raise exception using errcode = '22023', message = 'invalid_input';
   end if;
@@ -406,8 +411,12 @@ begin
   v_plan_id := private.require_active_plan_version(
     p_profile_id, p_base_plan_version_id
   );
-  insert into public.lab_batches (profile_id, plan_id, base_plan_version_id)
-  values (p_profile_id, v_plan_id, p_base_plan_version_id)
+  insert into public.lab_batches (
+    profile_id, plan_id, base_plan_version_id, request_recalculation
+  )
+  values (
+    p_profile_id, v_plan_id, p_base_plan_version_id, p_request_recalculation
+  )
   returning id into v_batch_id;
 
   for v_item in select value from jsonb_array_elements(p_observations)
@@ -459,6 +468,7 @@ begin
 
   select jsonb_build_object(
     'batchId', v_batch_id,
+    'requestRecalculation', p_request_recalculation,
     'observations', jsonb_agg(private.lab_observation_json(id) order by ordinal)
   ) into v_response
   from unnest(v_observation_ids) with ordinality as inserted(id, ordinal);
@@ -539,10 +549,10 @@ begin
   perform private.require_questionnaire_access(
     p_auth_subject, p_auth_session_id, p_profile_id
   );
-  perform private.require_active_plan_version(
-    p_profile_id, p_base_plan_version_id
-  );
   if p_source_kind not in ('follow_up', 'lab_batch')
+    or p_source_id is null
+    or p_effective_at is null
+    or p_effective_at > clock_timestamp() + interval '1 day'
     or jsonb_typeof(p_answers) <> 'object'
     or octet_length(p_answers::text) > 262144
     or p_completeness not in ('complete', 'provisional')
@@ -599,6 +609,10 @@ begin
     end if;
     return private.context_snapshot_json(v_existing_origin.context_snapshot_id);
   end if;
+
+  perform private.require_active_plan_version(
+    p_profile_id, p_base_plan_version_id
+  );
 
   insert into public.context_snapshots (
     profile_id, source_draft_id, source_draft_version, schema_version,
@@ -679,6 +693,7 @@ create function public.internal_record_lab_batch(
   p_auth_session_id uuid,
   p_profile_id uuid,
   p_base_plan_version_id uuid,
+  p_request_recalculation boolean,
   p_observations jsonb,
   p_idempotency_key_digest bytea,
   p_request_digest bytea
@@ -690,7 +705,8 @@ set search_path = pg_catalog
 as $$
   select private.record_lab_batch(
     p_auth_subject, p_auth_session_id, p_profile_id, p_base_plan_version_id,
-    p_observations, p_idempotency_key_digest, p_request_digest
+    p_request_recalculation, p_observations,
+    p_idempotency_key_digest, p_request_digest
   )
 $$;
 
@@ -748,7 +764,7 @@ revoke all on function private.record_follow_up(
 revoke all on function private.list_follow_ups(uuid, uuid, uuid, integer)
 from public, anon, authenticated, service_role;
 revoke all on function private.record_lab_batch(
-  uuid, uuid, uuid, uuid, jsonb, bytea, bytea
+  uuid, uuid, uuid, uuid, boolean, jsonb, bytea, bytea
 ) from public, anon, authenticated, service_role;
 revoke all on function private.list_lab_observations(uuid, uuid, uuid, integer)
 from public, anon, authenticated, service_role;
@@ -762,7 +778,7 @@ revoke all on function public.internal_record_follow_up(
 revoke all on function public.internal_list_follow_ups(uuid, uuid, uuid, integer)
 from public, anon, authenticated;
 revoke all on function public.internal_record_lab_batch(
-  uuid, uuid, uuid, uuid, jsonb, bytea, bytea
+  uuid, uuid, uuid, uuid, boolean, jsonb, bytea, bytea
 ) from public, anon, authenticated;
 revoke all on function public.internal_list_lab_observations(
   uuid, uuid, uuid, integer
@@ -777,7 +793,7 @@ grant execute on function public.internal_record_follow_up(
 grant execute on function public.internal_list_follow_ups(uuid, uuid, uuid, integer)
 to service_role;
 grant execute on function public.internal_record_lab_batch(
-  uuid, uuid, uuid, uuid, jsonb, bytea, bytea
+  uuid, uuid, uuid, uuid, boolean, jsonb, bytea, bytea
 ) to service_role;
 grant execute on function public.internal_list_lab_observations(
   uuid, uuid, uuid, integer

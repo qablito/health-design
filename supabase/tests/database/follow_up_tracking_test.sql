@@ -234,6 +234,7 @@ select public.internal_record_lab_batch(
   '21000000-0000-4000-8000-000000013101',
   '51000000-0000-4000-8000-000000013101',
   '74000000-0000-4000-8000-000000013101',
+  false,
   '[
     {
       "analyte":"b12","name":"Vitamina B12","value":"180",
@@ -274,6 +275,7 @@ select is(
     '21000000-0000-4000-8000-000000013101',
     '51000000-0000-4000-8000-000000013101',
     '74000000-0000-4000-8000-000000013101',
+    false,
     '[{"analyte":"b12","name":"Vitamina B12","value":"180","unit":"pg/mL","source":"laboratory","confidence":"high","measurement":{"kind":"exact","date":"2026-07-01"},"referenceRange":{"minimum":"200","maximum":"900","unit":"pg/mL"}},{"analyte":"folate","name":"Folato","value":"4.2","source":"self_reported","confidence":"unknown","measurement":{"kind":"unknown"}}]'::jsonb,
     decode(repeat('d1', 32), 'hex'), decode(repeat('d2', 32), 'hex')
   ),

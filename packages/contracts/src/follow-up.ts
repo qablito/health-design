@@ -65,7 +65,7 @@ const TrainingValuesSchema = z
 
 const HydrationValuesSchema = z
   .object({
-    averageMl: z.number().int().min(0).max(12_000).optional(),
+    averageMl: z.number().int().min(0).max(10_000).optional(),
     issues: z.enum(["none", "mild", "important"]).optional(),
   })
   .strict();
@@ -237,6 +237,7 @@ export const LabBatchCreateRequestSchema = z
   .object({
     basePlanVersionId: z.uuid(),
     observations: z.array(LabObservationInputSchema).min(1).max(4),
+    requestRecalculation: z.boolean().optional(),
     schemaVersion: z.literal(FOLLOW_UP_SCHEMA_VERSION),
   })
   .strict();
@@ -249,6 +250,21 @@ export const LabObservationSchema = LabObservationInputSchema.extend({
   measuredTo: z.iso.date().nullable(),
   profileId: z.uuid(),
 }).strict();
+
+export const LabBatchRecordAckSchema = z
+  .object({
+    batchId: z.uuid(),
+    observations: z.array(LabObservationSchema).min(1).max(4),
+    requestRecalculation: z.boolean(),
+  })
+  .strict();
+
+export const LabObservationListSchema = z
+  .object({
+    observations: z.array(LabObservationSchema).max(500),
+    profileId: z.uuid(),
+  })
+  .strict();
 
 export const LabTrendSchema = z.enum(["up", "down", "stable", "insufficient"]);
 export const LabInterpretationSchema = z.enum([
@@ -275,6 +291,7 @@ export const LabHistoryItemSchema = z
     interpretation: LabInterpretationSchema,
     latestObservationId: z.uuid(),
     latestValue: DecimalSchema,
+    name: z.string().min(1).max(80),
     trend: LabTrendSchema,
     unit: z.string().min(1).max(32).nullable(),
   })
@@ -302,6 +319,7 @@ export const FollowUpImpactSchema = z
 export const FollowUpMutationAckSchema = z
   .object({
     candidate: PlanCandidateAckSchema.nullable(),
+    contextUpdateRequired: z.boolean(),
     entry: FollowUpEntrySchema,
     impact: FollowUpImpactSchema,
   })

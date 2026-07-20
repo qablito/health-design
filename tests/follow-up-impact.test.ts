@@ -144,6 +144,25 @@ describe("impacto selectivo T13", () => {
         { analyte: "b12", measuredAt: "2026-07-01", unit: "mg/dL", value: "2" },
       ]).trend,
     ).toBe("insufficient");
+
+    expect(
+      analyzeLabHistory([
+        {
+          analyte: "b12",
+          measuredAt: "2026-06-01",
+          recordedAt: "2026-06-01T08:00:00.000Z",
+          unit: "pg/mL",
+          value: "220",
+        },
+        {
+          analyte: "b12",
+          measuredAt: null,
+          recordedAt: "2026-07-20T08:00:00.000Z",
+          unit: "pg/mL",
+          value: "180",
+        },
+      ]).trend,
+    ).toBe("insufficient");
   });
 
   it("usa vigencia curada y deja desconocido lo no modelado", () => {

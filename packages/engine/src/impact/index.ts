@@ -163,6 +163,7 @@ export function analyzeFollowUpImpact(input: FollowUpImpactInput): FollowUpImpac
 type LabHistoryValue = Readonly<{
   analyte: LabAnalyte;
   measuredAt: string | null;
+  recordedAt?: string;
   referenceRange?: Readonly<{
     maximum?: string;
     minimum?: string;
@@ -182,7 +183,9 @@ export type LabHistoryAnalysis = Readonly<{
 
 function chronological(values: readonly LabHistoryValue[]): LabHistoryValue[] {
   return [...values].sort((left, right) =>
-    (left.measuredAt ?? "").localeCompare(right.measuredAt ?? ""),
+    (left.measuredAt ?? left.recordedAt ?? "").localeCompare(
+      right.measuredAt ?? right.recordedAt ?? "",
+    ),
   );
 }
 
@@ -216,7 +219,7 @@ export function analyzeLabHistory(
   const previousNumber =
     previous && targetUnit ? comparableValue(previous, targetUnit) : null;
   const trend =
-    latestNumber === null || previousNumber === null
+    latest.measuredAt === null || latestNumber === null || previousNumber === null
       ? "insufficient"
       : latestNumber === previousNumber
         ? "stable"

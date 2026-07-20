@@ -4,6 +4,14 @@ import {
   ContextSnapshotInternalSchema,
   CONTEXT_CANONICALIZATION_VERSION,
   CONTEXT_NORMALIZATION_VERSION,
+  FollowUpCreateRequestSchema,
+  FollowUpEntrySchema,
+  FollowUpHistorySchema,
+  FollowUpMutationAckSchema,
+  LabBatchCreateRequestSchema,
+  LabBatchRecordAckSchema,
+  LabMutationAckSchema,
+  LabObservationListSchema,
   PlanCandidateAckSchema,
   PlanCandidateCreateRequestSchema,
   PlanEngineResultSchema,
@@ -19,9 +27,16 @@ import {
   type PlanEngineResult,
   type PlanModuleResultInput,
 } from "@health-design/contracts";
+import { analyzeFollowUpImpact } from "@health-design/engine";
 
 import { canonicalJson, hashSha256Hex } from "../_shared/access-security.ts";
 import { resolveCors, type EdgeEnvironment } from "../_shared/cors.ts";
+import {
+  applyFollowUpToAnswers,
+  applyLabsToAnswers,
+  buildLabHistory,
+  enrichLabObservations,
+} from "./follow-up.ts";
 
 const MAX_BODY_BYTES = 256 * 1024;
 const MAX_DEPTH = 12;
@@ -57,6 +72,10 @@ type PlanRoute =
   | { kind: "plan-versions"; planId: string }
   | { kind: "plan-version"; planId: string; versionId: string }
   | { kind: "plan-version-activate"; planId: string; versionId: string }
+  | { kind: "follow-up-list"; profileId: string }
+  | { kind: "follow-up-create"; profileId: string }
+  | { kind: "lab-list"; profileId: string }
+  | { kind: "lab-create"; profileId: string }
   | { kind: "candidate-create"; planId: string }
   | { candidateId: string; kind: "candidate-activate" }
   | { candidateId: string; kind: "candidate-discard" };
@@ -133,6 +152,25 @@ function parseRoute(url: URL, method: string): PlanRoute | null {
   const versionIndex = url.pathname.lastIndexOf("/v1/");
   if (versionIndex < 0) return null;
   const path = url.pathname.slice(versionIndex);
+
+  const trackingMatch = new RegExp(
+    `^/v1/profiles/(${UUID_PATTERN})/(follow-ups|labs)$`,
+    "i",
+  ).exec(path);
+  if (trackingMatch?.[1] && trackingMatch[2]) {
+    if (trackingMatch[2] === "follow-ups" && method === "GET") {
+      return { kind: "follow-up-list", profileId: trackingMatch[1] };
+    }
+    if (trackingMatch[2] === "follow-ups" && method === "POST") {
+      return { kind: "follow-up-create", profileId: trackingMatch[1] };
+    }
+    if (trackingMatch[2] === "labs" && method === "GET") {
+      return { kind: "lab-list", profileId: trackingMatch[1] };
+    }
+    if (trackingMatch[2] === "labs" && method === "POST") {
+      return { kind: "lab-create", profileId: trackingMatch[1] };
+    }
+  }
 
   const profileMatch = new RegExp(
     `^/v1/profiles/(${UUID_PATTERN})/(contexts/snapshot|plans/generate)$`,
@@ -315,6 +353,9 @@ function mapRpcError(error: RpcError): PlanHttpError {
   }
   if (error.message?.includes("draft_not_submitted")) {
     return new PlanHttpError("DRAFT_NOT_SUBMITTED", 422);
+  }
+  if (error.code === "22023" || error.message?.includes("invalid_input")) {
+    return new PlanHttpError("INVALID_INPUT", 422);
   }
   if (error.message?.includes("not_found") || error.code === "P0002") {
     return new PlanHttpError("NOT_FOUND", 404);
@@ -599,6 +640,452 @@ async function createCandidate(
   return ack;
 }
 
+type PlanHistory = ReturnType<typeof PlanHistorySchema.parse>;
+type PlanVersionDetail = ReturnType<typeof PlanVersionDetailSchema.parse>;
+
+async function loadPlanBase(
+  dependencies: PlanLifecycleDependencies,
+  auth: AuthContext,
+  profileId: string,
+  baseVersionId: string,
+): Promise<{
+  baseContext: ContextSnapshotInternal;
+  baseVersion: PlanVersionDetail;
+  history: PlanHistory;
+}> {
+  const history = parseDependency(
+    PlanHistorySchema,
+    firstRow(
+      await rpc(dependencies, "internal_get_profile_current_plan", {
+        ...authArgs(auth),
+        p_profile_id: profileId,
+      }),
+    ),
+  );
+  if (!history.versions.some(({ id }) => id === baseVersionId)) {
+    throw new PlanHttpError("NOT_FOUND", 404);
+  }
+  const baseVersion = parseDependency(
+    PlanVersionDetailSchema,
+    firstRow(
+      await rpc(dependencies, "internal_get_plan_version", {
+        ...authArgs(auth),
+        p_plan_id: history.planId,
+        p_plan_version_id: baseVersionId,
+      }),
+    ),
+  );
+  return {
+    baseContext: await getContext(
+      dependencies,
+      auth,
+      profileId,
+      baseVersion.contextSnapshotId,
+    ),
+    baseVersion,
+    history,
+  };
+}
+
+async function createDerivedContext(
+  input: Readonly<{
+    answers: ContextSnapshotInternal["answers"];
+    auth: AuthContext;
+    baseContext: ContextSnapshotInternal;
+    baseVersionId: string;
+    completeness: "complete" | "provisional";
+    dependencies: PlanLifecycleDependencies;
+    effectiveAt: string;
+    profileId: string;
+    sourceId: string;
+    sourceKind: "follow_up" | "lab_batch";
+  }>,
+): Promise<ContextSnapshotInternal> {
+  const inputHash = await hashSha256Hex(
+    canonicalJson({
+      answers: input.answers,
+      baseContextSnapshotId: input.baseContext.id,
+      sourceId: input.sourceId,
+      sourceKind: input.sourceKind,
+    }),
+  );
+  const ack = parseDependency(
+    ContextSnapshotAckSchema,
+    firstRow(
+      await rpc(input.dependencies, "internal_create_derived_context_snapshot", {
+        ...authArgs(input.auth),
+        p_answers: input.answers,
+        p_base_plan_version_id: input.baseVersionId,
+        p_completeness: input.completeness,
+        p_effective_at: input.effectiveAt,
+        p_input_hash: `\\x${inputHash}`,
+        p_profile_id: input.profileId,
+        p_source_id: input.sourceId,
+        p_source_kind: input.sourceKind,
+      }),
+    ),
+  );
+  return ContextSnapshotInternalSchema.parse({ ...ack, answers: input.answers });
+}
+
+async function addConservativeFollowUpReview(
+  result: PlanEngineResult,
+  conservativeModules: readonly string[],
+  reasons: readonly string[],
+): Promise<PlanEngineResult> {
+  if (conservativeModules.length === 0) return result;
+  const conservative = new Set(conservativeModules);
+  const moduleResults = result.moduleResults.map((moduleResult) =>
+    conservative.has(moduleResult.module) && moduleResult.status !== "not_requested"
+      ? {
+          ...moduleResult,
+          confidence: "low" as const,
+          status: "provisional" as const,
+          uncertainties: [
+            ...moduleResult.uncertainties,
+            {
+              code: "FOLLOW_UP_IMPORTANT_SIGNAL",
+              messageKey: "follow_up.uncertainty.important_signal",
+              module: moduleResult.module,
+            },
+          ],
+        }
+      : moduleResult,
+  );
+  const safetyFindings = [
+    ...result.safetyFindings,
+    ...moduleResults
+      .filter(
+        ({ module, status }) => conservative.has(module) && status !== "not_requested",
+      )
+      .map(({ module }) => ({
+        actionLevel: "immediate_conservative" as const,
+        code: "FOLLOW_UP_IMPORTANT_SIGNAL",
+        evidenceRef: "internal:follow-up-v1",
+        messageKey: "follow_up.safety.important_signal",
+        module,
+      })),
+  ];
+  const validation = {
+    ...result.validation,
+    completeness: "provisional",
+    followUpReview: [...reasons],
+  };
+  const outputHash = await hashSha256Hex(
+    canonicalJson({
+      moduleResults,
+      safetyFindings,
+      validation,
+      validationStatus: result.validationStatus,
+    }),
+  );
+  return PlanEngineResultSchema.parse({
+    ...result,
+    completeness: "provisional",
+    moduleResults,
+    outputHash,
+    safetyFindings,
+    validation,
+  });
+}
+
+async function createTrackingCandidate(
+  input: Readonly<{
+    auth: AuthContext;
+    baseContext: ContextSnapshotInternal;
+    baseVersion: PlanVersionDetail;
+    change: PlanContextChange;
+    changeKind: "follow_up_changed" | "lab_result_changed";
+    changePayload: Record<string, unknown>;
+    context: ContextSnapshotInternal;
+    dependencies: PlanLifecycleDependencies;
+    digests: Awaited<ReturnType<typeof mutationDigests>>;
+    history: PlanHistory;
+    reasons: readonly string[];
+    conservativeModules?: readonly string[];
+  }>,
+): Promise<ReturnType<typeof PlanCandidateAckSchema.parse>> {
+  const baseModuleResults = input.baseVersion.moduleResults.map((moduleResult) => ({
+    confidence: moduleResult.confidence,
+    module: moduleResult.module,
+    payload: moduleResult.payload,
+    status: moduleResult.status,
+    uncertainties: moduleResult.uncertainties,
+  }));
+  const engineResult = await runEngine(input.dependencies, {
+    baseContext: input.baseContext,
+    baseModuleResults,
+    change: input.change,
+    context: input.context,
+  });
+  const result = await addConservativeFollowUpReview(
+    engineResult,
+    input.conservativeModules ?? [],
+    input.reasons,
+  );
+  const ack = parseDependency(
+    PlanCandidateAckSchema,
+    firstRow(
+      await rpc(input.dependencies, "internal_create_plan_candidate", {
+        ...authArgs(input.auth),
+        ...engineRpcArgs(result),
+        p_base_version_id: input.baseVersion.id,
+        p_change_kind: input.changeKind,
+        p_change_payload: input.changePayload,
+        p_context_snapshot_id: input.context.id,
+        p_diff: {
+          affectedModules: input.change.affectedModules,
+          changedFields: input.change.changedFields,
+        },
+        p_expected_version: input.history.aggregateVersion,
+        p_idempotency_key_digest: input.digests.keyDigest,
+        p_impact: input.change.impact,
+        p_plan_id: input.history.planId,
+        p_request_digest: input.digests.requestDigest,
+      }),
+    ),
+  );
+  if (
+    ack.completeness !==
+    (input.context.completeness === "complete" && result.completeness === "complete"
+      ? "complete"
+      : "provisional")
+  ) {
+    throw new PlanHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  }
+  return ack;
+}
+
+async function createFollowUp(
+  request: Request,
+  route: Extract<PlanRoute, { kind: "follow-up-create" }>,
+  dependencies: PlanLifecycleDependencies,
+  auth: AuthContext,
+): Promise<unknown> {
+  const body = parse(FollowUpCreateRequestSchema, await readJson(request));
+  const digests = await mutationDigests(request, body, route);
+  const { baseContext, baseVersion, history } = await loadPlanBase(
+    dependencies,
+    auth,
+    route.profileId,
+    body.basePlanVersionId,
+  );
+  const impact = analyzeFollowUpImpact({
+    activeModules: baseContext.answers.activeModules ?? [],
+    requestRecalculation: body.requestRecalculation ?? false,
+    scope: body.scope,
+    values: body.values,
+  });
+  const contextUpdateRequired = (body.values.common?.materialChanges.length ?? 0) > 0;
+  const entry = parseDependency(
+    FollowUpEntrySchema,
+    firstRow(
+      await rpc(dependencies, "internal_record_follow_up", {
+        ...authArgs(auth),
+        p_base_plan_version_id: body.basePlanVersionId,
+        p_completeness: contextUpdateRequired ? "provisional" : "complete",
+        p_idempotency_key_digest: digests.keyDigest,
+        p_observed_at: body.observedAt,
+        p_profile_id: route.profileId,
+        p_request_digest: digests.requestDigest,
+        p_request_recalculation: body.requestRecalculation ?? false,
+        p_scope: body.scope,
+        p_values: body.values,
+      }),
+    ),
+  );
+
+  let candidate: ReturnType<typeof PlanCandidateAckSchema.parse> | null = null;
+  if (
+    impact.candidateRequired &&
+    !contextUpdateRequired &&
+    impact.affectedModules.length > 0
+  ) {
+    const answers = applyFollowUpToAnswers(baseContext.answers, body.values);
+    const context = await createDerivedContext({
+      answers,
+      auth,
+      baseContext,
+      baseVersionId: body.basePlanVersionId,
+      completeness:
+        impact.conservativeModules.length > 0
+          ? "provisional"
+          : baseContext.completeness,
+      dependencies,
+      effectiveAt: body.observedAt,
+      profileId: route.profileId,
+      sourceId: entry.id,
+      sourceKind: "follow_up",
+    });
+    candidate = await createTrackingCandidate({
+      auth,
+      baseContext,
+      baseVersion,
+      change: {
+        affectedModules: impact.affectedModules,
+        changedFields: impact.reasons,
+        impact: impact.impact,
+      },
+      changeKind: "follow_up_changed",
+      changePayload: {
+        followUpId: entry.id,
+        reasons: impact.reasons,
+        scope: body.scope,
+      },
+      conservativeModules: impact.conservativeModules,
+      context,
+      dependencies,
+      digests,
+      history,
+      reasons: impact.reasons,
+    });
+  }
+  return FollowUpMutationAckSchema.parse({
+    candidate,
+    contextUpdateRequired,
+    entry,
+    impact,
+  });
+}
+
+async function listLabs(
+  route: Extract<PlanRoute, { kind: "lab-list" }>,
+  dependencies: PlanLifecycleDependencies,
+  auth: AuthContext,
+): Promise<unknown> {
+  const history = parseDependency(
+    PlanHistorySchema,
+    firstRow(
+      await rpc(dependencies, "internal_get_profile_current_plan", {
+        ...authArgs(auth),
+        p_profile_id: route.profileId,
+      }),
+    ),
+  );
+  if (!history.activeVersionId) throw new PlanHttpError("NOT_FOUND", 404);
+  const { baseContext } = await loadPlanBase(
+    dependencies,
+    auth,
+    route.profileId,
+    history.activeVersionId,
+  );
+  const stored = parseDependency(
+    LabObservationListSchema,
+    firstRow(
+      await rpc(dependencies, "internal_list_lab_observations", {
+        ...authArgs(auth),
+        p_limit: 500,
+        p_profile_id: route.profileId,
+      }),
+    ),
+  );
+  return buildLabHistory({
+    answers: baseContext.answers,
+    now: dependencies.now().toISOString(),
+    observations: stored.observations,
+    profileId: route.profileId,
+  });
+}
+
+async function createLabBatch(
+  request: Request,
+  route: Extract<PlanRoute, { kind: "lab-create" }>,
+  dependencies: PlanLifecycleDependencies,
+  auth: AuthContext,
+): Promise<unknown> {
+  const body = parse(LabBatchCreateRequestSchema, await readJson(request));
+  const digests = await mutationDigests(request, body, route);
+  const { baseContext, baseVersion, history } = await loadPlanBase(
+    dependencies,
+    auth,
+    route.profileId,
+    body.basePlanVersionId,
+  );
+  const batch = parseDependency(
+    LabBatchRecordAckSchema,
+    firstRow(
+      await rpc(dependencies, "internal_record_lab_batch", {
+        ...authArgs(auth),
+        p_base_plan_version_id: body.basePlanVersionId,
+        p_idempotency_key_digest: digests.keyDigest,
+        p_observations: enrichLabObservations(body.observations),
+        p_profile_id: route.profileId,
+        p_request_digest: digests.requestDigest,
+        p_request_recalculation: body.requestRecalculation ?? false,
+      }),
+    ),
+  );
+  const stored = parseDependency(
+    LabObservationListSchema,
+    firstRow(
+      await rpc(dependencies, "internal_list_lab_observations", {
+        ...authArgs(auth),
+        p_limit: 500,
+        p_profile_id: route.profileId,
+      }),
+    ),
+  );
+  const labHistory = buildLabHistory({
+    answers: baseContext.answers,
+    now: dependencies.now().toISOString(),
+    observations: stored.observations,
+    profileId: route.profileId,
+  });
+  const inserted = new Set(batch.observations.map(({ id }) => id));
+  const outOfRange = labHistory.items.filter(
+    ({ interpretation, latestObservationId }) =>
+      inserted.has(latestObservationId) &&
+      (interpretation === "above_range" || interpretation === "below_range"),
+  );
+  const activeModules = new Set(baseContext.answers.activeModules ?? []);
+  const affectedModules: PlanContextChange["affectedModules"] = activeModules.has(
+    "supplements",
+  )
+    ? ["supplements"]
+    : [];
+  let candidate: ReturnType<typeof PlanCandidateAckSchema.parse> | null = null;
+  if (
+    affectedModules.length > 0 &&
+    (outOfRange.length > 0 || body.requestRecalculation === true)
+  ) {
+    const answers = applyLabsToAnswers(baseContext.answers, batch.observations);
+    const context = await createDerivedContext({
+      answers,
+      auth,
+      baseContext,
+      baseVersionId: body.basePlanVersionId,
+      completeness: baseContext.completeness,
+      dependencies,
+      effectiveAt: dependencies.now().toISOString(),
+      profileId: route.profileId,
+      sourceId: batch.batchId,
+      sourceKind: "lab_batch",
+    });
+    candidate = await createTrackingCandidate({
+      auth,
+      baseContext,
+      baseVersion,
+      change: {
+        affectedModules,
+        changedFields: ["labValues"],
+        impact: "module_only",
+      },
+      changeKind: "lab_result_changed",
+      changePayload: {
+        batchId: batch.batchId,
+        outOfRangeAnalytes: outOfRange.map(({ analyte }) => analyte),
+        recalculationRequested: body.requestRecalculation ?? false,
+      },
+      context,
+      dependencies,
+      digests,
+      history,
+      reasons: ["lab_values_updated"],
+    });
+  }
+  return LabMutationAckSchema.parse({ candidate, history: labHistory });
+}
+
 async function dispatch(
   request: Request,
   route: PlanRoute,
@@ -621,6 +1108,27 @@ async function dispatch(
   }
   if (route.kind === "plan-generate") {
     return generatePlan(request, route, dependencies, auth);
+  }
+  if (route.kind === "follow-up-list") {
+    return parseDependency(
+      FollowUpHistorySchema,
+      firstRow(
+        await rpc(dependencies, "internal_list_follow_ups", {
+          ...authArgs(auth),
+          p_limit: 500,
+          p_profile_id: route.profileId,
+        }),
+      ),
+    );
+  }
+  if (route.kind === "follow-up-create") {
+    return createFollowUp(request, route, dependencies, auth);
+  }
+  if (route.kind === "lab-list") {
+    return listLabs(route, dependencies, auth);
+  }
+  if (route.kind === "lab-create") {
+    return createLabBatch(request, route, dependencies, auth);
   }
   if (route.kind === "plan-versions") {
     return parseDependency(

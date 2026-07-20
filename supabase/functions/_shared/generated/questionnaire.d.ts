@@ -179,10 +179,10 @@ export declare const QuestionnaireAnswersSchema: z.ZodObject<{
     }>>>;
     mobilityAnchors: z.ZodOptional<z.ZodArray<z.ZodEnum<{
         evening: "evening";
-        after_training: "after_training";
-        before_training: "before_training";
-        daily_break: "daily_break";
         morning: "morning";
+        daily_break: "daily_break";
+        before_training: "before_training";
+        after_training: "after_training";
     }>>>;
     mobilityDiscomfortDetails: z.ZodOptional<z.ZodArray<z.ZodString>>;
     mobilityDiscomfortStatus: z.ZodOptional<z.ZodEnum<{
@@ -541,10 +541,10 @@ export declare const QuestionnaireDraftSaveRequestSchema: z.ZodObject<{
         }>>>;
         mobilityAnchors: z.ZodOptional<z.ZodArray<z.ZodEnum<{
             evening: "evening";
-            after_training: "after_training";
-            before_training: "before_training";
-            daily_break: "daily_break";
             morning: "morning";
+            daily_break: "daily_break";
+            before_training: "before_training";
+            after_training: "after_training";
         }>>>;
         mobilityDiscomfortDetails: z.ZodOptional<z.ZodArray<z.ZodString>>;
         mobilityDiscomfortStatus: z.ZodOptional<z.ZodEnum<{
@@ -1051,10 +1051,10 @@ export declare const QuestionnaireDraftSchema: z.ZodObject<{
         }>>>;
         mobilityAnchors: z.ZodOptional<z.ZodArray<z.ZodEnum<{
             evening: "evening";
-            after_training: "after_training";
-            before_training: "before_training";
-            daily_break: "daily_break";
             morning: "morning";
+            daily_break: "daily_break";
+            before_training: "before_training";
+            after_training: "after_training";
         }>>>;
         mobilityDiscomfortDetails: z.ZodOptional<z.ZodArray<z.ZodString>>;
         mobilityDiscomfortStatus: z.ZodOptional<z.ZodEnum<{
@@ -1337,11 +1337,11 @@ export declare const QuestionnairePublicSchemaResponseSchema: z.ZodObject<{
             number: "number";
             boolean: "boolean";
             date: "date";
-            time: "time";
             entities: "entities";
             multi: "multi";
             single: "single";
             text: "text";
+            time: "time";
         }>;
         label: z.ZodString;
         options: z.ZodOptional<z.ZodArray<z.ZodObject<{

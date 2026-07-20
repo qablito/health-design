@@ -104,9 +104,11 @@ describe("contratos de seguimiento T13", () => {
           value: "4.2",
         },
       ],
+      requestRecalculation: true,
       schemaVersion: 1,
     });
     expect(parsed.observations).toHaveLength(2);
+    expect(parsed.requestRecalculation).toBe(true);
     expect(parsed.observations[1]?.unit).toBeUndefined();
 
     expect(
