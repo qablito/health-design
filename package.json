@@ -27,6 +27,7 @@
     "test:browser": "vitest run --config vitest.browser.config.ts",
     "test:db": "supabase test db",
     "test:e2e": "playwright test",
+    "test:t13:remote": "node scripts/follow-up-remote-smoke.mjs",
     "test:supply-chain": "node scripts/verify-supply-chain.mjs",
     "typecheck": "tsc --noEmit --project tsconfig.json",
     "validate:exercise-assets": "node scripts/validate-exercise-assets.mjs",

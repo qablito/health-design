@@ -889,12 +889,20 @@ async function createFollowUp(
     route.profileId,
     body.basePlanVersionId,
   );
-  const impact = analyzeFollowUpImpact({
-    activeModules: baseContext.answers.activeModules ?? [],
-    requestRecalculation: body.requestRecalculation ?? false,
-    scope: body.scope,
-    values: body.values,
-  });
+  let impact: ReturnType<typeof analyzeFollowUpImpact>;
+  try {
+    impact = analyzeFollowUpImpact({
+      activeModules: baseContext.answers.activeModules ?? [],
+      requestRecalculation: body.requestRecalculation ?? false,
+      scope: body.scope,
+      values: body.values,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "inactive_follow_up_module") {
+      throw new PlanHttpError("INVALID_INPUT", 422);
+    }
+    throw error;
+  }
   const contextUpdateRequired = (body.values.common?.materialChanges.length ?? 0) > 0;
   const entry = parseDependency(
     FollowUpEntrySchema,

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { LabMutationAckSchema, type PlanEngineResult } from "@health-design/contracts";
+import {
+  LabMutationAckSchema,
+  QuestionnaireAnswersSchema,
+  type ContextSnapshotInternal,
+  type PlanEngineResult,
+} from "@health-design/contracts";
 
 import {
   handlePlanLifecycle,
@@ -208,7 +213,7 @@ const engineResult: PlanEngineResult = {
 };
 
 function setup(options?: {
-  answers?: typeof answers;
+  answers?: ContextSnapshotInternal["answers"];
   labObservations?: readonly [typeof previousLab, typeof newLab] | readonly [];
 }) {
   const calls: Array<{ args: Record<string, unknown>; name: string }> = [];
@@ -404,6 +409,35 @@ describe("Edge de seguimiento T13", () => {
     });
     expect(current.engineCalls).toHaveLength(0);
     expect(current.calls.at(-1)?.name).toBe("internal_record_follow_up");
+  });
+
+  it("rechaza como entrada inválida los datos de un módulo inactivo", async () => {
+    const current = setup({
+      answers: QuestionnaireAnswersSchema.parse({
+        ...answers,
+        activeModules: ["nutrition", "hydration", "sleep", "supplements"],
+        trainingMode: "none",
+      }),
+    });
+    const response = await handlePlanLifecycle(
+      request(
+        `/v1/profiles/${profileId}/follow-ups`,
+        "POST",
+        weekly({
+          common: { adherence: 4, importantSymptoms: [], materialChanges: [] },
+          training: { completedSessions: 2, plannedSessions: 3 },
+        }),
+      ),
+      current.dependencies,
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      error: { code: "INVALID_INPUT" },
+    });
+    expect(current.calls.map(({ name }) => name)).not.toContain(
+      "internal_record_follow_up",
+    );
   });
 
   it("recomienda un cambio de volumen de hasta 10 % sin mutar ni regenerar", async () => {
