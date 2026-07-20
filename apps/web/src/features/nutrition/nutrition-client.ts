@@ -1,4 +1,6 @@
 import {
+  AIExplanationRequestSchema,
+  AIExplanationResponseSchema,
   ContextSnapshotAckSchema,
   ContextSnapshotCreateRequestSchema,
   PlanGenerationRequestSchema,
@@ -7,6 +9,7 @@ import {
   PlanMutationRequestSchema,
   PlanVersionDetailSchema,
   type ContextSnapshotAck,
+  type AIExplanationResponse,
   type PlanMutationAck,
   type PlanVersionDetail,
 } from "@health-design/contracts";
@@ -184,6 +187,15 @@ export function createNutritionPlanClient(dependencies: Dependencies) {
         method: "POST",
         parse: (value) => ContextSnapshotAckSchema.parse(value),
         path: `/v1/profiles/${profileId}/contexts/snapshot`,
+      });
+    },
+    explainVersion(versionId: string): Promise<AIExplanationResponse> {
+      const body = AIExplanationRequestSchema.parse({ schemaVersion: 1 });
+      return request({
+        body,
+        method: "POST",
+        parse: (value) => AIExplanationResponseSchema.parse(value),
+        path: `/v1/plans/${versionId}/explanation`,
       });
     },
     generate(profileId: string, contextSnapshotId: string): Promise<PlanMutationAck> {

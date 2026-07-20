@@ -13,6 +13,7 @@ import type {
 } from "@health-design/contracts";
 
 import { accessClient, type ProfileAccessSummary } from "../access/access-client";
+import { AIExplanation } from "../ai-explanation/AIExplanation";
 import {
   isPlanNotFound,
   mutationAckFromHistory,
@@ -983,6 +984,9 @@ export function WellnessApp() {
               {ack.status === "active" ? "Plan activo" : "Activar plan"}
             </button>
           </section>
+          {ack.validationStatus === "valid" && !modules.validationBlocked ? (
+            <AIExplanation planVersionId={ack.planVersionId} />
+          ) : null}
           {modules.validationBlocked || modules.invalidModules.length > 0 ? (
             <div className="message error-message" role="alert">
               El resultado no supera la validación y no se muestra ni puede activarse.

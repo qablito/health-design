@@ -9,6 +9,7 @@ import {
 import { applyNutritionSubstitution } from "@health-design/engine";
 
 import { accessClient, type ProfileAccessSummary } from "../access/access-client";
+import { AIExplanation } from "../ai-explanation/AIExplanation";
 import { questionnaireClient } from "../questionnaire/questionnaire-client";
 import { clinicalFindingLabel } from "../wellness/wellness-view";
 import {
@@ -526,6 +527,9 @@ export function NutritionApp() {
                 </div>
               ) : null}
             </section>
+          ) : null}
+          {ack?.validationStatus === "valid" ? (
+            <AIExplanation planVersionId={ack.planVersionId} />
           ) : null}
           <section className="nutrition-targets" aria-label="Objetivos nutricionales">
             <article>

@@ -10,6 +10,7 @@ import {
 } from "@health-design/contracts";
 
 import { accessClient, type ProfileAccessSummary } from "../access/access-client";
+import { AIExplanation } from "../ai-explanation/AIExplanation";
 import {
   NutritionPlanApiError,
   nutritionPlanClient,
@@ -896,6 +897,10 @@ export function TrainingApp() {
             {announcement}
           </p>
         </section>
+      ) : null}
+
+      {ack && hasResult && ack.validationStatus === "valid" ? (
+        <AIExplanation planVersionId={ack.planVersionId} />
       ) : null}
 
       {training?.kind === "plan" && training.plan.mode === "generated" ? (

@@ -311,6 +311,36 @@ async function mockNutritionApi(page: Page, options: { provisional?: boolean } =
       });
       return;
     }
+    if (path.endsWith(`/v1/plans/${planVersionId}/explanation`)) {
+      await route.fulfill({
+        body: JSON.stringify({
+          planOutputHash: "b".repeat(64),
+          planVersionId,
+          schemaVersion: 1,
+          segments: [
+            {
+              messageKey: `ai.explanation.summary.${completeness}`,
+              slot: "summary",
+              text:
+                completeness === "complete"
+                  ? "Tu plan está completo y ha superado la validación interna."
+                  : "Tu plan es provisional porque todavía contiene incertidumbres visibles.",
+            },
+            {
+              messageKey: `ai.explanation.nutrition.${options.provisional ? "provisional" : "valid"}`,
+              slot: "nutrition",
+              text: options.provisional
+                ? "La alimentación se mantiene provisional y conserva sus incertidumbres visibles."
+                : "La alimentación está validada para el contexto registrado.",
+            },
+          ],
+          source: "luna",
+        }),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
     if (path.endsWith(`/v1/plans/${planId}/versions/${planVersionId}/activate`)) {
       currentStatus = "active";
       currentAggregateVersion = 2;
@@ -346,6 +376,12 @@ test("genera, recalcula una sustitución y activa solo el borrador original", as
   ).toBeVisible();
   await expect(page.getByText("Día 7", { exact: true })).toBeVisible();
   await expect(page.getByRole("option", { name: /·/ }).first()).toBeAttached();
+
+  await page.getByRole("button", { name: "Explicar mi plan" }).click();
+  await expect(page.getByText("Explicación seleccionada por Luna")).toBeVisible();
+  await expect(
+    page.getByText("La alimentación está validada para el contexto registrado."),
+  ).toBeVisible();
 
   const dailyBefore = await page.locator(".nutrition-toolbar span").textContent();
   const firstSubstitution = page.getByRole("combobox", { name: /^Sustituir / }).first();
