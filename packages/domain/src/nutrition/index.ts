@@ -53,6 +53,19 @@ export type NutritionUncertainty = Readonly<{
   messageKey: string;
 }>;
 
+export type FoodPreparation = Readonly<{
+  instruction: string;
+  ruleId: string;
+  ruleSetVersion: string;
+  status: "complete" | "provisional";
+}>;
+
+export type NutritionPreparation = Readonly<{
+  completeness: "complete" | "provisional";
+  ruleSetVersion: string;
+  uncertainties: readonly NutritionUncertainty[];
+}>;
+
 export type NutritionTargets = Readonly<{
   completeness: "complete" | "provisional";
   energy: Readonly<{
@@ -104,6 +117,14 @@ export type PlannedFood = PlannedFoodAlternative &
     substitutes: readonly PlannedFoodAlternative[];
   }>;
 
+export type PreparedPlannedFoodAlternative = PlannedFoodAlternative &
+  Readonly<{ preparation: FoodPreparation }>;
+
+export type PreparedPlannedFood = PreparedPlannedFoodAlternative &
+  Readonly<{
+    substitutes: readonly PreparedPlannedFoodAlternative[];
+  }>;
+
 export type NutritionMeal = Readonly<{
   anchor: NutritionMealAnchor;
   flexibleWindowMinutes: number;
@@ -117,6 +138,12 @@ export type NutritionDay = Readonly<{
   meals: readonly NutritionMeal[];
   totals: NutritionTotals;
 }>;
+
+export type NutritionMealV2 = Omit<NutritionMeal, "foods"> &
+  Readonly<{ foods: readonly PreparedPlannedFood[] }>;
+
+export type NutritionDayV2 = Omit<NutritionDay, "meals"> &
+  Readonly<{ meals: readonly NutritionMealV2[] }>;
 
 export type ShoppingListItem = Readonly<{
   amountG: string;
@@ -139,3 +166,10 @@ export type NutritionWeek = Readonly<{
   }>;
   weekTotals: NutritionTotals;
 }>;
+
+export type NutritionWeekV2 = Omit<NutritionWeek, "days"> &
+  Readonly<{
+    days: readonly NutritionDayV2[];
+    nutritionSchemaVersion: 2;
+    preparation: NutritionPreparation;
+  }>;
