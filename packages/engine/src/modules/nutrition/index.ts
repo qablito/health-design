@@ -925,6 +925,9 @@ function nutritionValidation(
 
 function aggregateWeek(plan: NutritionWeekV2): NutritionWeekV2 {
   const days = plan.days.map(aggregateDay);
+  const inheritedLegacyPreparation = plan.preparation.uncertainties.some(
+    ({ code }) => code === "PREPARATION_NOT_VERSIONED",
+  );
   const missingPreparationKeys = [
     ...new Set(
       days.flatMap(({ meals }) =>
@@ -941,15 +944,19 @@ function aggregateWeek(plan: NutritionWeekV2): NutritionWeekV2 {
   const aggregated = {
     ...plan,
     days,
-    preparation: {
-      completeness:
-        missingPreparationKeys.length === 0 ? ("complete" as const) : ("provisional" as const),
-      ruleSetVersion: PREPARATION_RULE_SET_VERSION,
-      uncertainties: missingPreparationKeys.map((canonicalFoodKey) => ({
-        code: "PREPARATION_RULE_MISSING",
-        messageKey: `nutrition.preparation.rule_missing.${canonicalFoodKey}`,
-      })),
-    },
+    preparation: inheritedLegacyPreparation
+      ? plan.preparation
+      : {
+          completeness:
+            missingPreparationKeys.length === 0
+              ? ("complete" as const)
+              : ("provisional" as const),
+          ruleSetVersion: PREPARATION_RULE_SET_VERSION,
+          uncertainties: missingPreparationKeys.map((canonicalFoodKey) => ({
+            code: "PREPARATION_RULE_MISSING",
+            messageKey: `nutrition.preparation.rule_missing.${canonicalFoodKey}`,
+          })),
+        },
     shoppingList: shoppingList(days),
     weekTotals: addTotals(days.map(({ totals }) => totals)),
   };
