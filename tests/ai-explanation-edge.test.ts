@@ -50,6 +50,7 @@ function setup(options?: {
   providerError?: AIProviderCallError;
   providerOutput?: unknown;
   reservationStatus?: "rejected" | "reserved";
+  storeError?: boolean;
 }) {
   const calls: Array<{ args: Record<string, unknown>; name: string }> = [];
   const providerInputs: unknown[] = [];
@@ -82,6 +83,12 @@ function setup(options?: {
     randomUUID: () => requestId,
     rpc: (name, args) => {
       calls.push({ args, name });
+      if (name === "internal_ai_store_explanation" && options?.storeError) {
+        return Promise.resolve({
+          data: null,
+          error: { message: "explanation_store_unavailable" },
+        });
+      }
       const data: Record<string, unknown> = {
         internal_ai_get_explanation_context: {
           completeness: "complete",
@@ -209,6 +216,17 @@ describe("Explicación opcional del plan", () => {
     expect(current.calls.map(({ name }) => name)).toContain(
       "internal_ai_release_usage",
     );
+  });
+
+  it("mantiene el plan utilizable si falla la persistencia de la explicación", async () => {
+    const current = setup({ storeError: true });
+    const response = await handleAIExplanation(request(), current.dependencies);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      source: "deterministic_fallback",
+    });
+    expect(current.calls.map(({ name }) => name)).toContain("internal_ai_settle_usage");
   });
 
   it("activa la revisión preparada mediante una solicitud AAL2 registrada", async () => {

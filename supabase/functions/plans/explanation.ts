@@ -364,12 +364,16 @@ export async function handleAIExplanation(
     );
     if (settled.status !== "settled") return response(fallback, 200, cors.headers);
     const explanation = resolveAIExplanation(input, provider.output);
-    await rpc(dependencies, "internal_ai_store_explanation", {
-      p_event_id: eventId,
-      p_input_manifest_hash: `\\x${await hashSha256Hex(canonicalJson(input))}`,
-      p_output_segments: explanation.segments,
-      p_request_id: requestId,
-    });
+    try {
+      await rpc(dependencies, "internal_ai_store_explanation", {
+        p_event_id: eventId,
+        p_input_manifest_hash: `\\x${await hashSha256Hex(canonicalJson(input))}`,
+        p_output_segments: explanation.segments,
+        p_request_id: requestId,
+      });
+    } catch {
+      return response(fallback, 200, cors.headers);
+    }
     return response(AIExplanationResponseSchema.parse(explanation), 200, cors.headers);
   } catch (error) {
     const message = error instanceof Error ? error.message : "internal_error";

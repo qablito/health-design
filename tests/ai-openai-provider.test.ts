@@ -93,4 +93,14 @@ describe("Adaptador de Responses API", () => {
       costUncertain: true,
     });
   });
+
+  it("no inicia la petición si falta la clave del proveedor", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const call = createOpenAIProviderCaller(() => {
+      throw new Error("missing_openai_api_key");
+    }, fetcher);
+
+    await expect(call(input, config)).rejects.toThrow("missing_openai_api_key");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
 });

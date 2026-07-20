@@ -56,6 +56,7 @@ export function createOpenAIProviderCaller(
     input: AIExplanationInput,
     config: ProviderConfig,
   ): Promise<ProviderResult> {
+    const key = apiKey();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
     let response: Response;
@@ -134,7 +135,7 @@ export function createOpenAIProviderCaller(
           truncation: "disabled",
         }),
         headers: {
-          authorization: `Bearer ${apiKey()}`,
+          authorization: `Bearer ${key}`,
           "content-type": "application/json",
         },
         method: "POST",
