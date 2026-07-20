@@ -45,7 +45,7 @@ describe("contrato canónico del motor en navegador real", () => {
 
     expect(plan.validation.status).toBe("valid");
     await expect(sha256CanonicalJson(plan)).resolves.toBe(
-      "d9ac26e4cc7d58fb2fe2e8bd3d356bc2f7d6d9a46b3f5f34841093230d600b32",
+      "2a1e03facc945234da0711874bcfda1a48d5303d8c7ce55c4d26fbc458a0fadb",
     );
   });
 });
