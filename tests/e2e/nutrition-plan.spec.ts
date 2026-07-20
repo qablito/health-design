@@ -374,7 +374,7 @@ test("genera, recalcula una sustitución y activa solo el borrador original", as
   await expect(
     page.getByRole("region", { name: "Objetivos nutricionales" }),
   ).toBeVisible();
-  await expect(page.getByText("Día 7", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Día 7", exact: true })).toBeVisible();
   await expect(page.getByRole("option", { name: /·/ }).first()).toBeAttached();
 
   await page.getByRole("button", { name: "Explicar mi plan" }).click();
@@ -418,7 +418,10 @@ test("selector accesible alterna ingredientes y preparación sin ocultar nutrien
   const ingredients = page.getByRole("radio", {
     name: "Ingredientes y cantidades",
   });
-  const preparation = page.getByRole("radio", { name: "Preparación breve" });
+  const preparation = page.getByRole("radio", {
+    exact: true,
+    name: "Preparación breve",
+  });
   const firstFood = nutritionWeek.days[0]!.meals[0]!.foods[0]!;
   const firstReplacement = firstFood.substitutes[0]!;
 

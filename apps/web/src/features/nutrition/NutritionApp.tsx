@@ -4,6 +4,7 @@ import {
   NutritionWeekSchema,
   NutritionWeekV2Schema,
   normalizeNutritionWeek,
+  type ExportChoice,
   type NutritionWeekV2Contract,
   type PlanMutationAck,
   type PlanVersionDetail,
@@ -12,6 +13,7 @@ import { applyNutritionSubstitution } from "@health-design/engine";
 
 import { accessClient, type ProfileAccessSummary } from "../access/access-client";
 import { AIExplanation } from "../ai-explanation/AIExplanation";
+import { ExportPanel } from "../exports/ExportPanel";
 import { questionnaireClient } from "../questionnaire/questionnaire-client";
 import { clinicalFindingLabel } from "../wellness/wellness-view";
 import {
@@ -89,6 +91,7 @@ type NutritionDetailState = Readonly<{
   ack: PlanMutationAck;
   original?: NutritionWeekV2Contract;
   plan?: NutritionWeekV2Contract;
+  planOutputHash?: string;
   provisionalReason?: string;
   review?: NutritionReview;
 }>;
@@ -130,6 +133,7 @@ function readNutritionDetail(
     ack,
     original: plan,
     plan,
+    planOutputHash: detail.outputHash,
     review,
   };
 }
@@ -203,11 +207,13 @@ export function NutritionApp() {
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string>();
   const [localPreview, setLocalPreview] = useState(false);
+  const [choices, setChoices] = useState<Record<string, 0 | 1 | 2>>({});
   const [mealView, setMealView] = useState<"ingredients" | "preparation">(
     "ingredients",
   );
   const [original, setOriginal] = useState<NutritionWeekV2Contract>();
   const [plan, setPlan] = useState<NutritionWeekV2Contract>();
+  const [planOutputHash, setPlanOutputHash] = useState<string>();
   const [profiles, setProfiles] = useState<ProfileAccessSummary[]>([]);
   const [profileId, setProfileId] = useState<string>();
   const [provisionalReason, setProvisionalReason] = useState<string>();
@@ -237,6 +243,8 @@ export function NutritionApp() {
     setOriginal(undefined);
     setPlan(undefined);
     setLocalPreview(false);
+    setChoices({});
+    setPlanOutputHash(undefined);
     setProvisionalReason(undefined);
     setReview(undefined);
     setError(undefined);
@@ -262,6 +270,7 @@ export function NutritionApp() {
         setAck(state.ack);
         setOriginal(state.original);
         setPlan(state.plan);
+        setPlanOutputHash(state.planOutputHash);
         setProvisionalReason(state.provisionalReason);
         setReview(state.review);
         setRestoreStatus("loaded");
@@ -314,6 +323,8 @@ export function NutritionApp() {
       setReview(state.review);
       setOriginal(state.original);
       setPlan(state.plan);
+      setPlanOutputHash(state.planOutputHash);
+      setChoices({});
       setRestoreStatus("loaded");
     } catch (generationError) {
       setError(message(generationError));
@@ -345,19 +356,51 @@ export function NutritionApp() {
     dayIndex: number,
     mealIndex: number,
     foodIndex: number,
-    substituteIndex: number,
+    choice: 0 | 1 | 2,
   ) {
-    if (!plan) return;
-    const next = applyNutritionSubstitution(plan, {
-      dayIndex,
-      foodIndex,
-      mealIndex,
-      substituteIndex,
-    });
+    if (!original) return;
+    const key = `${dayIndex}:${mealIndex}:${foodIndex}`;
+    const nextChoices = { ...choices };
+    if (choice === 0) delete nextChoices[key];
+    else nextChoices[key] = choice;
+    let next = NutritionWeekV2Schema.parse(original);
+    for (const [position, selected] of Object.entries(nextChoices).sort()) {
+      const [selectedDay, selectedMeal, selectedFood] = position.split(":").map(Number);
+      if (
+        selectedDay === undefined ||
+        selectedMeal === undefined ||
+        selectedFood === undefined
+      ) {
+        continue;
+      }
+      next = NutritionWeekV2Schema.parse(
+        applyNutritionSubstitution(next, {
+          dayIndex: selectedDay,
+          foodIndex: selectedFood,
+          mealIndex: selectedMeal,
+          substituteIndex: selected - 1,
+        }),
+      );
+    }
     const parsed = NutritionWeekV2Schema.parse(next);
+    setChoices(nextChoices);
     setPlan(parsed);
-    setLocalPreview(true);
+    setLocalPreview(Object.keys(nextChoices).length > 0);
   }
+
+  const exportChoices = useMemo(
+    () =>
+      Object.entries(choices)
+        .map(([position, choice]) => {
+          const [dayIndex, mealIndex, foodIndex] = position.split(":").map(Number);
+          return [dayIndex, mealIndex, foodIndex, choice] as ExportChoice;
+        })
+        .sort(
+          (left, right) =>
+            left[0] - right[0] || left[1] - right[1] || left[2] - right[2],
+        ),
+    [choices],
+  );
 
   return (
     <main className="nutrition-shell">
@@ -454,7 +497,7 @@ export function NutritionApp() {
         </section>
       ) : null}
 
-      {plan && dailyAverage ? (
+      {plan && original && dailyAverage ? (
         <>
           {review ? (
             <section
@@ -601,6 +644,7 @@ export function NutritionApp() {
                   className="secondary-button"
                   onClick={() => {
                     setPlan(original);
+                    setChoices({});
                     setLocalPreview(false);
                   }}
                   type="button"
@@ -628,6 +672,15 @@ export function NutritionApp() {
               Vista previa recalculada. Restablece las elecciones antes de activar este
               borrador.
             </p>
+          ) : null}
+
+          {ack?.validationStatus === "valid" && original && planOutputHash ? (
+            <ExportPanel
+              choices={exportChoices}
+              nutrition={original}
+              planOutputHash={planOutputHash}
+              planVersionId={ack.planVersionId}
+            />
           ) : null}
 
           <section className="nutrition-days" aria-label="Semana nutricional">
@@ -680,15 +733,23 @@ export function NutritionApp() {
                               <select
                                 aria-label={`Sustituir ${food.name}`}
                                 onChange={(event) => {
-                                  const index = Number(event.target.value);
-                                  if (Number.isInteger(index) && index >= 0) {
-                                    substitute(dayIndex, mealIndex, foodIndex, index);
+                                  const choice = Number(event.target.value);
+                                  if (choice === 0 || choice === 1 || choice === 2) {
+                                    substitute(dayIndex, mealIndex, foodIndex, choice);
                                   }
                                 }}
-                                value=""
+                                value={
+                                  choices[`${dayIndex}:${mealIndex}:${foodIndex}`] ?? 0
+                                }
                               >
-                                <option value="">Elegir sustituto</option>
-                                {food.substitutes.map((alternative, index) => (
+                                {[
+                                  original.days[dayIndex]!.meals[mealIndex]!.foods[
+                                    foodIndex
+                                  ]!,
+                                  ...original.days[dayIndex]!.meals[mealIndex]!.foods[
+                                    foodIndex
+                                  ]!.substitutes,
+                                ].map((alternative, index) => (
                                   <option
                                     key={alternative.canonicalFoodKey}
                                     value={index}

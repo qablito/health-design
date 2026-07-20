@@ -86,6 +86,12 @@ importers:
       '@health-design/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@health-design/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@health-design/export':
+        specifier: workspace:*
+        version: link:../../packages/export
       '@supabase/auth-js':
         specifier: 2.110.6
         version: 2.110.6
