@@ -181,11 +181,11 @@ un resultado válido de alimentación.
 
 ## 6. Operaciones de explicación y exportación
 
-| Operación | Propósito |
-|---|---|
+| Operación | Propósito | Regla |
+|---|---|---|
 | `POST /v1/plans/{version_id}/explanation` | solicita texto Luna postvalidación | solo campos permitidos; respuesta no autoritativa |
-| `POST /v1/plans/{version_id}/exports` | genera PDF compacto/completo, impresión o hoja editable | congela versión y modo |
-| `GET /v1/exports/{id}/content` | proxyfica el objeto privado después de validar JWT, actor, sesión, membresía y artefacto; nunca expone una capability de Storage en URL | compuestos sensibles omitidos en todo artefacto de plan |
+| `POST /v1/plans/{version_id}/exports` | genera un artefacto PDF o XLSX compacto/completo | congela versión, elecciones, modo, periodo y renderizador; nunca genera impresión |
+| `GET /v1/exports/{id}/content` | proxyfica el objeto privado después de validar JWT, actor, sesión, membresía y artefacto | nunca redirige ni expone una capability de Storage; compuestos sensibles omitidos |
 
 La petición Luna se rechaza si intenta escribir una entidad de dominio. Un
 fallo de proveedor devuelve `AI_EXPLANATION_UNAVAILABLE` y texto determinista.
@@ -195,6 +195,17 @@ credencial servidora de mínimo alcance y transmite la respuesta al cliente
 autenticado. No redirige a una URL firmada ni coloca bearer alguno en path,
 query o fragmento. La respuesta usa `Cache-Control: no-store, private`,
 `Content-Disposition` con nombre neutro y `Referrer-Policy: no-referrer`.
+
+La solicitud de exportación usa `schemaVersion=1`, formato `pdf|xlsx`, detalle
+`compact|complete`, presentación `ingredients|preparation`, alcance de día o
+semana, opciones de compra/preparación semanal y una lista acotada de elecciones
+`[dayIndex,mealIndex,foodIndex,choice]`. El servidor incorpora
+`rendererVersion=export-v1` al hash de configuración. La respuesta pública solo
+contiene identificadores, formato, detalle, presentación, estado y fecha; no
+contiene perfil, actor, ruta, digest ni URL.
+
+La impresión se construye localmente desde el mismo modelo canónico en memoria,
+usa CSS A4 y no persiste un `ExportArtifact`.
 
 ## 7. Operaciones de superadministrador
 

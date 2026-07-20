@@ -13,6 +13,11 @@ Estas puertas forman el contrato de lanzamiento. Son ocho comprobaciones indepen
 | G7 | Resiliencia, seguridad y restauración | ¿Sesiones, RLS, backups, borrado, restore, cuotas y entornos aislados resisten abuso? | pruebas de seguridad, restore de cuatro rotaciones, ledger externo, SBOM/procedencia y alertas | IDOR, replay QR, perfil borrado reaparece, artefacto no verificable, claves en frontend, sin rate limit |
 | G8 | UX y accesibilidad | ¿Una persona puede completar, revisar, entender y exportar el plan con accesibilidad AA? | recorrido teclado/lector, contraste, responsive, PDF/impresión y mensajes | foco perdido, alertas solo por color, progreso ilegible, contenido no accionable |
 
+La evidencia específica de T15 para los fragmentos de G6–G8 se conserva en
+[`TASK_15_VERIFICATION.md`](TASK_15_VERIFICATION.md). Ese recibo no convierte por
+sí solo ninguna puerta completa en `PASS`: G6 mantiene T16–T17 y G8 mantiene la
+auditoría AA final de T19.
+
 ## Criterio de evaluación por puerta
 
 ### G1 — Cuestionario y contexto
@@ -81,6 +86,9 @@ Estas puertas forman el contrato de lanzamiento. Son ocho comprobaciones indepen
 - Comparativa de supermercados respeta el habitual del usuario; alternativas de ahorro son avisos, no cambios silenciosos.
 - Precio base, sin ofertas/cupones/transporte; “cesta más barata” solo cuando todos los ingredientes están cubiertos.
 - PDF compacto y completo, ingredientes/cantidades o preparación breve, lista/plan/preparación semanal, impresión y Excel/Sheets tienen la misma versión y orden.
+- PDF/XLSX se generan en servidor dentro de un bucket privado; impresión es una
+  vista nativa A4. La descarga autenticada no redirige ni entrega una URL de
+  Storage y aplica idempotencia, límites y cabeceras privadas.
 - Compuestos sensibles quedan fuera de PDF y de archivos de usuario.
 - Una cadena usa exactamente la cesta 60+20: cobertura ≥90 %, cada grupo
   esencial ≥75 %, precio/formato válido y activación manual. Cero falsos

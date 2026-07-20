@@ -35,9 +35,11 @@ verificada localmente dentro del mismo recibo. La revisión semanal, el diario
 opcional, F47/F48, vigencia contextual, historial, tendencias básicas y
 recálculo selectivo tienen recibo remoto de desarrollo
 `T13_COMPLETE_REMOTE_PASS` en
-[`TASK_13_VERIFICATION.md`](TASK_13_VERIFICATION.md). PDF e impresión continúan
-en T15; la puerta AA final, en T19; los productos comerciales, en T16; y
-supermercados/precios, en T17.
+[`TASK_13_VERIFICATION.md`](TASK_13_VERIFICATION.md). La preparación versionada,
+el modelo común, PDF/XLSX privados e impresión A4 de T15 tienen recibo local
+`T15B_COMPLETE_LOCAL_PASS`; su estado remoto se registra en
+[`TASK_15_VERIFICATION.md`](TASK_15_VERIFICATION.md). La puerta AA final continúa
+en T19; los productos comerciales, en T16; y supermercados/precios, en T17.
 
 ## 1. Bloques de producto
 

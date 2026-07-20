@@ -989,6 +989,11 @@ pnpm test --filter ai-budget
 **Resultado:** todos los formatos representan exactamente la misma versión y
 omiten compuestos sensibles.
 
+> **Estado 2026-07-20:** `T15B_COMPLETE_LOCAL_PASS` en rama. La evidencia local y
+> la validación remota pendiente se registran en
+> [`TASK_15_VERIFICATION.md`](../quality/TASK_15_VERIFICATION.md); el cierre remoto
+> exige copia precrítica, migración y Edge Function únicamente en desarrollo.
+
 **Archivos previstos**
 
 - `packages/export/src/`
@@ -1016,8 +1021,9 @@ omiten compuestos sensibles.
 
 **Implementación**
 
-- Realizar un spike acotado para elegir librerías compatibles con Edge
-  Functions; documentar la decisión si exige otro runtime.
+- Usar `pdf-lib@1.17.1` y SheetJS CE `0.20.3` fijado desde el CDN oficial, según
+  [`ADR-0008`](../adr/0008-edge-pdf-and-xlsx-renderers.md); ambos funcionan en el
+  runtime Deno de Edge sin un runtime alternativo.
 - Generar artefacto idempotente por versión/configuración.
 - Guardar en bucket privado y transmitir por Edge Function autenticada con
   credencial servidora de mínimo alcance; no emitir URL firmada al navegador.

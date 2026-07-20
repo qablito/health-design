@@ -165,7 +165,12 @@ fuente comercial importada.
 | `ShoppingPreferenceRevision` | supermercado habitual y modo versionados | `id`, `profile_id`, `preferred_chain`, `compare_multistore`, `sorting`, `created_at`, `supersedes_id?` |
 | `ShoppingSnapshot` | lista calculada para una versión | `id`, `plan_version_id`, `week_start`, `chain_mode`, `items`, `coverage`, `estimated_total`, `generated_at` |
 | `LeftoverConfirmation` | sobrante confirmado por usuario | `shopping_snapshot_id`, `product_id`, `quantity`, `confirmed_at` |
-| `ExportArtifact` | PDF, impresión o hoja editable | `id`, `plan_version_id`, `mode`, `format`, `storage_ref`, `created_at`, `expires_at?` |
+| `ExportArtifact` | PDF o XLSX privado de una versión inmutable | `id`, `profile_id`, `actor_id`, `plan_version_id`, `renderer_version`, `config`, `config_digest`, `format=pdf\|xlsx`, `detail`, `presentation`, `storage_ref`, `mime_type`, `size_bytes`, `content_digest`, `status=pending\|ready\|failed`, `created_at`, `ready_at?`, `failed_at?`, `storage_deleted_at?` |
+
+La impresión no es una entidad persistente: es una proyección HTML/CSS A4 del
+mismo modelo canónico que consumen los renderizadores. `config_digest` incluye la
+versión del renderizador y permite reutilizar un artefacto listo de la misma
+versión/configuración sin mezclar elecciones.
 
 ## 2. Invariantes de dominio
 
@@ -236,6 +241,12 @@ fuente comercial importada.
     su evento `intent`. El borrado excepcional de un rango usa manifiesto,
     recibos externo de intención/finalización y nunca convierte un hueco no
     cubierto en una cadena válida.
+27. Un `ExportArtifact` pertenece a una única `PlanVersion` validada y a una
+    configuración canónica; no puede leer datos de otra versión ni mutar el plan.
+28. Solo puede existir una exportación `pending` por perfil y una exportación
+    `ready` por versión, renderizador y digest de configuración.
+29. Un perfil no llega a purga terminal mientras exista una exportación cuyo
+    objeto privado no tenga eliminación de Storage confirmada.
 
 ## 3. Versionado y concurrencia
 
