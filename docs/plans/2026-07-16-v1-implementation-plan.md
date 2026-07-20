@@ -989,10 +989,10 @@ pnpm test --filter ai-budget
 **Resultado:** todos los formatos representan exactamente la misma versión y
 omiten compuestos sensibles.
 
-> **Estado 2026-07-20:** `T15B_COMPLETE_LOCAL_PASS` en rama. La evidencia local y
-> la validación remota pendiente se registran en
-> [`TASK_15_VERIFICATION.md`](../quality/TASK_15_VERIFICATION.md); el cierre remoto
-> exige copia precrítica, migración y Edge Function únicamente en desarrollo.
+> **Estado 2026-07-20:** `T15_COMPLETE_REMOTE_PASS` en rama. La copia precrítica,
+> la migración, la Edge Function y el smoke sintético están verificados únicamente
+> en desarrollo; producción permanece intacta. El recibo reproducible está en
+> [`TASK_15_VERIFICATION.md`](../quality/TASK_15_VERIFICATION.md).
 
 **Archivos previstos**
 

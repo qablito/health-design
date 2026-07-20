@@ -23,7 +23,9 @@ de fórmulas en hojas de cálculo.
   no es un `ExportArtifact` ni se persiste.
 - El PDF se genera con `pdf-lib@1.17.1`.
 - El XLSX se genera con SheetJS CE `0.20.3`, fijado mediante el tarball del CDN
-  oficial y el lockfile. No se usa el paquete npm antiguo `xlsx` como origen.
+  oficial y el lockfile. La Edge Function empaqueta el módulo desde la instalación
+  bloqueada para que el despliegue no dependa de descargar el CDN; no se usa el
+  paquete npm antiguo `xlsx` como origen.
 - Ambos renderizadores usan módulos ESM puros, sin canvas, navegador sin cabeza,
   binarios nativos, macros ni enlaces externos.
 - La Edge Function genera, limita a 25 MiB, guarda en el bucket privado

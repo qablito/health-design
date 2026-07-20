@@ -2,12 +2,12 @@
 
 > **Fecha:** 2026-07-20
 >
-> **Estado:** `T15B_COMPLETE_LOCAL_PASS`
+> **Estado:** `T15_COMPLETE_REMOTE_PASS`
 >
 > **Rama:** `codex/task-15b-private-exports`
 >
 > **Commits funcionales:** `516dc83`, `8f73abc`, `6c2ad30`, `bbfb9b5`,
-> `3f2a441`
+> `3f2a441`, `a8e7176`, `386256f`
 >
 > **Entorno remoto objetivo:** `health-design-dev`
 > (`nwoivdxdupklervtnovd`)
@@ -73,33 +73,63 @@ permanecen en la función de servidor.
   digest interno, perfil, actor ni URL.
 - La descarga rechaza redirecciones en Edge y en el navegador; la URL Blob local
   se revoca después de activar la descarga.
-- `pdf-lib` está fijado a `1.17.1`; SheetJS CE a `0.20.3` desde su CDN oficial.
-  El lockfile y la puerta de cadena de suministro conservan su resolución e
-  integridad.
+- `pdf-lib` está fijado a `1.17.1`; SheetJS CE a `0.20.3` desde su tarball del
+  CDN oficial. El lockfile conserva origen e integridad y la Edge Function
+  empaqueta el módulo ya instalado, sin una descarga de red durante el
+  despliegue.
 
 ## Copia precrítica
 
-Pendiente de autorización y rotación. La rotación confirmada en T14 ya contiene
-cuatro objetos (T10, T12, T13 y T14), por lo que T15 no eliminará ninguno sin
-autorización explícita del usuario.
+- Se eliminó, con autorización explícita, la copia T10 más antigua y su secreto
+  asociado del Llavero.
+- Se creó y montó en solo lectura
+  `t15-precritical-development-20260720T173643Z.dmg`.
+- SHA-256 del DMG:
+  `6d0e2a19abb3e789eaa96902517c74fe254db9d8d2d64ffd91d7a28c9ba6ad45`.
+- Hash interno del esquema:
+  `c4e900617fc957607dff72d91d4fe544a9ec440ee73c67ba5b84adbe8d6dd138`.
+- Hash interno de los datos:
+  `8937ba5d96e395ca8c9cfb87171b0363e6592db3b6188538514b9021c412ddfa`.
+- El secreto T15 existe en el Llavero y la rotación vuelve a contener exactamente
+  T12, T13, T14 y T15.
 
 ## Desarrollo remoto
 
-Pendiente de autorización explícita. El script reproducible
-`pnpm test:t15:remote` usa únicamente perfiles sintéticos y comprueba rechazo
-anónimo, dos formatos máximos, idempotencia, veinte configuraciones distintas,
-límite de la solicitud 21, objeto privado, cabeceras y limpieza final. Nunca
-registra JWT, contenido del plan, bytes, respuestas del cuestionario ni rutas de
-Storage.
+- La migración `20260720162606_private_plan_exports.sql` está aplicada y un
+  `db push --dry-run` confirma que desarrollo está al día.
+- El bucket `plan-exports` es privado, limita cada objeto a 25 MiB y admite
+  únicamente PDF y XLSX. Una subida y eliminación real con rol servidor pasó.
+- `exports` versión 3 está `ACTIVE` con verificación JWT en
+  `health-design-dev`; `plans` permanece en versión 11.
+- El primer despliegue reveló que el empaquetador remoto no podía descargar
+  SheetJS desde su CDN. Se conservó el mismo tarball oficial fijado y se hizo que
+  el import map reutilizara el módulo ya instalado.
+- La primera ejecución útil detectó una incompatibilidad real: la confirmación
+  persistida devolvía `status=ready` sin el campo transitorio `outcome`. El
+  parser ahora infiere ese resultado desde el estado persistido; la regresión
+  cubre tanto confirmación como descarga. Los logs técnicos solo registran etapa
+  y código genérico, sin identificadores ni contenido privado.
+- `pnpm test:t15:remote` pasó con 22 artefactos: PDF máximo de 72.707 bytes,
+  XLSX máximo de 92.354 bytes, 168 elecciones, rechazo anónimo de creación y
+  descarga, idempotencia, objeto privado, 20 intentos admitidos y solicitud 21
+  limitada. La limpieza sintética terminó con residuo cero.
+- Una repetición intermedia sufrió un fallo DNS externo después de crear tres
+  objetos; se eliminaron expresamente objetos, filas, actor y usuario y se
+  verificó `remaining_count=0` antes de repetir la prueba definitiva.
+- Los advisors remotos no devuelven errores ni hallazgos de rendimiento. Los dos
+  avisos globales de seguridad no pertenecen al delta de exportación: política
+  anónima de `profiles` y protección de contraseñas filtradas desactivada.
 
 ## Producción
 
-Producción permanece fuera de alcance y no se tocará durante T15.
+La lista remota de producción conserva únicamente las funciones `access`,
+`admin` y `admin-reconciler`. No existe `exports`; no se desplegó función ni se
+ejecutó ningún comando de migración T15 contra producción.
 
 ## Estado de cierre
 
-- `T15B_COMPLETE_LOCAL_PASS`: solo después de la puerta local completa.
-- `T15_COMPLETE_REMOTE_PASS`: solo después de crear/verificar la copia T15,
+- `T15B_COMPLETE_LOCAL_PASS`: alcanzado con la puerta local completa.
+- `T15_COMPLETE_REMOTE_PASS`: alcanzado tras crear/verificar la copia T15,
   aplicar la migración en desarrollo, desplegar `exports`, superar el smoke
   remoto y confirmar que producción sigue intacta.
 
