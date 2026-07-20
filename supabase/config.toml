@@ -91,3 +91,9 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/medications/deno.json"
 entrypoint = "./functions/medications/index.ts"
+
+[functions.exports]
+enabled = true
+verify_jwt = true
+import_map = "./functions/exports/deno.json"
+entrypoint = "./functions/exports/index.ts"

@@ -121,6 +121,25 @@ describe("contrato compartido entre runtimes", () => {
     );
   });
 
+  it("mantiene JWT obligatorio y renderizadores fijados en exports", async () => {
+    const config = await readFile(
+      new URL("../supabase/config.toml", import.meta.url),
+      "utf8",
+    );
+    const denoConfig = JSON.parse(
+      await readFile(
+        new URL("../supabase/functions/exports/deno.json", import.meta.url),
+        "utf8",
+      ),
+    ) as { imports?: Record<string, string> };
+
+    expect(config).toMatch(/\[functions\.exports\][\s\S]*?verify_jwt\s*=\s*true/);
+    expect(denoConfig.imports?.["pdf-lib"]).toBe("npm:pdf-lib@1.17.1");
+    expect(denoConfig.imports?.xlsx).toBe(
+      "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs",
+    );
+  });
+
   it("aplica CORS exacto y rechaza orígenes ajenos", async () => {
     const allowedRequest = new Request("http://localhost/runtime-smoke", {
       body: JSON.stringify(RUNTIME_SMOKE_EXAMPLE),

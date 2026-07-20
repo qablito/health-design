@@ -40,6 +40,7 @@
     "supabase/functions/admin-reconciler/index.ts",
     "supabase/functions/catalogs/index.ts",
     "supabase/functions/catalogs/nutrition.ts",
+    "supabase/functions/exports/**/*.ts",
     "supabase/functions/medications/**/*.ts",
     "supabase/functions/plans/**/*.ts",
     "supabase/functions/runtime-smoke/index.ts",

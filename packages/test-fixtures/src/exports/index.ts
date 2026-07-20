@@ -3,7 +3,7 @@ import { createExportModel } from "@health-design/export/model";
 
 import { effectiveNutritionFoods } from "../profiles/nutrition/index.ts";
 
-const nutrition = generateNutritionWeek({
+export const exportNutrition = generateNutritionWeek({
   answers: {
     activeModules: ["nutrition"],
     activityLevel: "moderate",
@@ -29,7 +29,7 @@ const nutrition = generateNutritionWeek({
 });
 
 const shared = {
-  nutrition,
+  nutrition: exportNutrition,
   planOutputHash: "ab".repeat(32),
   planVersionId: "20000000-0000-4000-8000-000000000001",
   rendererVersion: "export-v1",

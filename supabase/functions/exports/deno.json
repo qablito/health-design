@@ -1,0 +1,13 @@
+{
+  "imports": {
+    "@health-design/contracts": "../_shared/generated/contracts.js",
+    "@health-design/domain": "../../../packages/domain/src/index.ts",
+    "@health-design/engine/nutrition": "../../../packages/engine/src/modules/nutrition/index.ts",
+    "@health-design/export/model": "../../../packages/export/src/model.ts",
+    "@health-design/export/pdf": "../../../packages/export/src/pdf.ts",
+    "@health-design/export/xlsx": "../../../packages/export/src/xlsx.ts",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.110.6",
+    "pdf-lib": "npm:pdf-lib@1.17.1",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs"
+  }
+}
