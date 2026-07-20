@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   NutritionWeekSchema,
-  type NutritionWeekContract,
+  NutritionWeekV2Schema,
+  normalizeNutritionWeek,
+  type NutritionWeekV2Contract,
   type PlanMutationAck,
   type PlanVersionDetail,
 } from "@health-design/contracts";
@@ -35,7 +37,7 @@ function message(error: unknown): string {
   return "No se ha podido generar el plan. No se ha activado ningún cambio.";
 }
 
-function totalsLabel(totals: NutritionWeekContract["weekTotals"]): string {
+function totalsLabel(totals: NutritionWeekV2Contract["weekTotals"]): string {
   return `${totals.energyKcal} kcal · P ${totals.proteinG} g · C ${totals.carbohydratesG} g · G ${totals.fatG} g · Fibra ${totals.fiberG} g`;
 }
 
@@ -85,8 +87,8 @@ type NutritionReview = Readonly<{
 
 type NutritionDetailState = Readonly<{
   ack: PlanMutationAck;
-  original?: NutritionWeekContract;
-  plan?: NutritionWeekContract;
+  original?: NutritionWeekV2Contract;
+  plan?: NutritionWeekV2Contract;
   provisionalReason?: string;
   review?: NutritionReview;
 }>;
@@ -104,29 +106,30 @@ function readNutritionDetail(
       provisionalReason: uncertainty?.code ?? "NUTRITION_PLAN_PROVISIONAL_WITHOUT_WEEK",
     };
   }
+  const plan = normalizeNutritionWeek(parsed.data);
   const uncertainties = [
     ...(nutrition?.uncertainties ?? []),
-    ...parsed.data.targets.uncertainties,
+    ...plan.targets.uncertainties,
   ];
   const review: NutritionReview = {
     completeness:
       ack.completeness === "provisional" ||
       nutrition?.status === "provisional" ||
-      parsed.data.targets.completeness === "provisional"
+      plan.targets.completeness === "provisional"
         ? "provisional"
         : "complete",
     moduleStatus: nutrition?.status ?? "invalid",
     safetyFindings: detail.safetyFindings.filter(
       ({ module }) => module === "nutrition",
     ),
-    strategies: parsed.data.strategies,
+    strategies: plan.strategies,
     uncertainties,
     validationStatus: detail.validationStatus,
   };
   return {
     ack,
-    original: parsed.data,
-    plan: parsed.data,
+    original: plan,
+    plan,
     review,
   };
 }
@@ -174,7 +177,7 @@ const clinicalNutrientLabels: Readonly<Record<string, string>> = {
 function ClinicalNutrients({
   values,
 }: {
-  values: NutritionWeekContract["days"][number]["meals"][number]["foods"][number]["clinicalNutrients"];
+  values: NutritionWeekV2Contract["days"][number]["meals"][number]["foods"][number]["clinicalNutrients"];
 }) {
   const entries = Object.entries(values);
   if (entries.length === 0) return null;
@@ -200,8 +203,11 @@ export function NutritionApp() {
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string>();
   const [localPreview, setLocalPreview] = useState(false);
-  const [original, setOriginal] = useState<NutritionWeekContract>();
-  const [plan, setPlan] = useState<NutritionWeekContract>();
+  const [mealView, setMealView] = useState<"ingredients" | "preparation">(
+    "ingredients",
+  );
+  const [original, setOriginal] = useState<NutritionWeekV2Contract>();
+  const [plan, setPlan] = useState<NutritionWeekV2Contract>();
   const [profiles, setProfiles] = useState<ProfileAccessSummary[]>([]);
   const [profileId, setProfileId] = useState<string>();
   const [provisionalReason, setProvisionalReason] = useState<string>();
@@ -282,7 +288,7 @@ export function NutritionApp() {
         key,
         (Number(value) / 7).toFixed(1),
       ]),
-    ) as NutritionWeekContract["weekTotals"];
+    ) as NutritionWeekV2Contract["weekTotals"];
   }, [plan]);
 
   async function generate() {
@@ -348,7 +354,7 @@ export function NutritionApp() {
       mealIndex,
       substituteIndex,
     });
-    const parsed = NutritionWeekSchema.parse(next);
+    const parsed = NutritionWeekV2Schema.parse(next);
     setPlan(parsed);
     setLocalPreview(true);
   }
@@ -560,6 +566,28 @@ export function NutritionApp() {
             </article>
           </section>
 
+          <fieldset className="meal-view-selector">
+            <legend>Vista de las comidas</legend>
+            <label>
+              <input
+                checked={mealView === "ingredients"}
+                name="meal-view"
+                onChange={() => setMealView("ingredients")}
+                type="radio"
+              />
+              <span>Ingredientes y cantidades</span>
+            </label>
+            <label>
+              <input
+                checked={mealView === "preparation"}
+                name="meal-view"
+                onChange={() => setMealView("preparation")}
+                type="radio"
+              />
+              <span>Preparación breve</span>
+            </label>
+          </fieldset>
+
           <div className="nutrition-toolbar">
             <div>
               <strong>
@@ -639,6 +667,11 @@ export function NutritionApp() {
                                 {food.amountG} g ·{" "}
                                 {food.foodState === "raw" ? "en crudo" : food.foodState}
                               </span>
+                              {mealView === "preparation" ? (
+                                <p className="food-preparation">
+                                  {food.preparation.instruction}
+                                </p>
+                              ) : null}
                               <ClinicalNutrients values={food.clinicalNutrients} />
                             </div>
                             <small role="cell">{totalsLabel(food.nutrients)}</small>

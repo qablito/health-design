@@ -407,6 +407,45 @@ test("genera, recalcula una sustitución y activa solo el borrador original", as
   );
 });
 
+test("selector accesible alterna ingredientes y preparación sin ocultar nutrientes", async ({
+  page,
+}) => {
+  await installSession(page);
+  await mockNutritionApi(page);
+  await page.goto("/nutrition");
+  await page.getByRole("button", { name: "Generar semana estable" }).click();
+
+  const ingredients = page.getByRole("radio", {
+    name: "Ingredientes y cantidades",
+  });
+  const preparation = page.getByRole("radio", { name: "Preparación breve" });
+  const firstFood = nutritionWeek.days[0]!.meals[0]!.foods[0]!;
+  const firstReplacement = firstFood.substitutes[0]!;
+
+  await expect(page.getByRole("group", { name: "Vista de las comidas" })).toBeVisible();
+  await expect(ingredients).toBeChecked();
+  await expect(preparation).not.toBeChecked();
+  await expect(page.getByText(firstFood.preparation.instruction).first()).toHaveCount(
+    0,
+  );
+
+  await ingredients.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(preparation).toBeChecked();
+  await expect(page.getByText(firstFood.preparation.instruction).first()).toBeVisible();
+  await expect(page.getByText(/kcal · P /).first()).toBeVisible();
+
+  const firstSubstitution = page.getByRole("combobox", { name: /^Sustituir / }).first();
+  await firstSubstitution.selectOption({ index: 1 });
+  await expect(
+    page.getByText(firstReplacement.preparation.instruction).first(),
+  ).toBeVisible();
+
+  const visible = await page.locator("body").innerText();
+  expect(visible).not.toContain(firstReplacement.preparation.ruleId);
+  expect(visible).not.toContain(firstReplacement.preparation.ruleSetVersion);
+});
+
 test("presenta y activa un plan provisional validado sin exponer códigos internos", async ({
   page,
 }) => {
