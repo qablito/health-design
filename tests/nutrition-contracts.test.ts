@@ -44,15 +44,10 @@ function legacyWeek() {
   const generated = generateNutritionWeek({
     answers,
     catalog: effectiveNutritionFoods,
-  }) as ReturnType<typeof generateNutritionWeek> & {
-    nutritionSchemaVersion?: 2;
-    preparation?: unknown;
-  };
-  const {
-    nutritionSchemaVersion: _schemaVersion,
-    preparation: _preparation,
-    ...week
-  } = generated;
+  });
+  const { nutritionSchemaVersion, preparation, ...week } = generated;
+  void nutritionSchemaVersion;
+  void preparation;
   return {
     ...week,
     days: week.days.map((day) => ({
@@ -60,15 +55,14 @@ function legacyWeek() {
       meals: day.meals.map((meal) => ({
         ...meal,
         foods: meal.foods.map((food) => {
-          const { preparation: _foodPreparation, ...legacyFood } =
-            food as typeof food & {
-              preparation?: unknown;
-            };
+          const { preparation: foodPreparation, ...legacyFood } = food;
+          void foodPreparation;
           return {
             ...legacyFood,
             substitutes: food.substitutes.map((substitute) => {
-              const { preparation: _substitutePreparation, ...legacySubstitute } =
-                substitute as typeof substitute & { preparation?: unknown };
+              const { preparation: substitutePreparation, ...legacySubstitute } =
+                substitute;
+              void substitutePreparation;
               return legacySubstitute;
             }),
           };
@@ -126,8 +120,9 @@ describe("contrato nutricional versionado T15A", () => {
     const current = v2Week();
     const firstFood = current.days[0]!.meals[0]!.foods[0]!;
     const firstSubstitute = firstFood.substitutes[0]!;
-    const { preparation: _preparation, ...substituteWithoutPreparation } =
+    const { preparation, ...substituteWithoutPreparation } =
       firstSubstitute;
+    void preparation;
     const partial = {
       ...current,
       days: [

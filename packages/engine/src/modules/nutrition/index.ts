@@ -1,16 +1,18 @@
 import type {
   EffectiveNutritionFood,
   FoodFunction,
-  NutritionDay,
-  NutritionMeal,
+  NutritionDayV2,
+  NutritionMealV2,
   NutritionMealAnchor,
   NutritionTargets,
   NutritionTotals,
   NutritionWeek,
-  PlannedFood,
-  PlannedFoodAlternative,
+  NutritionWeekV2,
+  PreparedPlannedFood,
+  PreparedPlannedFoodAlternative,
   QuestionnaireAnswers,
 } from "@health-design/domain";
+import { normalizeNutritionWeek } from "@health-design/contracts";
 
 import {
   absoluteDecimal,
@@ -23,6 +25,16 @@ import {
   sumDecimals,
 } from "../../decimal.ts";
 import { clinicalContextReviewCodes } from "../clinical-context.ts";
+import {
+  PREPARATION_RULE_SET_VERSION,
+  resolveFoodPreparation,
+} from "./preparation.ts";
+
+export {
+  LEGACY_PREPARATION_RULE_SET_VERSION,
+  PREPARATION_RULE_SET_VERSION,
+  resolveFoodPreparation,
+} from "./preparation.ts";
 
 const PAL_BANDS = {
   high: { center: "1.9", maximum: "2.05", minimum: "1.75" },
@@ -742,7 +754,7 @@ function alternative(
   food: EffectiveNutritionFood,
   function_: FoodFunction,
   amountG: string,
-): PlannedFoodAlternative {
+): PreparedPlannedFoodAlternative {
   return {
     amountG,
     canonicalFoodKey: food.canonicalFoodKey,
@@ -751,6 +763,7 @@ function alternative(
     function: function_,
     name: food.name,
     nutrients: totalsForAmount(food, amountG),
+    preparation: resolveFoodPreparation(food),
     revisionId: food.revisionId,
     source: {
       manifestId: food.manifestId,
@@ -764,7 +777,7 @@ function plannedFood(
   food: EffectiveNutritionFood,
   function_: FoodFunction,
   amountG: string,
-): PlannedFood {
+): PreparedPlannedFood {
   const primary = alternative(food, function_, amountG);
   return { ...primary, substitutes: [] };
 }
@@ -774,7 +787,7 @@ function plannedSubstitute(
   function_: FoodFunction,
   target: string,
   answers: QuestionnaireAnswers,
-): PlannedFoodAlternative | null {
+): PreparedPlannedFoodAlternative | null {
   const targetNutrient = nutrientForFunction(function_);
   const amount = amountForNutrient(candidate, targetNutrient, target);
   if (!amountRespectsTolerance(candidate, amount, answers)) return null;
@@ -797,16 +810,16 @@ function resolvedAnchors(answers: QuestionnaireAnswers, meals: number) {
   return supplied.length === meals ? supplied : defaultAnchors(meals);
 }
 
-function aggregateMeal(meal: NutritionMeal): NutritionMeal {
+function aggregateMeal(meal: NutritionMealV2): NutritionMealV2 {
   return { ...meal, totals: addTotals(meal.foods.map(({ nutrients }) => nutrients)) };
 }
 
-function aggregateDay(day: NutritionDay): NutritionDay {
+function aggregateDay(day: NutritionDayV2): NutritionDayV2 {
   const meals = day.meals.map(aggregateMeal);
   return { ...day, meals, totals: addTotals(meals.map(({ totals }) => totals)) };
 }
 
-function shoppingList(days: readonly NutritionDay[]) {
+function shoppingList(days: readonly NutritionDayV2[]) {
   const items = new Map<string, { amountG: string; name: string }>();
   for (const food of days.flatMap(({ meals }) => meals.flatMap(({ foods }) => foods))) {
     const current = items.get(food.canonicalFoodKey);
@@ -823,8 +836,8 @@ function shoppingList(days: readonly NutritionDay[]) {
 }
 
 function nutritionValidation(
-  plan: Omit<NutritionWeek, "validation">,
-): NutritionWeek["validation"] {
+  plan: Omit<NutritionWeekV2, "validation">,
+): NutritionWeekV2["validation"] {
   const errors: string[] = [];
   const fatMinimum = divideDecimals(
     multiplyDecimals(plan.targets.energy.minimumKcal, "0.3"),
@@ -910,11 +923,33 @@ function nutritionValidation(
   };
 }
 
-function aggregateWeek(plan: NutritionWeek): NutritionWeek {
+function aggregateWeek(plan: NutritionWeekV2): NutritionWeekV2 {
   const days = plan.days.map(aggregateDay);
+  const missingPreparationKeys = [
+    ...new Set(
+      days.flatMap(({ meals }) =>
+        meals.flatMap(({ foods }) =>
+          foods.flatMap((food) =>
+            [food, ...food.substitutes]
+              .filter(({ preparation }) => preparation.status === "provisional")
+              .map(({ canonicalFoodKey }) => canonicalFoodKey),
+          ),
+        ),
+      ),
+    ),
+  ].sort(lexicalCompare);
   const aggregated = {
     ...plan,
     days,
+    preparation: {
+      completeness:
+        missingPreparationKeys.length === 0 ? ("complete" as const) : ("provisional" as const),
+      ruleSetVersion: PREPARATION_RULE_SET_VERSION,
+      uncertainties: missingPreparationKeys.map((canonicalFoodKey) => ({
+        code: "PREPARATION_RULE_MISSING",
+        messageKey: `nutrition.preparation.rule_missing.${canonicalFoodKey}`,
+      })),
+    },
     shoppingList: shoppingList(days),
     weekTotals: addTotals(days.map(({ totals }) => totals)),
   };
@@ -922,10 +957,10 @@ function aggregateWeek(plan: NutritionWeek): NutritionWeek {
 }
 
 function replacePlannedFood(
-  plan: NutritionWeek,
+  plan: NutritionWeekV2,
   selection: Readonly<{ dayIndex: number; foodIndex: number; mealIndex: number }>,
-  replacement: PlannedFood,
-): NutritionWeek {
+  replacement: PreparedPlannedFood,
+): NutritionWeekV2 {
   const days = plan.days.map((day, dayIndex) =>
     dayIndex !== selection.dayIndex
       ? day
@@ -947,10 +982,10 @@ function replacePlannedFood(
 }
 
 function assignValidatedSubstitutes(
-  plan: NutritionWeek,
+  plan: NutritionWeekV2,
   answers: QuestionnaireAnswers,
   eligible: readonly EffectiveNutritionFood[],
-): NutritionWeek {
+): NutritionWeekV2 {
   const foodByKey = new Map(eligible.map((food) => [food.canonicalFoodKey, food]));
   const days = plan.days.map((day, dayIndex) => ({
     ...day,
@@ -965,7 +1000,7 @@ function assignValidatedSubstitutes(
             candidate.canonicalFoodKey !== food.canonicalFoodKey &&
             candidate.foodState === food.foodState,
         );
-        const substitutes: PlannedFoodAlternative[] = [];
+        const substitutes: PreparedPlannedFoodAlternative[] = [];
         for (const candidate of candidates) {
           const substitute = plannedSubstitute(
             candidate,
@@ -993,7 +1028,9 @@ function assignValidatedSubstitutes(
   return aggregateWeek({ ...plan, days });
 }
 
-function plannedFunctionsAreMeaningful(foods: readonly PlannedFood[]): boolean {
+function plannedFunctionsAreMeaningful(
+  foods: readonly PreparedPlannedFood[],
+): boolean {
   for (const function_ of ["protein", "carbohydrate_base", "fat"] as const) {
     const nutrient = nutrientForFunction(function_);
     const primary = foods.find((food) => food.function === function_);
@@ -1015,7 +1052,7 @@ export function generateNutritionWeek(input: {
   answers: QuestionnaireAnswers;
   catalog: readonly EffectiveNutritionFood[];
   generatedTrainingLoad?: GeneratedTrainingLoad | null;
-}): NutritionWeek {
+}): NutritionWeekV2 {
   const meals = input.answers.mealsPerDay;
   if (meals === undefined || meals < 2 || meals > 6) {
     throw new Error("nutrition_meals_out_of_range");
@@ -1071,8 +1108,8 @@ export function generateNutritionWeek(input: {
     String(meals),
     6,
   );
-  const days = Array.from({ length: 7 }, (_, dayIndex): NutritionDay => {
-    const dayMeals = Array.from({ length: meals }, (_, mealIndex): NutritionMeal => {
+  const days = Array.from({ length: 7 }, (_, dayIndex): NutritionDayV2 => {
+    const dayMeals = Array.from({ length: meals }, (_, mealIndex): NutritionMealV2 => {
       const seed = dayIndex * meals + mealIndex;
       const proteinCandidates = candidateOrder(
         primaryPools.protein,
@@ -1096,7 +1133,7 @@ export function generateNutritionWeek(input: {
       );
       const validCandidates: Array<{
         fiberDistance: string;
-        foods: PlannedFood[];
+        foods: PreparedPlannedFood[];
         order: number;
       }> = [];
       let candidateOrdinal = 0;
@@ -1192,7 +1229,7 @@ export function generateNutritionWeek(input: {
       };
     });
     return {
-      day: (dayIndex + 1) as NutritionDay["day"],
+      day: (dayIndex + 1) as NutritionDayV2["day"],
       meals: dayMeals,
       totals: addTotals(dayMeals.map(({ totals }) => totals)),
     };
@@ -1217,13 +1254,19 @@ export function generateNutritionWeek(input: {
       return [];
     }),
   ];
-  const base: NutritionWeek = {
+  const base: NutritionWeekV2 = {
     catalogManifestIds: [
       ...new Set(eligible.map(({ manifestId }) => manifestId)),
     ].sort(),
     days,
     dietaryPattern: input.answers.dietaryPattern,
     mode: input.answers.nutritionMode,
+    nutritionSchemaVersion: 2,
+    preparation: {
+      completeness: "complete",
+      ruleSetVersion: PREPARATION_RULE_SET_VERSION,
+      uncertainties: [],
+    },
     shoppingList: [],
     strategies,
     targets,
@@ -1237,29 +1280,32 @@ export function generateNutritionWeek(input: {
   return assignValidatedSubstitutes(aggregated, input.answers, eligible);
 }
 
-function withoutSubstitutes(food: PlannedFood): PlannedFoodAlternative {
+function withoutSubstitutes(
+  food: PreparedPlannedFood,
+): PreparedPlannedFoodAlternative {
   const { substitutes, ...alternative_ } = food;
   if (substitutes.length !== 2) throw new Error("invalid_nutrition_substitutes");
   return alternative_;
 }
 
 export function applyNutritionSubstitution(
-  plan: NutritionWeek,
+  plan: NutritionWeek | NutritionWeekV2,
   selection: Readonly<{
     dayIndex: number;
     foodIndex: number;
     mealIndex: number;
     substituteIndex: number;
   }>,
-): NutritionWeek {
-  const selectedDay = plan.days[selection.dayIndex];
+): NutritionWeekV2 {
+  const preparedPlan = normalizeNutritionWeek(plan);
+  const selectedDay = preparedPlan.days[selection.dayIndex];
   const selectedMeal = selectedDay?.meals[selection.mealIndex];
   const selectedFood = selectedMeal?.foods[selection.foodIndex];
   const replacement = selectedFood?.substitutes[selection.substituteIndex];
   if (!selectedDay || !selectedMeal || !selectedFood || !replacement) {
     throw new Error("invalid_nutrition_substitution");
   }
-  const promoted: PlannedFood = {
+  const promoted: PreparedPlannedFood = {
     ...replacement,
     substitutes: [
       withoutSubstitutes(selectedFood),
@@ -1268,5 +1314,5 @@ export function applyNutritionSubstitution(
       ),
     ].slice(0, 2),
   };
-  return replacePlannedFood(plan, selection, promoted);
+  return replacePlannedFood(preparedPlan, selection, promoted);
 }
