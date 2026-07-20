@@ -428,6 +428,7 @@ begin
       or length(btrim(coalesce(v_item ->> 'name', ''))) not between 1 and 80
       or (v_item ->> 'source') not in ('laboratory', 'device', 'self_reported')
       or (v_item ->> 'confidence') not in ('high', 'medium', 'low', 'unknown')
+      or length(coalesce(v_item ->> 'value', '')) > 64
       or coalesce(v_item ->> 'value', '') !~ '^-?(0|[1-9][0-9]*)(\.[0-9]+)?$'
     then
       raise exception using errcode = '22023', message = 'invalid_input';
@@ -647,6 +648,45 @@ begin
 end;
 $$;
 
+create function private.list_tracking_candidates(
+  p_auth_subject uuid,
+  p_auth_session_id uuid,
+  p_profile_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+declare
+  v_candidates jsonb;
+begin
+  perform private.require_questionnaire_access(
+    p_auth_subject, p_auth_session_id, p_profile_id
+  );
+  select coalesce(jsonb_agg(private.plan_ack(
+    item.plan_id, item.candidate_version_id, item.id
+  ) order by item.created_at desc, item.id desc), '[]'::jsonb)
+  into v_candidates
+  from (
+    select candidate.id, candidate.plan_id, candidate.candidate_version_id,
+      candidate.created_at
+    from public.plan_candidates candidate
+    join public.plans plan on plan.id = candidate.plan_id
+    join public.change_events event on event.id = candidate.change_event_id
+    where plan.profile_id = p_profile_id
+      and candidate.status = 'pending'
+      and event.kind in ('follow_up_changed', 'lab_result_changed')
+    order by candidate.created_at desc, candidate.id desc
+    limit 50
+  ) item;
+  return jsonb_build_object(
+    'profileId', p_profile_id,
+    'candidates', v_candidates
+  );
+end;
+$$;
+
 create function public.internal_record_follow_up(
   p_auth_subject uuid,
   p_auth_session_id uuid,
@@ -750,6 +790,21 @@ as $$
   )
 $$;
 
+create function public.internal_list_tracking_candidates(
+  p_auth_subject uuid,
+  p_auth_session_id uuid,
+  p_profile_id uuid
+)
+returns jsonb
+language sql
+security definer
+set search_path = pg_catalog
+as $$
+  select private.list_tracking_candidates(
+    p_auth_subject, p_auth_session_id, p_profile_id
+  )
+$$;
+
 revoke all on function private.reject_follow_up_artifact_mutation()
 from public, anon, authenticated, service_role;
 revoke all on function private.require_active_plan_version(uuid, uuid)
@@ -771,6 +826,8 @@ from public, anon, authenticated, service_role;
 revoke all on function private.create_derived_context_snapshot(
   uuid, uuid, uuid, uuid, text, uuid, timestamptz, jsonb, text, bytea
 ) from public, anon, authenticated, service_role;
+revoke all on function private.list_tracking_candidates(uuid, uuid, uuid)
+from public, anon, authenticated, service_role;
 
 revoke all on function public.internal_record_follow_up(
   uuid, uuid, uuid, uuid, text, timestamptz, jsonb, text, boolean, bytea, bytea
@@ -786,6 +843,8 @@ revoke all on function public.internal_list_lab_observations(
 revoke all on function public.internal_create_derived_context_snapshot(
   uuid, uuid, uuid, uuid, text, uuid, timestamptz, jsonb, text, bytea
 ) from public, anon, authenticated;
+revoke all on function public.internal_list_tracking_candidates(uuid, uuid, uuid)
+from public, anon, authenticated;
 
 grant execute on function public.internal_record_follow_up(
   uuid, uuid, uuid, uuid, text, timestamptz, jsonb, text, boolean, bytea, bytea
@@ -801,3 +860,5 @@ grant execute on function public.internal_list_lab_observations(
 grant execute on function public.internal_create_derived_context_snapshot(
   uuid, uuid, uuid, uuid, text, uuid, timestamptz, jsonb, text, bytea
 ) to service_role;
+grant execute on function public.internal_list_tracking_candidates(uuid, uuid, uuid)
+to service_role;

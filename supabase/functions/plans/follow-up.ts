@@ -5,6 +5,7 @@ import {
   type LabHistory,
   type LabObservation,
   type LabObservationInput,
+  type PlanCandidateAck,
 } from "@health-design/contracts";
 import {
   analyzeLabHistory,
@@ -191,6 +192,7 @@ function groupKey(observation: LabObservation): string {
 export function buildLabHistory(
   input: Readonly<{
     answers: QuestionnaireAnswers;
+    candidates: readonly PlanCandidateAck[];
     now: string;
     observations: readonly LabObservation[];
     profileId: string;
@@ -252,6 +254,7 @@ export function buildLabHistory(
   return LabHistorySchema.parse({
     items: items.sort((left, right) => left.name.localeCompare(right.name, "es")),
     observations: input.observations,
+    pendingCandidates: input.candidates,
     profileId: input.profileId,
   });
 }

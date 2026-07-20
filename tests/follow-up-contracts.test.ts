@@ -117,5 +117,11 @@ describe("contratos de seguimiento T13", () => {
         observations: Array.from({ length: 5 }, () => parsed.observations[0]),
       }).success,
     ).toBe(false);
+    expect(
+      LabBatchCreateRequestSchema.safeParse({
+        ...parsed,
+        observations: [{ ...parsed.observations[0], value: "9".repeat(65) }],
+      }).success,
+    ).toBe(false);
   });
 });

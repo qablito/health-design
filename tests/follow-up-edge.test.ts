@@ -236,6 +236,12 @@ function setup(options?: {
           error: null,
         });
       }
+      if (name === "internal_list_tracking_candidates") {
+        return Promise.resolve({
+          data: [{ candidates: [], profileId }],
+          error: null,
+        });
+      }
       if (name === "internal_record_follow_up") {
         return Promise.resolve({
           data: [
@@ -365,8 +371,15 @@ describe("Edge de seguimiento T13", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ entries: [followUpEntry], profileId });
-    expect(current.calls.map(({ name }) => name)).toEqual(["internal_list_follow_ups"]);
+    expect(await response.json()).toEqual({
+      entries: [followUpEntry],
+      pendingCandidates: [],
+      profileId,
+    });
+    expect(current.calls.map(({ name }) => name)).toEqual([
+      "internal_list_follow_ups",
+      "internal_list_tracking_candidates",
+    ]);
   });
 
   it("registra una semana estable sin fabricar un candidato idéntico", async () => {
@@ -444,7 +457,9 @@ describe("Edge de seguimiento T13", () => {
       contextUpdateRequired: false,
     });
     expect(current.engineCalls).toHaveLength(1);
-    expect(current.calls.at(-1)).toMatchObject({
+    expect(
+      current.calls.find(({ name }) => name === "internal_create_plan_candidate"),
+    ).toMatchObject({
       args: { p_change_kind: "follow_up_changed", p_impact: "module_only" },
       name: "internal_create_plan_candidate",
     });
@@ -518,7 +533,9 @@ describe("Edge de seguimiento T13", () => {
       },
     });
     expect(payload.history.items[0]).not.toHaveProperty("prediction");
-    expect(current.calls.at(-1)).toMatchObject({
+    expect(
+      current.calls.find(({ name }) => name === "internal_create_plan_candidate"),
+    ).toMatchObject({
       args: { p_change_kind: "lab_result_changed" },
       name: "internal_create_plan_candidate",
     });
@@ -551,6 +568,11 @@ describe("Edge de seguimiento T13", () => {
       if (name === "internal_list_lab_observations")
         return Promise.resolve({
           data: [{ observations: [incomplete], profileId }],
+          error: null,
+        });
+      if (name === "internal_list_tracking_candidates")
+        return Promise.resolve({
+          data: [{ candidates: [], profileId }],
           error: null,
         });
       return Promise.resolve({ data: null, error: { message: `unexpected_${name}` } });

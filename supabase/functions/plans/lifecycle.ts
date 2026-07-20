@@ -6,10 +6,12 @@ import {
   CONTEXT_NORMALIZATION_VERSION,
   FollowUpCreateRequestSchema,
   FollowUpEntrySchema,
+  FollowUpEntryListSchema,
   FollowUpHistorySchema,
   FollowUpMutationAckSchema,
   LabBatchCreateRequestSchema,
   LabBatchRecordAckSchema,
+  LabHistorySchema,
   LabMutationAckSchema,
   LabObservationListSchema,
   PlanCandidateAckSchema,
@@ -21,6 +23,7 @@ import {
   PlanMutationRequestSchema,
   PlanVersionDetailSchema,
   QuestionnaireDraftSchema,
+  TrackingCandidateListSchema,
   detectPlanContextChange,
   type ContextSnapshotInternal,
   type PlanContextChange,
@@ -687,6 +690,22 @@ async function loadPlanBase(
   };
 }
 
+async function listTrackingCandidates(
+  dependencies: PlanLifecycleDependencies,
+  auth: AuthContext,
+  profileId: string,
+) {
+  return parseDependency(
+    TrackingCandidateListSchema,
+    firstRow(
+      await rpc(dependencies, "internal_list_tracking_candidates", {
+        ...authArgs(auth),
+        p_profile_id: profileId,
+      }),
+    ),
+  ).candidates;
+}
+
 async function createDerivedContext(
   input: Readonly<{
     answers: ContextSnapshotInternal["answers"];
@@ -981,6 +1000,7 @@ async function listLabs(
   );
   return buildLabHistory({
     answers: baseContext.answers,
+    candidates: await listTrackingCandidates(dependencies, auth, route.profileId),
     now: dependencies.now().toISOString(),
     observations: stored.observations,
     profileId: route.profileId,
@@ -1025,14 +1045,15 @@ async function createLabBatch(
       }),
     ),
   );
-  const labHistory = buildLabHistory({
+  const labHistoryBeforeCandidate = buildLabHistory({
     answers: baseContext.answers,
+    candidates: [],
     now: dependencies.now().toISOString(),
     observations: stored.observations,
     profileId: route.profileId,
   });
   const inserted = new Set(batch.observations.map(({ id }) => id));
-  const outOfRange = labHistory.items.filter(
+  const outOfRange = labHistoryBeforeCandidate.items.filter(
     ({ interpretation, latestObservationId }) =>
       inserted.has(latestObservationId) &&
       (interpretation === "above_range" || interpretation === "below_range"),
@@ -1083,6 +1104,14 @@ async function createLabBatch(
       reasons: ["lab_values_updated"],
     });
   }
+  const labHistory = LabHistorySchema.parse({
+    ...labHistoryBeforeCandidate,
+    pendingCandidates: await listTrackingCandidates(
+      dependencies,
+      auth,
+      route.profileId,
+    ),
+  });
   return LabMutationAckSchema.parse({ candidate, history: labHistory });
 }
 
@@ -1110,8 +1139,8 @@ async function dispatch(
     return generatePlan(request, route, dependencies, auth);
   }
   if (route.kind === "follow-up-list") {
-    return parseDependency(
-      FollowUpHistorySchema,
+    const history = parseDependency(
+      FollowUpEntryListSchema,
       firstRow(
         await rpc(dependencies, "internal_list_follow_ups", {
           ...authArgs(auth),
@@ -1120,6 +1149,14 @@ async function dispatch(
         }),
       ),
     );
+    return FollowUpHistorySchema.parse({
+      ...history,
+      pendingCandidates: await listTrackingCandidates(
+        dependencies,
+        auth,
+        route.profileId,
+      ),
+    });
   }
   if (route.kind === "follow-up-create") {
     return createFollowUp(request, route, dependencies, auth);

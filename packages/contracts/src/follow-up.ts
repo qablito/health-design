@@ -5,7 +5,10 @@ import { PlanCandidateAckSchema, PlanModuleSchema } from "./plans";
 export const FOLLOW_UP_SCHEMA_VERSION = 1 as const;
 
 const TimestampSchema = z.iso.datetime({ offset: true });
-const DecimalSchema = z.string().regex(/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/);
+const DecimalSchema = z
+  .string()
+  .max(64)
+  .regex(/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/);
 const ScoreFiveSchema = z.number().int().min(1).max(5);
 const ModuleListSchema = z
   .array(PlanModuleSchema)
@@ -176,6 +179,14 @@ export const FollowUpEntrySchema = z
 export const FollowUpHistorySchema = z
   .object({
     entries: z.array(FollowUpEntrySchema).max(500),
+    pendingCandidates: z.array(PlanCandidateAckSchema).max(50),
+    profileId: z.uuid(),
+  })
+  .strict();
+
+export const FollowUpEntryListSchema = z
+  .object({
+    entries: z.array(FollowUpEntrySchema).max(500),
     profileId: z.uuid(),
   })
   .strict();
@@ -301,6 +312,14 @@ export const LabHistorySchema = z
   .object({
     items: z.array(LabHistoryItemSchema).max(100),
     observations: z.array(LabObservationSchema).max(500),
+    pendingCandidates: z.array(PlanCandidateAckSchema).max(50),
+    profileId: z.uuid(),
+  })
+  .strict();
+
+export const TrackingCandidateListSchema = z
+  .object({
+    candidates: z.array(PlanCandidateAckSchema).max(50),
     profileId: z.uuid(),
   })
   .strict();

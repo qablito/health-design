@@ -152,4 +152,3 @@ Postgres 17, RLS y pgTAP.
 - Sin PDF/XLSX, Luna ni automatización de compra.
 - Sin motor de candidatos alternativo ni activación automática.
 - Sin reglas genéricas de vigencia para analitos no modelados.
-

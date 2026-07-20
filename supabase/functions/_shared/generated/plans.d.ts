@@ -784,6 +784,7 @@ export declare const PlanHistorySchema: z.ZodObject<{
 export type ContextSnapshotCreateRequest = z.infer<typeof ContextSnapshotCreateRequestSchema>;
 export type ContextSnapshotAck = z.infer<typeof ContextSnapshotAckSchema>;
 export type ContextSnapshotInternal = z.infer<typeof ContextSnapshotInternalSchema>;
+export type PlanCandidateAck = z.infer<typeof PlanCandidateAckSchema>;
 export type PlanCandidateCreateRequest = z.infer<typeof PlanCandidateCreateRequestSchema>;
 export type PlanEngineResult = z.infer<typeof PlanEngineResultSchema>;
 export type PlanModuleResultInput = z.infer<typeof PlanModuleResultInputSchema>;

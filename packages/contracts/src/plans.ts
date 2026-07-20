@@ -235,6 +235,7 @@ export type ContextSnapshotCreateRequest = z.infer<
 >;
 export type ContextSnapshotAck = z.infer<typeof ContextSnapshotAckSchema>;
 export type ContextSnapshotInternal = z.infer<typeof ContextSnapshotInternalSchema>;
+export type PlanCandidateAck = z.infer<typeof PlanCandidateAckSchema>;
 export type PlanCandidateCreateRequest = z.infer<
   typeof PlanCandidateCreateRequestSchema
 >;

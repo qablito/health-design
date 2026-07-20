@@ -228,6 +228,16 @@ select is(
   'el propietario recupera su historial de seguimiento'
 );
 
+select is(
+  jsonb_array_length(public.internal_list_tracking_candidates(
+    '00000000-0000-4000-8000-000000013101',
+    '21000000-0000-4000-8000-000000013101',
+    '51000000-0000-4000-8000-000000013101'
+  ) -> 'candidates'),
+  0,
+  'el listado de candidatos pendientes comienza vacío y queda ligado al perfil'
+);
+
 create temporary table first_lab_batch as
 select public.internal_record_lab_batch(
   '00000000-0000-4000-8000-000000013101',
@@ -281,6 +291,37 @@ select is(
   ),
   (select response from first_lab_batch),
   'el lote manual también es idempotente'
+);
+
+select throws_ok(
+  format(
+    $$select public.internal_record_lab_batch(
+      '00000000-0000-4000-8000-000000013101',
+      '21000000-0000-4000-8000-000000013101',
+      '51000000-0000-4000-8000-000000013101',
+      '74000000-0000-4000-8000-000000013101', false,
+      %L::jsonb, decode(repeat('f1', 32), 'hex'), decode(repeat('f2', 32), 'hex')
+    )$$,
+    jsonb_build_array(jsonb_build_object(
+      'analyte', 'b12', 'name', 'Vitamina B12', 'value', repeat('9', 65),
+      'unit', 'pg/mL', 'source', 'laboratory', 'confidence', 'high',
+      'measurement', jsonb_build_object('kind', 'unknown')
+    ))::text
+  ),
+  '22023', 'invalid_input',
+  'rechaza decimales desproporcionados antes de persistirlos'
+);
+
+select throws_ok(
+  $$
+    select public.internal_list_lab_observations(
+      '00000000-0000-4000-8000-000000013102',
+      '21000000-0000-4000-8000-000000013102',
+      '51000000-0000-4000-8000-000000013101', 100
+    )
+  $$,
+  '42501', 'access_not_granted',
+  'un actor ajeno tampoco puede leer las analíticas del perfil'
 );
 
 create temporary table derived_snapshot as

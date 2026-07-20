@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { AccessApp } from "./features/access/AccessApp";
 import { AdminApp } from "./features/admin/AdminApp";
+import { FollowUpApp } from "./features/follow-up/FollowUpApp";
 import { NutritionApp } from "./features/nutrition/NutritionApp";
 import { TrainingApp } from "./features/training/TrainingApp";
 import { WellnessApp } from "./features/wellness/WellnessApp";
@@ -29,6 +30,8 @@ createRoot(rootElement).render(
       <TrainingApp />
     ) : window.location.pathname.startsWith("/wellness") ? (
       <WellnessApp />
+    ) : window.location.pathname.startsWith("/follow-up") ? (
+      <FollowUpApp />
     ) : (
       <AccessApp />
     )}
