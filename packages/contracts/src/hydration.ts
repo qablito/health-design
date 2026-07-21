@@ -4,7 +4,7 @@ import {
   ActionLevelSchema,
   ClinicalCoverageSchema,
   ClinicalUncertaintySchema,
-} from "./clinical";
+} from "./clinical.ts";
 
 export const HydrationMlRangeSchema = z
   .object({

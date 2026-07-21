@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { QuestionnaireAnswersSchema } from "./questionnaire";
+import { QuestionnaireAnswersSchema } from "./questionnaire.ts";
 export declare const PLAN_SCHEMA_VERSION: 1;
 export declare const CONTEXT_SOURCE_SCHEMA_VERSIONS: readonly [1, 2];
 export declare const CONTEXT_NORMALIZATION_VERSION: "normalization-v1";

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { ActionLevelSchema, ClinicalCoverageSchema } from "./clinical";
+import { ActionLevelSchema, ClinicalCoverageSchema } from "./clinical.ts";
 
 export const SUPPLEMENTS_SCHEMA_VERSION = 1 as const;
 

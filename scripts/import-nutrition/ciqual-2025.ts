@@ -250,6 +250,14 @@ function knownNutrient(
   const definition = NUTRIENT_COLUMNS[key];
   const parsed = parseCiqualValue(row[definition.column]);
   if (parsed.state !== "known") {
+    if (parsed.state === "trace" && GENERATOR_REQUIRED_NUTRIENTS.has(key)) {
+      return {
+        nutrientClass: definition.nutrientClass,
+        state: "known",
+        unit: definition.unit,
+        value: "0",
+      };
+    }
     if (GENERATOR_REQUIRED_NUTRIENTS.has(key)) {
       throw new Error(`ciqual_2025_required_value_${parsed.state}_${key}`);
     }
@@ -267,8 +275,8 @@ function recordFromRow(
   row: readonly unknown[],
   metadata: GeneratorFoodMetadata,
 ): NutritionImportRecord {
-  if (cellText(row[6]) !== metadata.ciqualCode) {
-    throw new Error(`ciqual_2025_code_mismatch_${metadata.ciqualCode}`);
+  if (cellText(row[6]) !== metadata.sourceCode) {
+    throw new Error(`ciqual_2025_code_mismatch_${metadata.sourceCode}`);
   }
   const nutrients: Record<string, ImportedNutrientValue> = {};
   for (const key of Object.keys(
@@ -308,8 +316,8 @@ export async function buildCiqual2025GeneratorArtifact(
   assertWorkbookShape(rows);
   const rowsByCode = new Map(rows.slice(1).map((row) => [String(row[6]), row]));
   const records = CIQUAL_2025_GENERATOR_CORE.map((metadata) => {
-    const row = rowsByCode.get(metadata.ciqualCode);
-    if (!row) throw new Error(`ciqual_2025_code_missing_${metadata.ciqualCode}`);
+    const row = rowsByCode.get(metadata.sourceCode);
+    if (!row) throw new Error(`ciqual_2025_code_missing_${metadata.sourceCode}`);
     return recordFromRow(row, metadata);
   });
   return {
@@ -328,6 +336,7 @@ export async function buildCiqual2025GeneratorArtifact(
     sourceVersion: CIQUAL_2025_SOURCE_VERSION,
     transformations: [
       "source:doi:10.57745/RPWYZD",
+      "trace:required_generator_nutrients_as_zero",
       "worksheet:composition nutritionnelle",
       "decimal_comma:canonical_decimal",
       "generator_core:exact_required_values_only",

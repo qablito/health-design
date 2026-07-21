@@ -27,6 +27,7 @@ describe("catálogo nutricional federado", () => {
       "livsmedelsverket",
       "usda_foundation",
       "usda_sr_legacy",
+      "bedca_public",
     ]);
 
     const batches = await Promise.all(

@@ -78,6 +78,11 @@ La corrección documental no autoriza importación ni publicación.
 
 # T17-P0 — Núcleo nutricional exacto 60 + 20
 
+> **Estado 2026-07-21:** `T17_P0_LOCAL_PASS`. P0.1 y P0.2 están implementadas
+> localmente: 80/80 correspondencias oficiales, 88 revisiones totales y 440/440
+> observaciones nutricionales obligatorias conocidas. No se ha importado, activado ni
+> desplegado nada en Supabase remoto. Recibo: [`T17_BASKET_SOURCE_MAP.md`](../data/T17_BASKET_SOURCE_MAP.md).
+
 ## Tarea P0.1: Fijar la semilla canónica y demostrar el déficit actual
 
 **Archivos:**

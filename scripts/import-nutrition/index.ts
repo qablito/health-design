@@ -20,6 +20,18 @@ import {
 } from "@health-design/test-fixtures/nutrition";
 
 import { buildCiqual2025GeneratorArtifact, downloadCiqual2025 } from "./ciqual-2025.ts";
+import {
+  buildBedcaPublicGeneratorArtifact,
+  downloadBedcaPublicGeneratorSnapshot,
+} from "./bedca-public.ts";
+import {
+  buildFineliGeneratorArtifact,
+  downloadFineliGeneratorSnapshot,
+} from "./fineli.ts";
+import {
+  buildUsdaSrLegacyGeneratorArtifact,
+  downloadUsdaSrLegacyGeneratorSnapshot,
+} from "./usda-sr-legacy.ts";
 
 type Descriptor = Readonly<{
   envelope: NutritionImportEnvelope;
@@ -164,10 +176,85 @@ async function importCiqual2025(arguments_: readonly string[]): Promise<void> {
   );
 }
 
+async function writeQuarantineBatch(
+  artifact: NutritionImportArtifact,
+  output: string,
+): Promise<void> {
+  const batch = await buildNutritionQuarantineBatch(artifact);
+  if (batch.status !== "quarantined") {
+    throw new Error(
+      `${artifact.sourceKey}_quarantine_failed:${JSON.stringify(batch.violations)}`,
+    );
+  }
+  const serialized = `${JSON.stringify(batch, null, 2)}\n`;
+  if (new TextEncoder().encode(serialized).byteLength > 512 * 1_024) {
+    throw new Error(`${artifact.sourceKey}_edge_batch_limit_exceeded`);
+  }
+  await writeFile(resolve(output), serialized, { encoding: "utf8", flag: "w" });
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        manifest: batch.manifest.id,
+        output: resolve(output),
+        records: batch.revisions.length,
+        source: batch.manifest.sourceKey,
+        sourceVersion: batch.manifest.sourceVersion,
+        status: batch.status,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
+async function importSelectedOfficialSource(
+  arguments_: readonly string[],
+  source: "bedca" | "fineli" | "usda-sr-legacy",
+): Promise<void> {
+  const snapshotArgument = argumentValue(arguments_, "--snapshot");
+  const downloadArgument = argumentValue(arguments_, "--download");
+  const output = argumentValue(arguments_, "--output");
+  if (
+    output === null ||
+    (snapshotArgument === null && downloadArgument === null) ||
+    (snapshotArgument !== null && downloadArgument !== null)
+  ) {
+    throw new Error(`${source}_arguments_invalid`);
+  }
+  const snapshot = resolve(snapshotArgument ?? downloadArgument!);
+  if (downloadArgument !== null) {
+    if (source === "fineli") {
+      await downloadFineliGeneratorSnapshot(snapshot);
+    } else if (source === "usda-sr-legacy") {
+      await downloadUsdaSrLegacyGeneratorSnapshot(
+        snapshot,
+        argumentValue(arguments_, "--api-key") ?? "DEMO_KEY",
+      );
+    } else {
+      await downloadBedcaPublicGeneratorSnapshot(snapshot);
+    }
+  }
+  const retrievedAt =
+    argumentValue(arguments_, "--retrieved-at") ?? new Date().toISOString();
+  const artifact =
+    source === "fineli"
+      ? await buildFineliGeneratorArtifact(snapshot, retrievedAt)
+      : source === "usda-sr-legacy"
+        ? await buildUsdaSrLegacyGeneratorArtifact(snapshot, retrievedAt)
+        : await buildBedcaPublicGeneratorArtifact(snapshot, retrievedAt);
+  await writeQuarantineBatch(artifact, output);
+}
+
 const arguments_ = process.argv.slice(2);
 const path = descriptorPath(arguments_);
 if (arguments_.includes("--ciqual-2025")) {
   await importCiqual2025(arguments_);
+} else if (arguments_.includes("--fineli")) {
+  await importSelectedOfficialSource(arguments_, "fineli");
+} else if (arguments_.includes("--usda-sr-legacy")) {
+  await importSelectedOfficialSource(arguments_, "usda-sr-legacy");
+} else if (arguments_.includes("--bedca")) {
+  await importSelectedOfficialSource(arguments_, "bedca");
 } else if (arguments_.includes("--fixture") && path === null) {
   await importFixture();
 } else if (path !== null && !arguments_.includes("--fixture")) {
@@ -176,7 +263,10 @@ if (arguments_.includes("--ciqual-2025")) {
   process.stderr.write(
     "Uso: pnpm run import:nutrition -- --fixture | --descriptor <ruta.json> | " +
       "--ciqual-2025 (--workbook <ciqual.xlsx> | --download <ciqual.xlsx>) " +
-      "--output <lote.json> [--retrieved-at <ISO>]\n",
+      "--output <lote.json> | " +
+      "--fineli|--usda-sr-legacy|--bedca " +
+      "(--snapshot <fuente.json> | --download <fuente.json>) " +
+      "--output <lote.json> [--retrieved-at <ISO>] [--api-key <USDA>]\n",
   );
   process.exitCode = 1;
 }

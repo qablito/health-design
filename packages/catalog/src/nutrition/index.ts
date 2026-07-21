@@ -19,11 +19,20 @@ export const SOURCE_PRIORITY = [
   "livsmedelsverket",
   "usda_foundation",
   "usda_sr_legacy",
+  "bedca_public",
 ] as const;
 
 export type NutritionSourceKey = (typeof SOURCE_PRIORITY)[number];
 
 export const NUTRITION_SOURCES = {
+  bedca_public: {
+    downloadUrl: "https://www.bedca.net/bdpub/",
+    license: "BEDCA public data use conditions",
+    name: "Base de Datos Española de Composición de Alimentos",
+    precedence: 7,
+    referenceUrl:
+      "https://www.aesan.gob.es/AECOSAN/web/seguridad_alimentaria/subdetalle/composicion.htm",
+  },
   bls_4_0: {
     downloadUrl: "https://blsdb.de/download",
     license: "CC BY 4.0",
@@ -39,8 +48,8 @@ export const NUTRITION_SOURCES = {
     referenceUrl: "https://ciqual.anses.fr/cms/en/2025-anses-ciqual-table",
   },
   fineli: {
-    downloadUrl: "https://fineli.fi/fineli/en/index",
-    license: "THL open data terms",
+    downloadUrl: "https://fineli.fi/fineli/content/file/49",
+    license: "CC BY 4.0",
     name: "Fineli",
     precedence: 3,
     referenceUrl: "https://fineli.fi/fineli/en/index",

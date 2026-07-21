@@ -12,7 +12,7 @@ import {
   detectContextChange as detectDomainContextChange,
 } from "@health-design/domain";
 
-import { QuestionnaireAnswersSchema } from "./questionnaire";
+import { QuestionnaireAnswersSchema } from "./questionnaire.ts";
 
 export const PLAN_SCHEMA_VERSION = 1 as const;
 export const CONTEXT_SOURCE_SCHEMA_VERSIONS = [1, 2] as const;

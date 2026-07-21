@@ -1,20 +1,20 @@
 import { z } from "zod";
 
-export * from "./access";
-export * from "./ai";
-export * from "./admin";
-export * from "./clinical";
-export * from "./follow-up";
-export * from "./exports";
-export * from "./hydration";
-export * from "./mobility";
-export * from "./nutrition";
-export * from "./plans";
-export * from "./products";
-export * from "./questionnaire";
-export * from "./sleep";
-export * from "./supplements";
-export * from "./training";
+export * from "./access.ts";
+export * from "./ai.ts";
+export * from "./admin.ts";
+export * from "./clinical.ts";
+export * from "./follow-up.ts";
+export * from "./exports.ts";
+export * from "./hydration.ts";
+export * from "./mobility.ts";
+export * from "./nutrition.ts";
+export * from "./plans.ts";
+export * from "./products.ts";
+export * from "./questionnaire.ts";
+export * from "./sleep.ts";
+export * from "./supplements.ts";
+export * from "./training.ts";
 
 export const RuntimeSmokeSchema = z
   .object({

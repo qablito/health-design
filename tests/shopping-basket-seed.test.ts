@@ -25,11 +25,7 @@ describe("semilla de compra T17 60 + 20", () => {
     expect(T17_RESERVE_BASKET_KEYS).toHaveLength(20);
     expect(new Set(T17_RESERVE_BASKET_KEYS)).toHaveProperty("size", 20);
     expect(
-      T17_FIXED_BASKET_KEYS.filter((key) =>
-        T17_RESERVE_BASKET_KEYS.includes(
-          key as (typeof T17_RESERVE_BASKET_KEYS)[number],
-        ),
-      ),
+      T17_FIXED_BASKET_KEYS.filter((key) => T17_RESERVE_BASKET_KEYS.includes(key)),
     ).toEqual([]);
   });
 

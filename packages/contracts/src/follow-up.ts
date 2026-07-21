@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { PlanCandidateAckSchema, PlanModuleSchema } from "./plans";
+import { PlanCandidateAckSchema, PlanModuleSchema } from "./plans.ts";
 
 export const FOLLOW_UP_SCHEMA_VERSION = 1 as const;
 

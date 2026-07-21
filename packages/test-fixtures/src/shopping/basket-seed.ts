@@ -584,14 +584,14 @@ export const T17_FIXED_BASKET = [
   }),
 
   item({
-    canonicalFoodKey: "food:bedca-2544",
+    canonicalFoodKey: "food:ciqual-17270",
     ediblePart: "whole_edible_product",
     foodState: "unspecified",
     group: "fat",
     name: "Aceite de oliva virgen extra",
     purchaseForm: "natural",
-    sourceCode: "2544",
-    sourceKey: "bedca_public",
+    sourceCode: "17270",
+    sourceKey: "ciqual_2025",
   }),
   item({
     canonicalFoodKey: "food:fineli-11057",

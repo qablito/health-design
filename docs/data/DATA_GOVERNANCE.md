@@ -48,6 +48,11 @@ licencia/uso permitido, fecha de consulta, versión, transformaciones, cobertura
 y responsable de revisión. Conserva además SHA-256 del artefacto bruto y del
 resultado normalizado, junto con la versión de canonicalización; reimportar un
 contenido distinto nunca reutiliza silenciosamente el mismo manifiesto.
+
+La selección oficial exacta que cubre la cesta nutricional T17 se documenta en
+[`T17_BASKET_SOURCE_MAP.md`](T17_BASKET_SOURCE_MAP.md). La selección es
+multifuente, pero cada alimento conserva una única identidad y revisión de
+origen; no se promedian valores entre bases.
 `CatalogRevision.source_manifest_id` y `capture_evidence_ref` enlazan cada lote
 de supermercado con esa evidencia. Ninguna revisión comercial puede publicarse
 si falta manifiesto, licencia, hashes o descripción de captura/transformación.
@@ -255,6 +260,8 @@ versión, licencia y manifiesto exactos usados en cada importación:
 - [Livsmedelsverkets Livsmedelsdatabas](https://soknaringsinnehall.livsmedelsverket.se/).
 - [USDA FoodData Central](https://fdc.nal.usda.gov/) y
   [datasets descargables](https://fdc.nal.usda.gov/download-datasets/).
+- [BEDCA](https://www.bedca.net/) y la
+  [referencia institucional de AESAN](https://www.aesan.gob.es/AECOSAN/web/seguridad_alimentaria/subdetalle/composicion.htm).
 - [FAO/INFOODS Standards and Guidelines](https://www.fao.org/infoods/infoods/standards-guidelines/en/).
 - [Comisión Europea: etiquetado nutricional](https://food.ec.europa.eu/food-safety/labelling-and-nutrition/food-information-consumers-legislation/nutrition-labelling_en).
 
