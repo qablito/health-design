@@ -39,6 +39,7 @@
     "packages/*/src",
     "playwright.config.ts",
     "scripts/import-nutrition/**/*.ts",
+    "scripts/import-supermarket-catalog/**/*.ts",
     "supabase/functions/_shared/*.ts",
     "supabase/functions/_shared/generated/contracts.d.ts",
     "supabase/functions/_shared/generated/products.d.ts",

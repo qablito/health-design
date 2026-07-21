@@ -20,6 +20,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "import:nutrition": "node scripts/import-nutrition/index.ts",
+    "import:supermarkets": "node scripts/import-supermarket-catalog/index.ts",
     "lint": "eslint .",
     "supply-chain:artifacts": "node scripts/verify-supply-chain.mjs --generate-release && node scripts/verify-supply-chain.mjs --verify-release",
     "test": "vitest run",

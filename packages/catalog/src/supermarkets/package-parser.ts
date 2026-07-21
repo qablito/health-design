@@ -15,7 +15,7 @@ export type ParsedSupermarketPackage = Readonly<{
   status: "confirmed" | "review";
 }>;
 
-const canonicalPositiveDecimal = /^(?:[1-9]\d*)(?:\.\d*[1-9])?$/;
+const canonicalPositiveDecimal = /^(?:0|[1-9]\d*)(?:\.\d*[1-9])?$/;
 
 function sourceDecimal(value: string): string {
   const candidate = value.trim().replace(",", ".");
