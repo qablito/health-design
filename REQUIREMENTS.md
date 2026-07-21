@@ -123,13 +123,15 @@ falla cualquiera de sus requisitos críticos.
 | REQ-DAT-003 | V1 | El escaneo comercial requiere confirmación del usuario | Consultar o escanear no persiste ni aplica; la confirmación estructurada se reutiliza de inmediato solo en el perfil propietario y otros perfiles la reciben únicamente mediante una revisión global nueva, aprobada por AAL2 | G6,G7,G8 |
 | REQ-DAT-004 | V1 | Comparaciones, redondeos y discrepancias siguen el contrato numérico | Un valor supera exactamente el umbral documentado y abre revisión; redondear la UI no cambia el valor interno | G2,G6 |
 | REQ-DAT-005 | V1 | El matching comercial es versionado y aplica exclusiones primero | Estados exact/allowed/review/excluded/insufficient; cada GTIN tiene como máximo una regla activa, aprobar crea un borrador y activar es una acción manual independiente; unknown alergénico no se autoelige | G3,G5,G6 |
-| REQ-DAT-006 | V1 | Una cadena solo se publica al superar su puerta de cobertura | Sobre cesta 60+20: cobertura ≥90 %, cada grupo esencial ≥75 %, precio/formato utilizables y activación manual; caída oculta sin borrar historia | G6,G7 |
+| REQ-DAT-006 | V1 | Una cadena solo se publica al superar su puerta de cobertura | Sobre cesta de exactamente 60 fijos + 20 dinámicos: cobertura ≥90 %, cada grupo esencial ≥75 %, precio/formato utilizables y activación manual; una caída abre revisión, pero solo una acción administrativa sustituye u oculta la publicación sin borrar historia | G6,G7 |
 | REQ-DAT-007 | V1 | Producto comercial, alimento canónico y SKU de compra usan resoluciones separadas | Una corrección de etiqueta solo rige ese GTIN; aplicarla exige confirmación y crea candidato con cantidad, nutrientes y dos sustitutos recalculados; el alimento genérico y el SKU/precio mantienen autoridades propias | G2,G5,G6 |
 | REQ-SHP-001 | V1 | El plan activo es la verdad nutricional | Cambiar SKU afecta envases, sobrante y coste, nunca kcal/macros de la comida | G4,G6 |
 | REQ-SHP-002 | V1 | La lista agrega cantidades semanales y descuenta solo sobrante confirmado | Un producto sin equivalencia muestra «Sin producto confirmado» y no se autoelige | G4,G6 |
 | REQ-SHP-003 | V1 | El supermercado habitual es una preferencia vinculante | Se puede avisar de ahorro en otra cadena, pero no se cambia la elección | G6,G8 |
 | REQ-SHP-004 | V1 | El comparador calcula desembolso real y cobertura | No se declara «más barato» si falta una línea; no hay ofertas, cupones, transporte o checkout | G6,G7 |
 | REQ-SHP-005 | V1 | Orden y filtros son consistentes | Precio normalizado ascendente por defecto; precio asc/desc y A–Z/Z–A idénticos en UI/PDF/impresión | G6,G8 |
+
+El alcance verificable de `REQ-DAT-006` y `REQ-SHP-*` se detalla en el [contrato T17](docs/plans/2026-07-21-t17-supermarket-shopping-contract.md); su aprobación no acredita implementación ni despliegue.
 
 ## Exportación, seguimiento y calidad
 

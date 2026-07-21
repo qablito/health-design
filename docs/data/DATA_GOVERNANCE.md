@@ -118,13 +118,14 @@ El catálogo se divide en tres capas:
 
 1. catálogo comercial completo importado;
 2. alimentos canónicos y reglas de matching;
-3. cesta de prueba V1: 60 productos fijos + hasta 20 dinámicos frecuentes.
+3. cesta de prueba V1: 60 productos fijos + exactamente 20 dinámicos frecuentes.
 
 La cesta de prueba no limita el catálogo total. Una cadena solo se publica si
 alcanza al menos 90 % de cobertura de la cesta, ningún grupo esencial baja del
 75 %, tiene precio base y formato utilizables y cuenta con activación manual.
-Si la calidad cae, se oculta la publicación, pero se conserva la revisión
-histórica.
+Una publicación activa no caduca ni se oculta automáticamente. Si la calidad
+cae, se abre una revisión y solo una acción administrativa puede sustituirla u
+ocultarla; la revisión histórica se conserva.
 
 Reglas de matching:
 
@@ -133,7 +134,7 @@ Reglas de matching:
 - los estados son `exact`, `allowed`, `review`, `excluded`, `insufficient`;
 - solo hay una regla canónica activa por SKU;
 - cambios de nombre, ingredientes, formato o estado reevalúan la regla;
-- cambio de precio o disponibilidad no cambia identidad.
+- un cambio de precio no cambia identidad; el catálogo no acredita stock físico.
 
 El origen real del lote puede ser Sevilla para V1, pero esa referencia es
 interna: nunca se expone al usuario como explicación geográfica del precio.

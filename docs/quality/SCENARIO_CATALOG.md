@@ -39,7 +39,7 @@ completan cada fila mediante
 | C19 | Sueño medido por wearable, sueño/entrenamiento | REM/profundo/ligero | Trata fases como estimaciones, conserva total/horario y propone hábitos | G4,G8 / INV-18 |
 | C20 | Entrenamiento con calor y sudor alto, hidratación | Sweat-rate opcional | Banda y anclajes adaptados; cálculo oculto si hay riesgo de pesaje compulsivo | G3,G4 / INV-08 |
 | C21 | Nutrición con preferencia por proteína en polvo | Selector explícito | Mantiene alimentos por defecto; usa polvo solo en opción elegida y recalcula | G2,G4 / INV-04, INV-05 |
-| C22 | Dieta española + Mercadona/Lidl, compras/exportación | Un supermercado y ahorro opcional | Canon nutricional estable, formatos/precios orientativos, aviso de ahorro sin cambiar preferencia, PDF/Excel coherentes | G6,G8 / INV-04, INV-09, INV-10, INV-15 |
+| C22 | Dieta española + Mercadona/DIA/ALDI, compras/exportación | Una o varias cadenas candidatas V1 y ahorro opcional | Canon nutricional estable, formatos/precios orientativos sin promesa de stock, aviso de ahorro sin cambiar preferencia, PDF/XLSX coherentes | G6,G8 / INV-04, INV-09, INV-10, INV-15 |
 
 ## 70 casos focales
 

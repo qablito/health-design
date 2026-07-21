@@ -18,12 +18,13 @@ La evidencia específica de T15 para los fragmentos de G6–G8 se conserva en
 sí solo ninguna puerta completa en `PASS`: G6 mantiene T16–T17 y G8 mantiene la
 auditoría AA final de T19.
 
-La evidencia local de productos comerciales T16 se conserva en
-[`TASK_16_VERIFICATION.md`](TASK_16_VERIFICATION.md). Cubre los fragmentos
-locales de G3/G5–G8, pero no declara `T16-G8 Remoto`: copia precrítica,
-migraciones/funciones de desarrollo, dos perfiles reales sintéticos y recorrido
-AAL2 siguen pendientes de autorización y ejecución remota. G6 mantiene además
-los SKU/precios/cobertura de T17.
+La evidencia local y remota de desarrollo de productos comerciales T16 se
+conserva en [`TASK_16_VERIFICATION.md`](TASK_16_VERIFICATION.md), con estado
+`T16_COMPLETE_REMOTE_PASS`. Cubre los fragmentos T16 de G3/G5–G8 —incluidos
+copia precrítica, migraciones y funciones de desarrollo, perfiles sintéticos,
+AAL2 y exportaciones— sin acreditar producción. G6 mantiene pendientes los
+SKU, precios y cobertura de T17, cuyo contrato está aprobado pero aún no
+constituye evidencia de implementación.
 
 ## Criterio de evaluación por puerta
 

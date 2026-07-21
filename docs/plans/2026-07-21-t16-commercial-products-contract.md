@@ -1,11 +1,11 @@
 # Contrato T16 — Productos comerciales, códigos de barras y aplicación al plan
 
-**Estado:** `T16_LOCAL_PASS`
+**Estado:** `T16_COMPLETE_REMOTE_PASS`
 **Fecha:** 2026-07-21
 **Aprobación:** contrato confirmado por el usuario el 2026-07-21.
-**Naturaleza de este documento:** contrato aprobado y ejecutado localmente; la evidencia
-está en [`TASK_16_VERIFICATION.md`](../quality/TASK_16_VERIFICATION.md). No acredita
-migración, despliegue ni validación remota.
+**Naturaleza de este documento:** contrato aprobado e implementado, con evidencia local y
+remota de desarrollo en
+[`TASK_16_VERIFICATION.md`](../quality/TASK_16_VERIFICATION.md). No acredita producción.
 **Dependencias ya disponibles:** identidad y acceso, RLS y borrado, planes versionados,
 catálogo nutricional genérico, seguimiento, exportaciones PDF/XLSX y administración AAL2.
 **Requisitos cubiertos:** `REQ-DAT-001`, `REQ-DAT-003`, `REQ-DAT-005`,
@@ -1028,6 +1028,7 @@ de T16 salvo autorización posterior y explícita.
 ## 20. Decisión registrada
 
 El usuario aprobó el contrato y ordenó expresamente **Implementa T16**. Los tramos
-T16A–T16E están implementados y validados localmente, por lo que el estado documental es
-`T16_LOCAL_PASS`. La secuencia remota sigue separada: no se crearán copias, aplicarán
-migraciones ni desplegarán funciones hasta recibir autorización explícita posterior.
+T16A–T16E están implementados y validados localmente y en el entorno remoto de
+desarrollo, por lo que el estado documental es `T16_COMPLETE_REMOTE_PASS`. La evidencia
+incluye copia precrítica, cinco migraciones, cinco Edge Functions, Worker, smoke,
+revisión/activación manual y PDF/XLSX. Producción permanece intacta.

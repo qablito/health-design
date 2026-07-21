@@ -421,7 +421,7 @@ comercial/GTIN al que pertenece; no reemplaza el alimento genérico.
 - La corrección se reutiliza en su perfil.
 - Solo una corrección aprobada por el superadministrador se comparte con todos.
 - GS1 se usa como identidad cuando sea accesible, no como verdad nutricional.
-- El catálogo del supermercado aporta producto, formato, precio y disponibilidad, no macros canónicos.
+- El catálogo del supermercado aporta producto, formato y precio, no macros canónicos ni stock físico.
 
 ## 15. Compra, supermercados y comparación
 
@@ -438,7 +438,7 @@ comercial/GTIN al que pertenece; no reemplaza el alimento genérico.
 - Esa elección es vinculante para la cesta mostrada.
 - Se pueden mostrar avisos de ahorro en otra cadena, pero nunca se cambia la selección automáticamente.
 - El optimizador minimiza el desembolso real combinando formatos válidos.
-- En empate prioriza: menor sobrante, menos productos distintos, menos envases, menor precio normalizado y orden alfabético estable.
+- Para cada línea, el desempate prioriza: menor desembolso, menor remanente, menor precio normalizado y, por último, cadena + SKU en orden estable.
 
 ### Varios supermercados
 
@@ -476,7 +476,7 @@ La cesta de prueba contiene 60 alimentos fijos:
 - 6 lácteos o alternativas;
 - 6 grasas, frutos secos o semillas.
 
-Se añaden 20 alimentos dinámicos según frecuencia de uso. Los 80 no limitan el catálogo extraído.
+Se añaden exactamente 20 alimentos dinámicos según frecuencia de uso. Los 80 no limitan el catálogo extraído. El contrato cerrado de esta cesta y su implementación están en [T17](docs/plans/2026-07-21-t17-supermarket-shopping-contract.md).
 
 ### Regla canónica de compatibilidad
 
@@ -499,7 +499,7 @@ Las exclusiones se evalúan primero y las coincidencias usan palabras completas.
 - excluido;
 - información insuficiente.
 
-Solo puede tener un alimento canónico activo. Un cambio de metadatos reevalúa el enlace; precio y disponibilidad no cambian identidad. Los productos con advertencia alérgica incompatible o desconocida no pueden autoseleccionarse.
+Solo puede tener un alimento canónico activo. Un cambio de metadatos reevalúa el enlace; el precio no cambia identidad. Los productos con advertencia alérgica incompatible o desconocida no pueden autoseleccionarse.
 
 ### Publicación de cadenas
 
@@ -512,7 +512,7 @@ Una cadena puede mostrarse cuando:
 - dispone de precio base y formato utilizables;
 - el superadministrador la activa.
 
-Si su calidad cae se oculta para nuevas cestas, manteniendo las referencias históricas.
+Una publicación activa no caduca ni se oculta automáticamente. Si su calidad cae, el sistema abre revisión y solo una acción administrativa puede sustituirla u ocultarla; las referencias históricas se mantienen.
 
 ## 17. Generación, versionado y edición
 

@@ -209,7 +209,7 @@ Artículo envasado identificado por etiqueta o código de barras. Puede aportar 
 
 ### SKU
 
-Presentación comercial concreta vendida por una cadena. Determina formato, precio, disponibilidad, número de envases y sobrante; no modifica la pauta nutricional.
+Presentación comercial concreta incluida en el catálogo de una cadena. Determina formato, precio, número de envases y sobrante; no acredita stock físico ni modifica la pauta nutricional.
 
 ### Función nutricional
 
