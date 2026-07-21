@@ -1041,8 +1041,10 @@ pnpm test:a11y -- print
 
 ## Tarea 16 — Productos comerciales, código de barras y publicación
 
-**Estado:** `T16_LOCAL_PASS`; implementación y validación local completas. Copia,
-migración, despliegue y smoke de desarrollo pendientes de autorización explícita.
+**Estado:** `T16_REMOTE_DEPLOYED_SMOKE_PENDING`; implementación y validación
+local completas, copia T16 verificada, cinco migraciones aplicadas y cuatro Edge
+Functions activas en desarrollo. El smoke funcional, la activación manual y las
+salidas remotas permanecen pendientes; producción no se ha modificado.
 
 **Resultado:** los datos de producto se confirman, corrigen, revisan y comparten
 sin contaminar el canon genérico.

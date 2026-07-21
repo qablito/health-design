@@ -2,16 +2,18 @@
 
 > **Fecha:** 2026-07-21
 >
-> **Estado:** `T16_LOCAL_PASS`
+> **Estado:** `T16_REMOTE_DEPLOYED_SMOKE_PENDING`
 >
 > **Rama:** `codex/task-16-contract-plan`
 >
 > **Commits funcionales:** `85ee36c`, `b3d5111`, `91c3a2d`, `bf5d679`,
-> `d6dba6e` y `b8a42f8`
+> `d6dba6e`, `b8a42f8` y `90a33b9`
 >
-> **Entorno validado:** Supabase local y navegador local.
+> **Entorno validado:** Supabase local, navegador local y despliegue remoto de
+> desarrollo.
 >
-> **Entorno remoto:** pendiente de autorización explícita; producción no se ha
+> **Entorno remoto:** copia, cinco migraciones y cuatro Edge Functions aplicadas
+> solo en `health-design-dev`; smoke funcional pendiente. Producción no se ha
 > modificado.
 
 ## Contrato implementado
@@ -38,7 +40,7 @@
 
 | Comprobación | Resultado |
 |---|---|
-| `CI=true pnpm verify` | PASS; contratos Edge, formato, lint, tipos, 20 activos visuales, 66 archivos/557 pruebas Vitest, 2 archivos/4 pruebas de navegador y build |
+| `CI=true pnpm verify` | PASS; contratos Edge, formato, lint, tipos, 20 activos visuales, 66 archivos/558 pruebas Vitest, 2 archivos/4 pruebas de navegador y build |
 | `CI=true pnpm test:e2e` | PASS; 32/32 recorridos Chromium |
 | `pnpm test:db` | PASS; 14 archivos/340 pruebas pgTAP |
 | pruebas T16 dirigidas | PASS; contratos/catálogo, persistencia Edge, aplicación al plan, cliente, administración y reconciliador |
@@ -68,7 +70,7 @@ chunk y no se descarga cuando `BarcodeDetector` nativo cubre el navegador.
 | `T16-G5 Plan` | PASS | candidato recalculado, dos sustituciones, agregados y versión activa byte a byte estable |
 | `T16-G6 Administración` | PASS local | AAL1 rechazado, AAL2/TOTP exigidos, concurrencia, idempotencia e `intent/outcome` cubiertos |
 | `T16-G7 Historia y salida` | PASS local | revisiones inmutables, histórico, retirada, borrado y regresiones PDF/XLSX/impresión cubiertos |
-| `T16-G8 Remoto` | PENDING | exige copia precrítica, migración, despliegue y smoke contra desarrollo real |
+| `T16-G8 Remoto` | PARTIAL | copia, cinco migraciones y cuatro funciones PASS; smoke funcional, revisión/activación manual y salidas pendientes |
 
 Los PASS locales no sustituyen la prueba con identidades y funciones remotas. La
 puerta `T16-G8` solo puede cerrarse con la secuencia del runbook y autorización
@@ -91,21 +93,58 @@ expresa del usuario.
 - La cámara no transmite ni persiste fotogramas y se detiene al cerrar o desmontar
   el componente.
 
-## Operación remota pendiente
+## Copia precrítica T16
 
-No se ha creado todavía una copia precrítica T16, no se han aplicado las cinco
-migraciones T16 al proyecto enlazado y no se han desplegado las nuevas versiones
-de `catalogs`, `plans`, `admin` o `admin-reconciler`. Tampoco se ha ejecutado
-`pnpm test:t16:remote`.
+| Propiedad | Evidencia |
+|---|---|
+| Objeto | `/Users/pablito/Documents/health-design-private-backups/t16-precritical-development-20260721T134242Z.dmg` |
+| Cifrado | AES-256; clave únicamente en el Llavero de macOS, servicio `health-design-dev-t16-precritical-development-20260721T134242Z` |
+| SHA-256 del DMG | `d61a2c2ba30f72a79a78ead94be6184876c9515b434bc1e9628529fac7423960` |
+| SHA-256 interno de esquema | `804d25486403acf0d1a5d75ee1f8cdb31857da5f0a4a73b6606a4ded5ab2e906` |
+| SHA-256 interno de datos | `98f45cea5cbb8948d35c768d0bbf178121da3b6f0eba643c931f33be0b57e34b` |
+| SHA-256 interno de roles | `25873cec56a2cc6514e204f420231777f85c03da818caa7090cdcdfa89776ecd` |
+| Verificación | PASS con `hdiutil verify`, montaje de solo lectura y checksums internos |
 
-El siguiente paso, separado de este recibo local, requiere autorización para:
+La copia T12 y su secreto se eliminaron únicamente después del PASS. La rotación
+conserva exactamente T13, T14, T15 y T16.
 
-1. crear y verificar la copia cifrada respetando cuatro rotaciones;
-2. aplicar las migraciones solo a `health-design-dev`;
-3. desplegar las cuatro funciones en desarrollo;
-4. ejecutar el smoke con dos perfiles sintéticos y un superadministrador AAL2;
-5. revisar y activar manualmente el candidato de prueba;
-6. registrar objetos, auditoría, limpieza y ausencia de cambios en producción.
+## Desarrollo remoto desplegado
+
+El proyecto enlazado se comprobó como `health-design-dev`
+(`nwoivdxdupklervtnovd`). El dry-run previo enumeró únicamente las cinco
+migraciones T16 y se aplicaron en su orden canónico:
+
+1. `20260721084023_commercial_products.sql`;
+2. `20260721114021_commercial_product_plan_application.sql`;
+3. `20260721143000_commercial_product_admin_audit.sql`;
+4. `20260721154500_commercial_product_concurrency_sync.sql`;
+5. `20260721160000_commercial_product_application_lint.sql`.
+
+El dry-run posterior devuelve `Remote database is up to date`. El secreto
+`OPEN_FOOD_FACTS_USER_AGENT` existe en desarrollo sin registrar su contenido.
+
+| Edge Function | Versión | Estado | JWT | SHA-256 remoto |
+|---|---:|---|---|---|
+| `catalogs` | 5 | `ACTIVE` | obligatorio | `c5856b0e661965561fba9d072a4a04dceffcf0a463c8435dbca1f575a2ccd62b` |
+| `plans` | 13 | `ACTIVE` | obligatorio | `f7300f6245aa4dc7b5bc49bbb33944646561510f85bcdd26112b89ccfaa1e223` |
+| `admin` | 5 | `ACTIVE` | obligatorio | `7a04b60c4d536a346336eb09f6a7f1836561659468befab886cda949d59700fb` |
+| `admin-reconciler` | 5 | `ACTIVE` | firma interna | `4f8076ce4c13e3c1c8051ffd3d1a0b86d258a043eeb5ba72048970452602e0e3` |
+
+Las tres funciones con JWT rechazaron llamadas anónimas con
+`401/UNAUTHORIZED_NO_AUTH_HEADER`. El primer empaquetado de `admin` reveló que
+su import map no cerraba las dependencias transitivas catálogo → motor → dominio;
+se añadió una regresión roja/verde y el despliegue posterior de las cuatro
+funciones terminó correctamente.
+
+## Validación remota pendiente
+
+No se ha ejecutado `pnpm test:t16:remote`; por ello este recibo no declara
+`T16_COMPLETE_REMOTE_PASS`. El siguiente paso independiente requiere:
+
+1. ejecutar el smoke con dos perfiles sintéticos y un superadministrador AAL2;
+2. revisar y activar manualmente el candidato de prueba;
+3. verificar PDF/XLSX, auditoría, limpieza y ausencia de residuos;
+4. registrar que producción continúa sin migración ni despliegue T16.
 
 ## Referencias
 
