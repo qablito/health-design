@@ -223,6 +223,13 @@ git commit -m "feat(nutrition): cover the T17 60 plus 20 basket"
 
 # T17A — Contratos, normalización y cuarentena
 
+> **Estado 2026-07-21:** `T17A_LOCAL_PASS`. A.1–A.3 están implementadas en el
+> worktree dedicado: contratos estrictos, normalización decimal pura, parser CSV
+> endurecido, manifest y CLI de cuarentena. Los tres `--dry-run` reprodujeron 13.671
+> filas, 11.686 precios base y 41 errores de captura, con cero rechazos de
+> normalización. No se ha escrito en R2, aplicado migraciones, desplegado, fusionado ni
+> enviado a GitHub. Recibo: [`SUPERMARKET_IMPORT_FORMAT.md`](../data/SUPERMARKET_IMPORT_FORMAT.md).
+
 ## Tarea A.1: Crear contratos estrictos de catálogo y compra
 
 **Archivos:**

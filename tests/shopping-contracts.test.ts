@@ -6,6 +6,8 @@ import {
   ConfirmedPackageSchema,
   SHOPPING_HTTP_BODY_BYTES,
   ShoppingLeftoverRequestSchema,
+  ShoppingMutationAckSchema,
+  ShoppingPreferenceAckSchema,
   ShoppingPreferencePutSchema,
   ShoppingPreferenceRevisionSchema,
   ShoppingProductSelectionRequestSchema,
@@ -191,6 +193,12 @@ describe("contratos T17 de catálogo de supermercado", () => {
     expect(
       CatalogCoverageSchema.safeParse({ ...coverage, totalUsable: 71 }).success,
     ).toBe(false);
+    expect(
+      CatalogCoverageSchema.safeParse({
+        ...coverage,
+        groups: [{ groupKey: "proteins", required: 10, usable: 7 }],
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -341,6 +349,21 @@ describe("contratos T17 de preferencias y resolución", () => {
         items: [
           {
             ...snapshot.items[0],
+            selected: {
+              ...selected,
+              projection: { ...projection, usability: "visible" },
+            },
+          },
+        ],
+        totals: { resolvedItems: 1, subtotalEur: "6.5", unresolvedItems: 0 },
+      }).success,
+    ).toBe(false);
+    expect(
+      ShoppingSnapshotSchema.safeParse({
+        ...snapshot,
+        items: [
+          {
+            ...snapshot.items[0],
             alternatives: Array.from({ length: 5 }, () => projection),
           },
         ],
@@ -355,6 +378,23 @@ describe("contratos T17 de preferencias y resolución", () => {
         declaredMeasure: { dimension: "mass", quantity: "250", unit: "g" },
         expectedVersion: 1,
         schemaVersion: 1,
+      }).success,
+    ).toBe(true);
+    expect(
+      ShoppingLeftoverRequestSchema.safeParse({
+        canonicalFoodKey: "food:olive-oil",
+        declaredMeasure: { dimension: "volume", quantity: "250", unit: "ml" },
+        expectedVersion: 1,
+        schemaVersion: 1,
+      }).success,
+    ).toBe(false);
+    expect(
+      ShoppingLeftoverRequestSchema.safeParse({
+        canonicalFoodKey: "food:olive-oil",
+        declaredMeasure: { dimension: "volume", quantity: "250", unit: "ml" },
+        expectedVersion: 1,
+        schemaVersion: 1,
+        skuRevisionId: uuid(12),
       }).success,
     ).toBe(true);
     expect(
@@ -376,5 +416,32 @@ describe("contratos T17 de preferencias y resolución", () => {
 
   it("mantiene el cuerpo público común en 16 KiB", () => {
     expect(SHOPPING_HTTP_BODY_BYTES).toBe(16 * 1024);
+  });
+
+  it("devuelve ACK públicos mínimos sin manifest, hashes ni referencias R2", () => {
+    const preferenceAck = {
+      preferenceRevisionId: preference.id,
+      schemaVersion: 1,
+      version: 1,
+    } as const;
+    const mutationAck = {
+      schemaVersion: 1,
+      snapshotId: uuid(9),
+      status: "active",
+      version: 1,
+    } as const;
+
+    expect(ShoppingPreferenceAckSchema.parse(preferenceAck)).toEqual(preferenceAck);
+    expect(ShoppingMutationAckSchema.parse(mutationAck)).toEqual(mutationAck);
+    for (const forbidden of [
+      { manifestId: uuid(5) },
+      { normalizedSha256: "ab".repeat(32) },
+      { rawObjectRef: "r2://opaque/raw" },
+      { sourceLocationInternal: "41006" },
+    ]) {
+      expect(
+        ShoppingMutationAckSchema.safeParse({ ...mutationAck, ...forbidden }).success,
+      ).toBe(false);
+    }
   });
 });

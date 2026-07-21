@@ -168,6 +168,13 @@ export const CatalogCoverageSchema = z
     if (new Set(groupKeys).size !== groupKeys.length) {
       context.addIssue({ code: "custom", message: "coverage_groups_not_unique" });
     }
+    if (
+      value.publishable &&
+      (value.totalUsable < 72 ||
+        value.groups.some((group) => group.usable * 4 < group.required * 3))
+    ) {
+      context.addIssue({ code: "custom", message: "coverage_gate_not_met" });
+    }
   });
 
 export const SupermarketSourceManifestSchema = z
@@ -417,6 +424,15 @@ export const ShoppingResolutionInputSchema = z
     if (value.preferenceRevision.profileId !== value.profileId) {
       context.addIssue({ code: "custom", message: "shopping_profile_mismatch" });
     }
+    const itemCounts = new Map<string, number>();
+    for (const item of value.catalogItems) {
+      const count = (itemCounts.get(item.canonicalFoodKey) ?? 0) + 1;
+      itemCounts.set(item.canonicalFoodKey, count);
+      if (count > SHOPPING_MAX_ALTERNATIVES + 1) {
+        context.addIssue({ code: "custom", message: "shopping_catalog_options_limit" });
+        break;
+      }
+    }
   });
 
 const ShoppingSelectionSchema = z
@@ -430,7 +446,12 @@ const ShoppingSelectionSchema = z
     requiredAfterLeftoverG: CanonicalUnsignedDecimalSchema,
     totalCostEur: CanonicalUnsignedDecimalSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.projection.usability !== "calculable") {
+      context.addIssue({ code: "custom", message: "selected_sku_not_calculable" });
+    }
+  });
 
 const ShoppingSnapshotItemSchema = z
   .object({
@@ -515,7 +536,18 @@ export const ShoppingLeftoverRequestSchema = z
     schemaVersion: z.literal(1),
     skuRevisionId: z.uuid().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.declaredMeasure.dimension !== "mass" &&
+      value.skuRevisionId === undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "leftover_sku_revision_required_for_equivalence",
+      });
+    }
+  });
 
 export const ShoppingProductSelectionRequestSchema = z
   .object({

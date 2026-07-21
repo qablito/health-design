@@ -118,6 +118,7 @@ async function parseCsvFile(input: string): Promise<ParsedCsv> {
   let quotePending = false;
   let maximumCellBytes = 0;
   let streamedBytes = 0;
+  let inspectedMagic = false;
 
   const pushField = () => {
     const bytes = encoder.encode(field).byteLength;
@@ -200,6 +201,15 @@ async function parseCsvFile(input: string): Promise<ParsedCsv> {
 
   for await (const chunk of createReadStream(canonicalPath)) {
     const bytes = chunk as Buffer;
+    if (!inspectedMagic) {
+      inspectedMagic = true;
+      if (
+        (bytes[0] === 0x50 && bytes[1] === 0x4b) ||
+        (bytes[0] === 0x1f && bytes[1] === 0x8b)
+      ) {
+        throw new Error("supermarket_archive_not_supported");
+      }
+    }
     streamedBytes += bytes.byteLength;
     if (
       streamedBytes > IMPORT_LIMITS.fileBytes ||

@@ -192,6 +192,21 @@ describe("CLI local de cuarentena T17", () => {
     expect(await readdir(directory)).toEqual(["broken.csv"]);
   });
 
+  it("rechaza un archivo comprimido aunque se renombre como CSV", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "health-design-t17a-archive-"));
+    const input = join(directory, "renamed.csv");
+    await writeFile(input, Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00]));
+
+    await expect(
+      importSupermarketCatalogFile({
+        chain: "mercadona",
+        input,
+        licenseStatus: "unknown",
+        sourceTermsStatus: "unknown",
+      }),
+    ).rejects.toThrow("supermarket_archive_not_supported");
+  });
+
   it("reutiliza misma clave+hash y rechaza una colisión distinta", () => {
     const descriptor = {
       chain: "dia",
