@@ -12,7 +12,6 @@ import { adminClient } from "./admin-client";
 type CorrectionStatus = "approved" | "pending" | "rejected" | "superseded";
 
 type ProductReviewPanelProps = Readonly<{
-  busy: boolean;
   execute: <T>(operation: () => Promise<T>) => Promise<T | undefined>;
 }>;
 
@@ -73,7 +72,8 @@ function formText(form: FormData, key: string): string {
   return typeof value === "string" ? value : "";
 }
 
-export function ProductReviewPanel({ busy, execute }: ProductReviewPanelProps) {
+export function ProductReviewPanel({ execute }: ProductReviewPanelProps) {
+  const [busy, setBusy] = useState(false);
   const [detail, setDetail] = useState<AdminBarcodeCorrectionDetail>();
   const [draftJson, setDraftJson] = useState("");
   const [list, setList] = useState<AdminBarcodeCorrectionList>();
@@ -84,24 +84,36 @@ export function ProductReviewPanel({ busy, execute }: ProductReviewPanelProps) {
     version: number;
   }>();
 
+  const run = useCallback(
+    async <T,>(operation: () => Promise<T>): Promise<T | undefined> => {
+      setBusy(true);
+      try {
+        return await execute(operation);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [execute],
+  );
+
   const loadList = useCallback(
     async (nextStatus = status, cursor?: string) => {
-      const next = await execute(() =>
+      const next = await run(() =>
         adminClient.listBarcodeCorrections(nextStatus, cursor),
       );
       if (next) setList(next);
     },
-    [execute, status],
+    [run, status],
   );
 
   const loadDetail = useCallback(
     async (correctionId: string) => {
-      const next = await execute(() => adminClient.barcodeCorrection(correctionId));
+      const next = await run(() => adminClient.barcodeCorrection(correctionId));
       if (!next) return;
       setDetail(next);
       setDraftJson(JSON.stringify(next.proposedSnapshot, null, 2));
     },
-    [execute],
+    [run],
   );
 
   useEffect(() => {
@@ -141,7 +153,7 @@ export function ProductReviewPanel({ busy, execute }: ProductReviewPanelProps) {
       setFeedback("La ficha completa no supera el contrato estructurado.");
       return;
     }
-    const ack = await execute(() =>
+    const ack = await run(() =>
       adminClient.correctBarcodeCorrection(
         detail.correctionId,
         detail.version,
@@ -168,7 +180,7 @@ export function ProductReviewPanel({ busy, execute }: ProductReviewPanelProps) {
       .filter(Boolean);
     const matchState = (formText(form, "matchState") || "review") as
       "allowed" | "exact" | "excluded" | "insufficient" | "review";
-    const ack = await execute(() =>
+    const ack = await run(() =>
       adminClient.approveBarcodeCorrection(detail.correctionId, {
         canonicalFoodKey,
         evidence,
@@ -192,7 +204,7 @@ export function ProductReviewPanel({ busy, execute }: ProductReviewPanelProps) {
     const reason = new FormData(event.currentTarget).get("reason") as
       keyof typeof REJECTION_LABELS | null;
     if (!reason || !(reason in REJECTION_LABELS)) return;
-    const ack = await execute(() =>
+    const ack = await run(() =>
       adminClient.rejectBarcodeCorrection(detail.correctionId, detail.version, reason),
     );
     if (!ack) return;
@@ -206,7 +218,7 @@ export function ProductReviewPanel({ busy, execute }: ProductReviewPanelProps) {
 
   async function activateMatching() {
     if (!matchingRule) return;
-    const ack = await execute(() =>
+    const ack = await run(() =>
       adminClient.activateMatchingRule(matchingRule.id, matchingRule.version),
     );
     if (!ack) return;

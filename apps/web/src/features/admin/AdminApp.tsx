@@ -109,9 +109,8 @@ export function AdminApp() {
     });
   }, [resolveSession]);
 
-  const run = useCallback(
+  const executeOperation = useCallback(
     async <T,>(operation: () => Promise<T>): Promise<T | undefined> => {
-      setBusy(true);
       setError(undefined);
       try {
         return await operation();
@@ -125,11 +124,21 @@ export function AdminApp() {
         }
         setError(friendlyError(operationError));
         return undefined;
+      }
+    },
+    [prepareMfa],
+  );
+
+  const run = useCallback(
+    async <T,>(operation: () => Promise<T>): Promise<T | undefined> => {
+      setBusy(true);
+      try {
+        return await executeOperation(operation);
       } finally {
         setBusy(false);
       }
     },
-    [prepareMfa],
+    [executeOperation],
   );
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
@@ -293,7 +302,7 @@ export function AdminApp() {
 
       {stage === "ready" ? (
         <>
-          <ProductReviewPanel busy={busy} execute={run} />
+          <ProductReviewPanel execute={executeOperation} />
           <section aria-labelledby="admin-profiles-title" className="admin-card">
             <h2 id="admin-profiles-title">Perfiles</h2>
             {profiles.length === 0 ? <p>No hay perfiles disponibles.</p> : null}

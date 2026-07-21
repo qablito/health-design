@@ -131,6 +131,10 @@ test("el indicador de impersonación persiste al refrescar y salir restaura admi
       ]);
       return;
     }
+    if (path.endsWith("/v1/admin/barcode-corrections")) {
+      await respond({ items: [], nextCursor: null });
+      return;
+    }
     if (path.endsWith(`/v1/admin/profiles/${profileId}/impersonations`)) {
       active = true;
       await respond(
@@ -210,6 +214,14 @@ test("un desafío AAL2 caducado vuelve a mostrar la confirmación TOTP", async (
             status: "active",
           },
         ]),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    if (path.endsWith("/v1/admin/barcode-corrections")) {
+      await route.fulfill({
+        body: JSON.stringify({ items: [], nextCursor: null }),
         contentType: "application/json",
         status: 200,
       });

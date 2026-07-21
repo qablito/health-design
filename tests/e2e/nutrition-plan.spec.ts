@@ -703,19 +703,19 @@ test("confirma un código explícitamente y crea un candidato sin alterar el pla
   await page.getByRole("button", { name: "Escanear con la cámara" }).click();
   await expect(page.getByText(/introducir el código manualmente/i)).toBeVisible();
 
-  await page.getByLabel("Código numérico").fill(
-    COMMERCIAL_PRODUCT_FIXTURE.gtin.displayGtin,
-  );
+  await page
+    .getByLabel("Código numérico")
+    .fill(COMMERCIAL_PRODUCT_FIXTURE.gtin.displayGtin);
   await page.getByRole("button", { name: "Consultar ficha" }).click();
-  await expect(page.getByLabel("Nombre")).toHaveValue(
-    COMMERCIAL_PRODUCT_FIXTURE.name,
-  );
+  await expect(page.getByLabel("Nombre")).toHaveValue(COMMERCIAL_PRODUCT_FIXTURE.name);
   expect(productRequests.filter(({ method }) => method === "POST")).toHaveLength(0);
 
   await page.getByRole("button", { name: "Confirmar estos datos" }).click();
   await expect(page.getByRole("heading", { name: "Ficha confirmada" })).toBeVisible();
   expect(
-    productRequests.filter(({ path }) => path.includes("/catalogs/") && path.endsWith("/confirm")),
+    productRequests.filter(
+      ({ path }) => path.includes("/catalogs/") && path.endsWith("/confirm"),
+    ),
   ).toHaveLength(1);
   expect(
     productRequests.filter(({ path }) => path.endsWith("/product-applications")),
