@@ -24,6 +24,7 @@ const VersionNameSchema = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/);
 const JsonObjectSchema = z.record(z.string(), z.unknown());
 const JsonArraySchema = z.array(z.unknown());
 const TimestampSchema = z.iso.datetime({ offset: true });
+const FoodKeySchema = z.string().regex(/^food:[a-z0-9][a-z0-9._:-]{0,127}$/);
 const ContextSourceSchemaVersionSchema = z.union([
   z.literal(CONTEXT_SOURCE_SCHEMA_VERSIONS[0]),
   z.literal(CONTEXT_SOURCE_SCHEMA_VERSIONS[1]),
@@ -69,6 +70,23 @@ export const PlanCandidateCreateRequestSchema = z
     contextSnapshotId: z.uuid(),
     expectedVersion: z.number().int().min(1),
     schemaVersion: z.literal(PLAN_SCHEMA_VERSION),
+  })
+  .strict();
+
+export const ProductApplicationRequestSchema = z
+  .object({
+    baseVersionId: z.uuid(),
+    confirmationId: z.uuid(),
+    expectedVersion: z.number().int().min(1),
+    schemaVersion: z.literal(PLAN_SCHEMA_VERSION),
+    selection: z
+      .object({
+        dayIndex: z.number().int().min(0).max(6),
+        expectedCanonicalFoodKey: FoodKeySchema,
+        foodIndex: z.number().int().min(0).max(11),
+        mealIndex: z.number().int().min(0).max(5),
+      })
+      .strict(),
   })
   .strict();
 
@@ -239,6 +257,7 @@ export type PlanCandidateAck = z.infer<typeof PlanCandidateAckSchema>;
 export type PlanCandidateCreateRequest = z.infer<
   typeof PlanCandidateCreateRequestSchema
 >;
+export type ProductApplicationRequest = z.infer<typeof ProductApplicationRequestSchema>;
 export type PlanEngineResult = z.infer<typeof PlanEngineResultSchema>;
 export type PlanModuleResultInput = z.infer<typeof PlanModuleResultInputSchema>;
 export type PlanGenerationRequest = z.infer<typeof PlanGenerationRequestSchema>;

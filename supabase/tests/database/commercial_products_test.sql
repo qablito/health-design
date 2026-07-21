@@ -102,6 +102,7 @@ create temporary table product_fixture as
 select jsonb_build_object(
   'schemaVersion', 1,
   'basis', 'per_100_g',
+  'density', jsonb_build_object('state', 'unknown'),
   'gtin', jsonb_build_object(
     'displayGtin', '8412345678905',
     'gtin14', '08412345678905',

@@ -109,6 +109,20 @@ const ProductPackageSchema = z
     "package_amount_unit_pair_required",
   );
 
+export const ProductDensitySchema = z.discriminatedUnion("state", [
+  z
+    .object({
+      gramsPerMl: CanonicalUnsignedDecimalSchema.refine(
+        (value) => value !== "0",
+        "density_must_be_positive",
+      ),
+      sourceRef: LimitedTextSchema(160),
+      state: z.literal("known"),
+    })
+    .strict(),
+  z.object({ state: z.literal("unknown") }).strict(),
+]);
+
 const ProductNutrientsSchema = z
   .object({
     carbohydratesG: ProductNutrientValueSchema,
@@ -149,6 +163,7 @@ export const CommercialProductSnapshotSchema = z
   .object({
     basis: z.enum(PRODUCT_NUTRITION_BASES),
     brand: LimitedTextSchema(200).optional(),
+    density: ProductDensitySchema,
     gtin: ProductGtinSchema,
     name: LimitedTextSchema(200),
     nutrients: ProductNutrientsSchema,
@@ -237,9 +252,24 @@ export const ProductConfirmationAckSchema = z
   })
   .strict();
 
+export const ConfirmedProductApplicationSchema = z
+  .object({
+    completeness: z.enum(COMMERCIAL_PRODUCT_COMPLETENESS),
+    confirmationId: z.uuid(),
+    contentHash: ContentHashSchema,
+    manifestId: z.uuid(),
+    matching: ProductMatchingSummarySchema,
+    productId: z.uuid(),
+    revisionId: z.uuid(),
+    schemaVersion: z.literal(1),
+    snapshot: CommercialProductSnapshotSchema,
+  })
+  .strict();
+
 export type ProductSymbology = (typeof PRODUCT_SYMBOLOGIES)[number];
 export type ProductGtin = z.infer<typeof ProductGtinSchema>;
 export type ProductNutrientValue = z.infer<typeof ProductNutrientValueSchema>;
+export type ProductDensity = z.infer<typeof ProductDensitySchema>;
 export type ProductStructuredTextList = z.infer<typeof ProductStructuredTextListSchema>;
 export type CommercialProductSnapshot = z.infer<typeof CommercialProductSnapshotSchema>;
 export type CommercialProductSource = (typeof COMMERCIAL_PRODUCT_SOURCES)[number];
@@ -250,3 +280,6 @@ export type ProductConfirmationRequest = z.infer<
   typeof ProductConfirmationRequestSchema
 >;
 export type ProductConfirmationAck = z.infer<typeof ProductConfirmationAckSchema>;
+export type ConfirmedProductApplication = z.infer<
+  typeof ConfirmedProductApplicationSchema
+>;

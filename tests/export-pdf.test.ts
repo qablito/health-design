@@ -2,7 +2,10 @@ import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 
 import { renderPdf } from "@health-design/export/pdf";
-import { exportModels } from "@health-design/test-fixtures/exports";
+import {
+  commercialProductPrivateSentinels,
+  exportModels,
+} from "@health-design/test-fixtures/exports";
 
 describe("renderizador PDF privado", () => {
   it("genera páginas A4 válidas, no vacías y bajo el límite", async () => {
@@ -42,5 +45,17 @@ describe("renderizador PDF privado", () => {
 
     expect(binary).not.toContain("�");
     expect(bytes.byteLength).toBeLessThan(25 * 1024 * 1024);
+  });
+
+  it("no incorpora identificadores privados del producto comercial", async () => {
+    const bytes = await renderPdf(exportModels.commercialProduct);
+    const document = await PDFDocument.load(bytes);
+    const serialized = new TextDecoder("latin1").decode(bytes);
+    const metadata = `${document.getTitle()} ${document.getAuthor()} ${document.getSubject()}`;
+
+    for (const sentinel of commercialProductPrivateSentinels) {
+      expect(serialized).not.toContain(sentinel);
+      expect(metadata).not.toContain(sentinel);
+    }
   });
 });

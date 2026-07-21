@@ -118,7 +118,40 @@ export type PlannedFood = PlannedFoodAlternative &
   }>;
 
 export type PreparedPlannedFoodAlternative = PlannedFoodAlternative &
-  Readonly<{ preparation: FoodPreparation }>;
+  Readonly<{
+    commercialProduct?:
+      | Readonly<{
+          brand?: string | undefined;
+          calculationHash: string;
+          confirmationId: string;
+          manifestId: string;
+          nutrientStates: Readonly<
+            Record<
+              | "carbohydratesG"
+              | "energyKcal"
+              | "fatG"
+              | "fiberG"
+              | "proteinG"
+              | "saltG"
+              | "saturatedFatG"
+              | "sugarsG",
+              Readonly<{
+                calculation:
+                  | "confirmed_conversion"
+                  | "declared"
+                  | "estimated_from_canonical"
+                  | "unavailable";
+                declaredState: "estimated" | "known" | "unknown";
+                sourceRef: string;
+              }>
+            >
+          >;
+          productId: string;
+          revisionId: string;
+        }>
+      | undefined;
+    preparation: FoodPreparation;
+  }>;
 
 export type PreparedPlannedFood = PreparedPlannedFoodAlternative &
   Readonly<{

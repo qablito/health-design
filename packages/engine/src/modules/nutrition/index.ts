@@ -12,7 +12,10 @@ import type {
   PreparedPlannedFoodAlternative,
   QuestionnaireAnswers,
 } from "@health-design/domain";
-import { normalizeNutritionWeek } from "@health-design/contracts";
+import {
+  normalizeNutritionWeek,
+  type CommercialProductSnapshot,
+} from "@health-design/contracts";
 
 import {
   absoluteDecimal,
@@ -24,6 +27,7 @@ import {
   subtractDecimals,
   sumDecimals,
 } from "../../decimal.ts";
+import { detectClinicalContext } from "../../clinical/index.ts";
 import { clinicalContextReviewCodes } from "../clinical-context.ts";
 import { PREPARATION_RULE_SET_VERSION, resolveFoodPreparation } from "./preparation.ts";
 
@@ -666,16 +670,20 @@ function amountForNutrient(
   nutrient: keyof NutritionTotals,
   target: string,
 ): string {
-  const density = food.nutrients[nutrient];
+  return amountForNutrientValues(food.nutrients, nutrient, target);
+}
+
+function amountForNutrientValues(
+  nutrients: NutritionTotals,
+  nutrient: keyof NutritionTotals,
+  target: string,
+): string {
+  const density = nutrients[nutrient];
   const usableNutrient = compareDecimals(density, "0") > 0 ? nutrient : "energyKcal";
   const usableTarget =
     usableNutrient === nutrient ? target : maximum("1", multiplyDecimals(target, "4"));
   return rounded(
-    divideDecimals(
-      multiplyDecimals(usableTarget, "100"),
-      food.nutrients[usableNutrient],
-      6,
-    ),
+    divideDecimals(multiplyDecimals(usableTarget, "100"), nutrients[usableNutrient], 6),
     2,
   );
 }
@@ -1316,4 +1324,314 @@ export function applyNutritionSubstitution(
     ].slice(0, 2),
   };
   return replacePlannedFood(preparedPlan, selection, promoted);
+}
+
+const PRODUCT_LABEL_KEYS = [
+  "carbohydratesG",
+  "energyKcal",
+  "fatG",
+  "fiberG",
+  "proteinG",
+  "saltG",
+  "saturatedFatG",
+  "sugarsG",
+] as const;
+
+export type ConfirmedCommercialProductApplication = Readonly<{
+  calculationHash: string;
+  confirmationId: string;
+  manifestId: string;
+  matchingState: "allowed" | "exact" | "excluded" | "insufficient" | "review";
+  productId: string;
+  revisionId: string;
+  snapshot: CommercialProductSnapshot;
+}>;
+
+function productPer100G(
+  product: ConfirmedCommercialProductApplication,
+  key: keyof NutritionTotals,
+  original: PreparedPlannedFood,
+): string {
+  const nutrient = product.snapshot.nutrients[key];
+  if (nutrient.state === "unknown") {
+    if (key !== "fiberG" || compareDecimals(original.amountG, "0") <= 0) {
+      throw new Error("PRODUCT_DATA_INSUFFICIENT");
+    }
+    return divideDecimals(
+      multiplyDecimals(original.nutrients.fiberG, "100"),
+      original.amountG,
+      9,
+    );
+  }
+  if (product.snapshot.basis === "per_100_g") return nutrient.value;
+  if (product.snapshot.density.state !== "known") {
+    throw new Error("PRODUCT_DATA_INSUFFICIENT");
+  }
+  return divideDecimals(nutrient.value, product.snapshot.density.gramsPerMl, 9);
+}
+
+function productNutrientStates(
+  product: ConfirmedCommercialProductApplication,
+  original: PreparedPlannedFood,
+): NonNullable<PreparedPlannedFoodAlternative["commercialProduct"]>["nutrientStates"] {
+  return Object.fromEntries(
+    PRODUCT_LABEL_KEYS.map((key) => {
+      const nutrient = product.snapshot.nutrients[key];
+      if (nutrient.state === "unknown") {
+        return [
+          key,
+          {
+            calculation: key === "fiberG" ? "estimated_from_canonical" : "unavailable",
+            declaredState: "unknown",
+            sourceRef: key === "fiberG" ? original.revisionId : product.revisionId,
+          },
+        ];
+      }
+      return [
+        key,
+        {
+          calculation:
+            nutrient.state === "estimated"
+              ? nutrient.estimation.method
+              : product.snapshot.basis === "per_100_ml"
+                ? "confirmed_conversion"
+                : "declared",
+          declaredState: nutrient.state,
+          sourceRef:
+            nutrient.state === "estimated"
+              ? nutrient.estimation.sourceRef
+              : product.revisionId,
+        },
+      ];
+    }),
+  ) as NonNullable<
+    PreparedPlannedFoodAlternative["commercialProduct"]
+  >["nutrientStates"];
+}
+
+function productClinicalNutrients(
+  product: ConfirmedCommercialProductApplication,
+  amountG: string,
+): PreparedPlannedFoodAlternative["clinicalNutrients"] {
+  return Object.fromEntries(
+    Object.entries(product.snapshot.nutrients.clinical).flatMap(([key, nutrient]) => {
+      if (nutrient.state === "unknown" || nutrient.unit === "kcal") return [];
+      const per100G =
+        product.snapshot.basis === "per_100_g"
+          ? nutrient.value
+          : product.snapshot.density.state === "known"
+            ? divideDecimals(nutrient.value, product.snapshot.density.gramsPerMl, 9)
+            : null;
+      if (per100G === null) throw new Error("PRODUCT_DATA_INSUFFICIENT");
+      return [
+        [
+          key,
+          {
+            unit: nutrient.unit,
+            value: rounded(
+              divideDecimals(multiplyDecimals(per100G, amountG), "100", 9),
+            ),
+          },
+        ],
+      ];
+    }),
+  );
+}
+
+function commercialProductTokens(
+  product: ConfirmedCommercialProductApplication,
+): Set<string> {
+  const entries = [product.snapshot.name];
+  for (const field of ["allergens", "crossContactAllergens", "ingredients"] as const) {
+    const value = product.snapshot.safety[field];
+    if (value.state === "known") entries.push(...value.values);
+  }
+  return new Set(
+    entries.flatMap((entry) => {
+      const token = normalized(entry.replace(/^[a-z]{2}:/i, ""));
+      return [token, ALLERGEN_ALIASES[token]].filter(
+        (candidate): candidate is string => candidate !== undefined,
+      );
+    }),
+  );
+}
+
+function tokenSetsOverlap(left: Set<string>, right: Set<string>): boolean {
+  for (const leftToken of left) {
+    for (const rightToken of right) {
+      if (
+        leftToken === rightToken ||
+        leftToken.includes(rightToken) ||
+        rightToken.includes(leftToken)
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function assertCommercialProductSafety(
+  product: ConfirmedCommercialProductApplication,
+  answers: QuestionnaireAnswers,
+): void {
+  if (
+    answers.nutritionAllergiesStatus === "unknown" ||
+    answers.nutritionIntolerancesStatus === "unknown"
+  ) {
+    throw new Error("PRODUCT_DATA_INSUFFICIENT");
+  }
+  const needsSafety =
+    answers.nutritionAllergiesStatus === "declared" ||
+    answers.nutritionIntolerancesStatus === "declared";
+  if (
+    needsSafety &&
+    Object.values(product.snapshot.safety).some(({ state }) => state === "unknown")
+  ) {
+    throw new Error("PRODUCT_DATA_INSUFFICIENT");
+  }
+  const clinical = detectClinicalContext(answers).detected;
+  if (
+    product.snapshot.nutrients.saltG.state === "unknown" &&
+    (clinical.cardiac ||
+      clinical.diuretic ||
+      clinical.hypertension ||
+      clinical.hyponatremia ||
+      clinical.renal)
+  ) {
+    throw new Error("PRODUCT_DATA_INSUFFICIENT");
+  }
+  const productTokens = commercialProductTokens(product);
+  if (
+    tokenSetsOverlap(productTokens, declaredTokens(answers.nutritionAllergies)) ||
+    tokenSetsOverlap(
+      productTokens,
+      new Set((answers.excludedFoods ?? []).map(normalized)),
+    )
+  ) {
+    throw new Error("PRODUCT_MATCH_EXCLUDED");
+  }
+  for (const intolerance of answers.nutritionIntolerances ?? []) {
+    if (!tokenSetsOverlap(productTokens, declaredTokens([intolerance]))) continue;
+    if (
+      intolerance.severity === "severe" ||
+      (intolerance.severity === "moderate" &&
+        parseToleratedAmount(intolerance.toleratedAmount) === null)
+    ) {
+      throw new Error("PRODUCT_MATCH_EXCLUDED");
+    }
+  }
+}
+
+export function applyConfirmedCommercialProduct(
+  plan: NutritionWeek | NutritionWeekV2,
+  input: Readonly<{
+    answers: QuestionnaireAnswers;
+    product: ConfirmedCommercialProductApplication;
+    selection: Readonly<{
+      dayIndex: number;
+      expectedCanonicalFoodKey: string;
+      foodIndex: number;
+      mealIndex: number;
+    }>;
+  }>,
+): Readonly<{
+  completeness: "complete" | "provisional";
+  nutrition: NutritionWeekV2;
+  uncertainties: readonly string[];
+}> {
+  if (input.product.matchingState === "review") {
+    throw new Error("PRODUCT_MATCH_REVIEW_REQUIRED");
+  }
+  if (input.product.matchingState === "excluded") {
+    throw new Error("PRODUCT_MATCH_EXCLUDED");
+  }
+  if (input.product.matchingState === "insufficient") {
+    throw new Error("PRODUCT_DATA_INSUFFICIENT");
+  }
+  assertCommercialProductSafety(input.product, input.answers);
+  const preparedPlan = normalizeNutritionWeek(plan);
+  const selectedFood =
+    preparedPlan.days[input.selection.dayIndex]?.meals[input.selection.mealIndex]
+      ?.foods[input.selection.foodIndex];
+  if (
+    !selectedFood ||
+    selectedFood.canonicalFoodKey !== input.selection.expectedCanonicalFoodKey
+  ) {
+    throw new Error("STALE_PLAN_VERSION");
+  }
+  if (
+    input.product.snapshot.basis === "per_100_ml" &&
+    input.product.snapshot.density.state !== "known"
+  ) {
+    throw new Error("PRODUCT_DATA_INSUFFICIENT");
+  }
+  const per100G = Object.fromEntries(
+    TOTAL_KEYS.map((key) => [key, productPer100G(input.product, key, selectedFood)]),
+  ) as unknown as NutritionTotals;
+  const targetNutrient = nutrientForFunction(selectedFood.function);
+  const amountG = amountForNutrientValues(
+    per100G,
+    targetNutrient,
+    selectedFood.nutrients[targetNutrient],
+  );
+  if (compareDecimals(amountG, "0") <= 0) {
+    throw new Error("PRODUCT_DATA_INSUFFICIENT");
+  }
+  for (const intolerance of input.answers.nutritionIntolerances ?? []) {
+    if (
+      intolerance.severity !== "moderate" ||
+      !tokenSetsOverlap(
+        commercialProductTokens(input.product),
+        declaredTokens([intolerance]),
+      )
+    ) {
+      continue;
+    }
+    const cap = parseToleratedAmount(intolerance.toleratedAmount);
+    if (cap !== null && compareDecimals(amountG, cap) > 0) {
+      throw new Error("PRODUCT_MATCH_EXCLUDED");
+    }
+  }
+  const nutrientStates = productNutrientStates(input.product, selectedFood);
+  const replacement: PreparedPlannedFood = {
+    amountG,
+    canonicalFoodKey: selectedFood.canonicalFoodKey,
+    clinicalNutrients: productClinicalNutrients(input.product, amountG),
+    commercialProduct: {
+      ...(input.product.snapshot.brand ? { brand: input.product.snapshot.brand } : {}),
+      calculationHash: input.product.calculationHash,
+      confirmationId: input.product.confirmationId,
+      manifestId: input.product.manifestId,
+      nutrientStates,
+      productId: input.product.productId,
+      revisionId: input.product.revisionId,
+    },
+    foodState: selectedFood.foodState,
+    function: selectedFood.function,
+    name: input.product.snapshot.name,
+    nutrients: Object.fromEntries(
+      TOTAL_KEYS.map((key) => [
+        key,
+        rounded(divideDecimals(multiplyDecimals(per100G[key], amountG), "100", 9)),
+      ]),
+    ) as unknown as NutritionTotals,
+    preparation: selectedFood.preparation,
+    revisionId: selectedFood.revisionId,
+    source: selectedFood.source,
+    substitutes: [withoutSubstitutes(selectedFood), selectedFood.substitutes[0]!],
+  };
+  const uncertainties = PRODUCT_LABEL_KEYS.flatMap((key) => {
+    const state = nutrientStates[key];
+    if (state.calculation === "estimated_from_canonical") {
+      return [`${key}_estimated_from_canonical`];
+    }
+    if (state.calculation === "unavailable") return [`${key}_unknown`];
+    return state.declaredState === "estimated" ? [`${key}_estimated`] : [];
+  });
+  return {
+    completeness: uncertainties.length === 0 ? "complete" : "provisional",
+    nutrition: replacePlannedFood(preparedPlan, input.selection, replacement),
+    uncertainties,
+  };
 }

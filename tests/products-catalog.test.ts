@@ -22,6 +22,7 @@ function productSnapshot(
 ): CommercialProductSnapshot {
   return {
     basis: "per_100_g",
+    density: { state: "unknown" },
     gtin: normalizeProductGtin({ code: "8412345678905", symbology: "ean_13" }),
     name: "Yogur natural",
     nutrients: {

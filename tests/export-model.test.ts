@@ -6,6 +6,11 @@ import {
   applyNutritionSubstitution,
   generateNutritionWeek,
 } from "@health-design/engine";
+import {
+  commercialProductName,
+  commercialProductPrivateSentinels,
+  exportModels,
+} from "@health-design/test-fixtures/exports";
 import { effectiveNutritionFoods } from "@health-design/test-fixtures/nutrition-plan";
 
 const planVersionId = "20000000-0000-4000-8000-000000000001";
@@ -153,5 +158,18 @@ describe("modelo canónico de exportación", () => {
       }),
     );
     expect(JSON.stringify(result)).not.toContain(sentinel);
+  });
+
+  it("muestra el producto aplicado sin exponer GTIN ni procedencia privada", () => {
+    const serialized = JSON.stringify(exportModels.commercialProduct);
+
+    expect(
+      exportModels.commercialProduct.rows.some(
+        ({ name, rowKind }) => name === commercialProductName && rowKind === "selected",
+      ),
+    ).toBe(true);
+    for (const sentinel of commercialProductPrivateSentinels) {
+      expect(serialized).not.toContain(sentinel);
+    }
   });
 });

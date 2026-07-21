@@ -1,4 +1,5 @@
 import {
+  ConfirmedProductApplicationSchema,
   ContextSnapshotAckSchema,
   ContextSnapshotCreateRequestSchema,
   ContextSnapshotInternalSchema,
@@ -22,15 +23,20 @@ import {
   PlanMutationAckSchema,
   PlanMutationRequestSchema,
   PlanVersionDetailSchema,
+  ProductApplicationRequestSchema,
   QuestionnaireDraftSchema,
   TrackingCandidateListSchema,
   detectPlanContextChange,
+  normalizeNutritionWeek,
   type ContextSnapshotInternal,
   type PlanContextChange,
   type PlanEngineResult,
   type PlanModuleResultInput,
 } from "@health-design/contracts";
-import { analyzeFollowUpImpact } from "@health-design/engine";
+import {
+  analyzeFollowUpImpact,
+  applyConfirmedCommercialProduct,
+} from "@health-design/engine";
 
 import { canonicalJson, hashSha256Hex } from "../_shared/access-security.ts";
 import { resolveCors, type EdgeEnvironment } from "../_shared/cors.ts";
@@ -80,6 +86,7 @@ type PlanRoute =
   | { kind: "lab-list"; profileId: string }
   | { kind: "lab-create"; profileId: string }
   | { kind: "candidate-create"; planId: string }
+  | { kind: "product-application"; planId: string }
   | { candidateId: string; kind: "candidate-activate" }
   | { candidateId: string; kind: "candidate-discard" };
 
@@ -96,6 +103,10 @@ type ErrorCode =
   | "PAYLOAD_TOO_LARGE"
   | "PLAN_CANDIDATE_INVALID"
   | "PLAN_VALIDATION_FAILED"
+  | "PRODUCT_DATA_INSUFFICIENT"
+  | "PRODUCT_MATCH_EXCLUDED"
+  | "PRODUCT_MATCH_REVIEW_REQUIRED"
+  | "STALE_PLAN_VERSION"
   | "UNAUTHENTICATED"
   | "VERSION_CONFLICT";
 
@@ -213,6 +224,14 @@ function parseRoute(url: URL, method: string): PlanRoute | null {
   ).exec(path);
   if (candidateCreate?.[1] && method === "POST") {
     return { kind: "candidate-create", planId: candidateCreate[1] };
+  }
+
+  const productApplication = new RegExp(
+    `^/v1/plans/(${UUID_PATTERN})/product-applications$`,
+    "i",
+  ).exec(path);
+  if (productApplication?.[1] && method === "POST") {
+    return { kind: "product-application", planId: productApplication[1] };
   }
 
   const versionMatch = new RegExp(
@@ -333,6 +352,9 @@ function firstRow(data: unknown): unknown {
 function mapRpcError(error: RpcError): PlanHttpError {
   if (error.message?.includes("idempotency_key_reused")) {
     return new PlanHttpError("IDEMPOTENCY_KEY_REUSED", 409);
+  }
+  if (error.message?.includes("stale_plan_version")) {
+    return new PlanHttpError("STALE_PLAN_VERSION", 409);
   }
   if (error.message?.includes("version_conflict") || error.code === "PT409") {
     return new PlanHttpError("VERSION_CONFLICT", 409);
@@ -638,6 +660,200 @@ async function createCandidate(
       ? "complete"
       : "provisional")
   ) {
+    throw new PlanHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  }
+  return ack;
+}
+
+function mapProductApplicationError(error: unknown): PlanHttpError {
+  const code = error instanceof Error ? error.message : "";
+  if (code === "PRODUCT_DATA_INSUFFICIENT") {
+    return new PlanHttpError("PRODUCT_DATA_INSUFFICIENT", 422);
+  }
+  if (code === "PRODUCT_MATCH_EXCLUDED") {
+    return new PlanHttpError("PRODUCT_MATCH_EXCLUDED", 422);
+  }
+  if (code === "PRODUCT_MATCH_REVIEW_REQUIRED") {
+    return new PlanHttpError("PRODUCT_MATCH_REVIEW_REQUIRED", 422);
+  }
+  if (code === "STALE_PLAN_VERSION") {
+    return new PlanHttpError("STALE_PLAN_VERSION", 409);
+  }
+  return new PlanHttpError("DEPENDENCY_UNAVAILABLE", 503);
+}
+
+async function createProductApplication(
+  request: Request,
+  route: Extract<PlanRoute, { kind: "product-application" }>,
+  dependencies: PlanLifecycleDependencies,
+  auth: AuthContext,
+): Promise<unknown> {
+  const body = parse(ProductApplicationRequestSchema, await readJson(request));
+  requireMatchingVersionHeader(request, body.expectedVersion);
+  const history = parseDependency(
+    PlanHistorySchema,
+    firstRow(
+      await rpc(dependencies, "internal_list_plan_versions", {
+        ...authArgs(auth),
+        p_plan_id: route.planId,
+      }),
+    ),
+  );
+  if (
+    history.activeVersionId !== body.baseVersionId ||
+    !history.versions.some(({ id }) => id === body.baseVersionId)
+  ) {
+    throw new PlanHttpError("STALE_PLAN_VERSION", 409);
+  }
+  const baseVersion = parseDependency(
+    PlanVersionDetailSchema,
+    firstRow(
+      await rpc(dependencies, "internal_get_plan_version", {
+        ...authArgs(auth),
+        p_plan_id: route.planId,
+        p_plan_version_id: body.baseVersionId,
+      }),
+    ),
+  );
+  const context = await getContext(
+    dependencies,
+    auth,
+    history.profileId,
+    baseVersion.contextSnapshotId,
+  );
+  const product = parseDependency(
+    ConfirmedProductApplicationSchema,
+    firstRow(
+      await rpc(dependencies, "internal_commercial_product_for_application", {
+        ...authArgs(auth),
+        p_canonical_food_key: body.selection.expectedCanonicalFoodKey,
+        p_confirmation_id: body.confirmationId,
+        p_profile_id: history.profileId,
+      }),
+    ),
+  );
+  const nutritionModule = baseVersion.moduleResults.find(
+    ({ module }) => module === "nutrition",
+  );
+  if (!nutritionModule) throw new PlanHttpError("NOT_FOUND", 404);
+  let application: ReturnType<typeof applyConfirmedCommercialProduct>;
+  try {
+    application = applyConfirmedCommercialProduct(
+      normalizeNutritionWeek(nutritionModule.payload),
+      {
+        answers: context.answers,
+        product: {
+          calculationHash: product.contentHash,
+          confirmationId: product.confirmationId,
+          manifestId: product.manifestId,
+          matchingState:
+            product.completeness === "insufficient"
+              ? "insufficient"
+              : product.matching.state,
+          productId: product.productId,
+          revisionId: product.revisionId,
+          snapshot: product.snapshot,
+        },
+        selection: body.selection,
+      },
+    );
+  } catch (error) {
+    throw mapProductApplicationError(error);
+  }
+  const moduleResults: PlanModuleResultInput[] = baseVersion.moduleResults.map(
+    ({ confidence, module, payload, status, uncertainties }) =>
+      module === "nutrition"
+        ? {
+            confidence,
+            module,
+            payload: application.nutrition,
+            status:
+              application.nutrition.validation.status === "invalid"
+                ? "invalid"
+                : application.completeness === "provisional"
+                  ? "provisional"
+                  : "valid",
+            uncertainties: [...application.uncertainties],
+          }
+        : { confidence, module, payload, status, uncertainties },
+  );
+  const safetyFindings = baseVersion.safetyFindings.map(
+    ({ actionLevel, code, evidenceRef, messageKey, module }) => ({
+      actionLevel,
+      code,
+      evidenceRef,
+      messageKey,
+      module,
+    }),
+  );
+  const validationStatus = application.nutrition.validation.status;
+  const validation = {
+    ...baseVersion.validation,
+    commercialProductApplication: {
+      completeness: application.completeness,
+      confirmationId: product.confirmationId,
+      revisionId: product.revisionId,
+      selection: body.selection,
+      uncertainties: application.uncertainties,
+    },
+    nutrition: application.nutrition.validation,
+  };
+  const result = PlanEngineResultSchema.parse({
+    canonicalizationVersion: baseVersion.canonicalizationVersion,
+    completeness: application.completeness,
+    engineVersion: baseVersion.engineVersion,
+    inputHash: await hashSha256Hex(
+      canonicalJson({
+        baseOutputHash: baseVersion.outputHash,
+        productRevisionId: product.revisionId,
+        selection: body.selection,
+      }),
+    ),
+    moduleResults,
+    outputHash: await hashSha256Hex(
+      canonicalJson({ moduleResults, safetyFindings, validation, validationStatus }),
+    ),
+    ruleSetRevisionId: baseVersion.ruleSetRevisionId,
+    safetyFindings,
+    sourceManifestId: baseVersion.sourceManifestId,
+    validation,
+    validationStatus,
+  });
+  const digests = await mutationDigests(request, body, route);
+  const ack = parseDependency(
+    PlanCandidateAckSchema,
+    firstRow(
+      await rpc(dependencies, "internal_create_commercial_product_candidate", {
+        ...authArgs(auth),
+        ...engineRpcArgs(result),
+        p_base_version_id: body.baseVersionId,
+        p_change_kind: "commercial_product_applied",
+        p_change_payload: {
+          confirmationId: product.confirmationId,
+          productRevisionId: product.revisionId,
+          selection: body.selection,
+        },
+        p_confirmation_id: product.confirmationId,
+        p_context_snapshot_id: baseVersion.contextSnapshotId,
+        p_diff: {
+          affectedModules: ["nutrition"],
+          changedFields: ["nutrition.productApplication"],
+        },
+        p_expected_version: body.expectedVersion,
+        p_idempotency_key_digest: digests.keyDigest,
+        p_impact: "module_only",
+        p_plan_id: route.planId,
+        p_product_revision_id: product.revisionId,
+        p_request_digest: digests.requestDigest,
+        p_selection: body.selection,
+      }),
+    ),
+  );
+  const expectedCompleteness =
+    context.completeness === "provisional" || result.completeness === "provisional"
+      ? "provisional"
+      : "complete";
+  if (ack.completeness !== expectedCompleteness) {
     throw new PlanHttpError("DEPENDENCY_UNAVAILABLE", 503);
   }
   return ack;
@@ -1200,6 +1416,9 @@ async function dispatch(
   }
   if (route.kind === "candidate-create") {
     return createCandidate(request, route, dependencies, auth);
+  }
+  if (route.kind === "product-application") {
+    return createProductApplication(request, route, dependencies, auth);
   }
 
   const body = parse(PlanMutationRequestSchema, await readJson(request));

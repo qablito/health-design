@@ -20,6 +20,7 @@ const unknown = { state: "unknown" as const };
 const snapshot = {
   basis: "per_100_g",
   brand: "Marca de prueba",
+  density: { state: "unknown" },
   gtin: {
     displayGtin: "8412345678905",
     gtin14: "08412345678905",
@@ -46,6 +47,37 @@ const snapshot = {
 } as const satisfies CommercialProductSnapshot;
 
 describe("contrato estructurado de producto comercial", () => {
+  it("representa la densidad confirmada sin asumir que un mililitro pesa un gramo", () => {
+    expect(
+      CommercialProductSnapshotSchema.safeParse({
+        ...snapshot,
+        density: {
+          gramsPerMl: "1.03",
+          sourceRef: "Etiqueta confirmada por el usuario",
+          state: "known",
+        },
+      }).success,
+    ).toBe(true);
+    expect(
+      CommercialProductSnapshotSchema.safeParse({
+        ...snapshot,
+        density: { state: "unknown" },
+      }).success,
+    ).toBe(true);
+    expect(
+      CommercialProductSnapshotSchema.safeParse({
+        ...snapshot,
+        density: { gramsPerMl: "0", sourceRef: "Etiqueta", state: "known" },
+      }).success,
+    ).toBe(false);
+    expect(
+      CommercialProductSnapshotSchema.safeParse({
+        ...snapshot,
+        density: { gramsPerMl: "1.03", state: "known" },
+      }).success,
+    ).toBe(false);
+  });
+
   it("acepta una ficha cerrada sin fotografías ni campos de compra", () => {
     expect(CommercialProductSnapshotSchema.safeParse(snapshot).success).toBe(true);
     expect(

@@ -525,6 +525,7 @@ function mapOpenFoodFactsProduct(
   return {
     basis: product.nutrition_data_per === "100ml" ? "per_100_ml" : "per_100_g",
     ...(text(product.brands) ? { brand: text(product.brands) } : {}),
+    density: { state: "unknown" },
     gtin,
     name,
     nutrients: {

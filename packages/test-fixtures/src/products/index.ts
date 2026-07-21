@@ -9,6 +9,7 @@ const known = (value: string, unit: "g" | "kcal" = "g") => ({
 export const COMMERCIAL_PRODUCT_FIXTURE = {
   basis: "per_100_g",
   brand: "Marca de prueba",
+  density: { state: "unknown" },
   gtin: {
     displayGtin: "8412345678905",
     gtin14: "08412345678905",

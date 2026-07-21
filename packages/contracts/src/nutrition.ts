@@ -161,7 +161,43 @@ const LegacyPlannedFoodSchema = LegacyPlannedFoodAlternativeSchema.extend({
   substitutes: z.array(LegacyPlannedFoodAlternativeSchema).length(2),
 }).strict();
 
+const CommercialProductNutrientStateSchema = z
+  .object({
+    calculation: z.enum([
+      "confirmed_conversion",
+      "declared",
+      "estimated_from_canonical",
+      "unavailable",
+    ]),
+    declaredState: z.enum(["estimated", "known", "unknown"]),
+    sourceRef: z.string().min(1).max(160),
+  })
+  .strict();
+
 const PlannedFoodAlternativeV2Schema = LegacyPlannedFoodAlternativeSchema.extend({
+  commercialProduct: z
+    .object({
+      brand: z.string().min(1).max(200).optional(),
+      calculationHash: z.string().regex(/^[0-9a-f]{64}$/),
+      confirmationId: z.uuid(),
+      manifestId: z.uuid(),
+      nutrientStates: z
+        .object({
+          carbohydratesG: CommercialProductNutrientStateSchema,
+          energyKcal: CommercialProductNutrientStateSchema,
+          fatG: CommercialProductNutrientStateSchema,
+          fiberG: CommercialProductNutrientStateSchema,
+          proteinG: CommercialProductNutrientStateSchema,
+          saltG: CommercialProductNutrientStateSchema,
+          saturatedFatG: CommercialProductNutrientStateSchema,
+          sugarsG: CommercialProductNutrientStateSchema,
+        })
+        .strict(),
+      productId: z.uuid(),
+      revisionId: z.uuid(),
+    })
+    .strict()
+    .optional(),
   preparation: FoodPreparationSchema,
 }).strict();
 

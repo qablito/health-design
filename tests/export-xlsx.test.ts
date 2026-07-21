@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 
 import { renderXlsx } from "@health-design/export/xlsx";
 import type { ExportModel } from "@health-design/export/model";
-import { exportModels } from "@health-design/test-fixtures/exports";
+import {
+  commercialProductName,
+  commercialProductPrivateSentinels,
+  exportModels,
+} from "@health-design/test-fixtures/exports";
 
 function workbook(model: ExportModel) {
   const bytes = renderXlsx(model);
@@ -65,6 +69,17 @@ describe("renderizador XLSX privado", () => {
     for (let row = 2; row <= dangerous.length + 1; row += 1) {
       const cell = result.Sheets.Plan?.[`F${row}`] as XLSX.CellObject | undefined;
       expect(cell?.t).toBe("s");
+    }
+  });
+
+  it("muestra el producto sin exportar GTIN ni procedencia privada", () => {
+    const { workbook: result } = workbook(exportModels.commercialProduct);
+    const rows = XLSX.utils.sheet_to_json<Record<string, string>>(result.Sheets.Plan!);
+    const serialized = JSON.stringify(result);
+
+    expect(rows.some(({ Alimento }) => Alimento === commercialProductName)).toBe(true);
+    for (const sentinel of commercialProductPrivateSentinels) {
+      expect(serialized).not.toContain(sentinel);
     }
   });
 });

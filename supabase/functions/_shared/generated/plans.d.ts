@@ -57,6 +57,18 @@ export declare const PlanCandidateCreateRequestSchema: z.ZodObject<{
     expectedVersion: z.ZodNumber;
     schemaVersion: z.ZodLiteral<1>;
 }, z.core.$strict>;
+export declare const ProductApplicationRequestSchema: z.ZodObject<{
+    baseVersionId: z.ZodUUID;
+    confirmationId: z.ZodUUID;
+    expectedVersion: z.ZodNumber;
+    schemaVersion: z.ZodLiteral<1>;
+    selection: z.ZodObject<{
+        dayIndex: z.ZodNumber;
+        expectedCanonicalFoodKey: z.ZodString;
+        foodIndex: z.ZodNumber;
+        mealIndex: z.ZodNumber;
+    }, z.core.$strict>;
+}, z.core.$strict>;
 export declare const PlanMutationRequestSchema: z.ZodObject<{
     expectedVersion: z.ZodNumber;
     schemaVersion: z.ZodLiteral<1>;
@@ -786,6 +798,7 @@ export type ContextSnapshotAck = z.infer<typeof ContextSnapshotAckSchema>;
 export type ContextSnapshotInternal = z.infer<typeof ContextSnapshotInternalSchema>;
 export type PlanCandidateAck = z.infer<typeof PlanCandidateAckSchema>;
 export type PlanCandidateCreateRequest = z.infer<typeof PlanCandidateCreateRequestSchema>;
+export type ProductApplicationRequest = z.infer<typeof ProductApplicationRequestSchema>;
 export type PlanEngineResult = z.infer<typeof PlanEngineResultSchema>;
 export type PlanModuleResultInput = z.infer<typeof PlanModuleResultInputSchema>;
 export type PlanGenerationRequest = z.infer<typeof PlanGenerationRequestSchema>;
