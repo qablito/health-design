@@ -10,6 +10,7 @@ export * from "./hydration";
 export * from "./mobility";
 export * from "./nutrition";
 export * from "./plans";
+export * from "./products";
 export * from "./questionnaire";
 export * from "./sleep";
 export * from "./supplements";

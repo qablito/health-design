@@ -120,6 +120,9 @@ importers:
 
   packages/catalog:
     dependencies:
+      '@health-design/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@health-design/domain':
         specifier: workspace:*
         version: link:../domain
@@ -164,6 +167,9 @@ importers:
 
   packages/test-fixtures:
     dependencies:
+      '@health-design/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@health-design/engine':
         specifier: workspace:*
         version: link:../engine

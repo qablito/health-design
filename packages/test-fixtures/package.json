@@ -6,9 +6,11 @@
   "exports": {
     "./exports": "./src/exports/index.ts",
     "./nutrition": "./src/nutrition/index.ts",
-    "./nutrition-plan": "./src/profiles/nutrition/index.ts"
+    "./nutrition-plan": "./src/profiles/nutrition/index.ts",
+    "./products": "./src/products/index.ts"
   },
   "dependencies": {
+    "@health-design/contracts": "workspace:*",
     "@health-design/engine": "workspace:*",
     "@health-design/export": "workspace:*"
   }
