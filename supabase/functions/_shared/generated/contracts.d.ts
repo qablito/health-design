@@ -12,6 +12,7 @@ export * from "./plans.ts";
 export * from "./products.ts";
 export * from "./questionnaire.ts";
 export * from "./sleep.ts";
+export * from "./shopping.ts";
 export * from "./supplements.ts";
 export * from "./training.ts";
 export declare const RuntimeSmokeSchema: z.ZodObject<{
