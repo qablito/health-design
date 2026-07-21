@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   NutritionWeekSchema,
@@ -13,6 +13,10 @@ import { applyNutritionSubstitution } from "@health-design/engine";
 
 import { accessClient, type ProfileAccessSummary } from "../access/access-client";
 import { AIExplanation } from "../ai-explanation/AIExplanation";
+import {
+  ProductScanner,
+  type ProductCandidatePreview,
+} from "../barcode/ProductScanner";
 import { ExportPanel } from "../exports/ExportPanel";
 import { questionnaireClient } from "../questionnaire/questionnaire-client";
 import { clinicalFindingLabel } from "../wellness/wellness-view";
@@ -94,6 +98,14 @@ type NutritionDetailState = Readonly<{
   planOutputHash?: string;
   provisionalReason?: string;
   review?: NutritionReview;
+}>;
+
+type ProductSelection = Readonly<{
+  dayIndex: number;
+  expectedCanonicalFoodKey: string;
+  foodIndex: number;
+  foodName: string;
+  mealIndex: number;
 }>;
 
 function readNutritionDetail(
@@ -216,11 +228,14 @@ export function NutritionApp() {
   const [planOutputHash, setPlanOutputHash] = useState<string>();
   const [profiles, setProfiles] = useState<ProfileAccessSummary[]>([]);
   const [profileId, setProfileId] = useState<string>();
+  const [productSelection, setProductSelection] = useState<ProductSelection>();
   const [provisionalReason, setProvisionalReason] = useState<string>();
   const [review, setReview] = useState<NutritionReview>();
   const [restoreStatus, setRestoreStatus] = useState<
     "blocked" | "can_generate" | "loaded" | "loading"
   >("loading");
+  const activationFocusRef = useRef<HTMLButtonElement>(null);
+  const productReturnFocusRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -246,6 +261,7 @@ export function NutritionApp() {
     setChoices({});
     setPlanOutputHash(undefined);
     setProvisionalReason(undefined);
+    setProductSelection(undefined);
     setReview(undefined);
     setError(undefined);
     if (!profileId) {
@@ -350,6 +366,45 @@ export function NutritionApp() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function loadProductCandidate(
+    candidateAck: PlanMutationAck,
+    selection: ProductSelection,
+  ): Promise<ProductCandidatePreview> {
+    const detail = await nutritionPlanClient.getVersion(
+      candidateAck.planId,
+      candidateAck.planVersionId,
+    );
+    const state = readNutritionDetail(detail, candidateAck);
+    const appliedFood =
+      state.plan?.days[selection.dayIndex]?.meals[selection.mealIndex]?.foods[
+        selection.foodIndex
+      ];
+    if (!appliedFood?.commercialProduct) {
+      throw new Error("commercial_product_candidate_missing");
+    }
+    setAck(state.ack);
+    setOriginal(state.original);
+    setPlan(state.plan);
+    setPlanOutputHash(state.planOutputHash);
+    setProvisionalReason(state.provisionalReason);
+    setReview(state.review);
+    setChoices({});
+    setLocalPreview(false);
+    setRestoreStatus("loaded");
+    const uncertaintyCodes =
+      state.review?.uncertainties
+        .map(codeFrom)
+        .filter((value): value is string => value !== undefined) ?? [];
+    return {
+      amountG: appliedFood.amountG,
+      completeness: state.review?.completeness ?? candidateAck.completeness,
+      name: appliedFood.name,
+      substitutes: appliedFood.substitutes.map(({ name }) => name),
+      totalsLabel: totalsLabel(appliedFood.nutrients),
+      uncertainties: [...new Set(uncertaintyCodes)],
+    };
   }
 
   function substitute(
@@ -661,6 +716,7 @@ export function NutritionApp() {
                   review?.validationStatus !== "valid"
                 }
                 onClick={() => void activate()}
+                ref={activationFocusRef}
                 type="button"
               >
                 {ack?.status === "active" ? "Plan activo" : "Activar plan"}
@@ -726,6 +782,25 @@ export function NutritionApp() {
                                 </p>
                               ) : null}
                               <ClinicalNutrients values={food.clinicalNutrients} />
+                              <button
+                                className="product-inline-button"
+                                disabled={
+                                  busy || localPreview || ack?.status !== "active"
+                                }
+                                onClick={(event) => {
+                                  productReturnFocusRef.current = event.currentTarget;
+                                  setProductSelection({
+                                    dayIndex,
+                                    expectedCanonicalFoodKey: food.canonicalFoodKey,
+                                    foodIndex,
+                                    foodName: food.name,
+                                    mealIndex,
+                                  });
+                                }}
+                                type="button"
+                              >
+                                Usar producto comercial
+                              </button>
                             </div>
                             <small role="cell">{totalsLabel(food.nutrients)}</small>
                             <label role="cell">
@@ -751,7 +826,7 @@ export function NutritionApp() {
                                   ]!.substitutes,
                                 ].map((alternative, index) => (
                                   <option
-                                    key={alternative.canonicalFoodKey}
+                                    key={`${index}:${alternative.canonicalFoodKey}`}
                                     value={index}
                                   >
                                     {alternative.name} · {alternative.amountG} g
@@ -768,6 +843,23 @@ export function NutritionApp() {
               </article>
             ))}
           </section>
+
+          {productSelection && ack && profileId ? (
+            <ProductScanner
+              baseVersionId={ack.planVersionId}
+              expectedVersion={ack.aggregateVersion}
+              fallbackFocusRef={activationFocusRef}
+              foodName={productSelection.foodName}
+              onCandidate={(candidateAck) =>
+                loadProductCandidate(candidateAck, productSelection)
+              }
+              onClose={() => setProductSelection(undefined)}
+              planId={ack.planId}
+              profileId={profileId}
+              returnFocusRef={productReturnFocusRef}
+              selection={productSelection}
+            />
+          ) : null}
 
           <section className="shopping-summary">
             <h2>Lista canónica de la semana</h2>

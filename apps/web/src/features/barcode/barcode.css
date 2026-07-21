@@ -1,0 +1,294 @@
+.product-overlay {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: stretch end;
+  background: rgb(26 30 27 / 55%);
+}
+
+.product-panel {
+  width: min(760px, 100%);
+  height: 100%;
+  overflow-y: auto;
+  padding: clamp(20px, 4vw, 42px);
+  background: #fffdf6;
+  box-shadow: -20px 0 55px rgb(20 28 22 / 24%);
+}
+
+.product-panel:focus {
+  outline: 3px solid #326b46;
+  outline-offset: -3px;
+}
+
+.product-panel > header,
+.product-actions,
+.product-code-fields,
+.product-resolution-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.product-panel h2,
+.product-panel h3,
+.product-panel p {
+  margin-top: 0;
+}
+
+.product-kicker {
+  margin-bottom: 6px;
+  color: #326b46;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.product-close {
+  min-width: 72px;
+  min-height: 44px;
+  border: 1px solid #6f746f;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.product-progress {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin: 26px 0 18px;
+  padding: 0;
+  list-style: none;
+}
+
+.product-progress li {
+  padding: 10px 6px;
+  border-bottom: 3px solid #d0cec5;
+  color: #656a66;
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.product-progress li[aria-current="step"] {
+  border-color: #326b46;
+  color: #183c26;
+  font-weight: 800;
+}
+
+.product-status,
+.product-error,
+.product-warning {
+  padding: 12px 14px;
+  border-left: 3px solid #326b46;
+  background: #eef5eb;
+}
+
+.product-error,
+.product-warning {
+  border-color: #9a451d;
+  background: #fff0e8;
+}
+
+.product-step,
+.product-form {
+  display: grid;
+  gap: 20px;
+  padding-top: 14px;
+}
+
+.product-camera {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.product-camera video {
+  width: min(100%, 520px);
+  aspect-ratio: 4 / 3;
+  border: 1px solid #b9b7ad;
+  border-radius: 12px;
+  background: #101510;
+  object-fit: cover;
+}
+
+.product-inline-button {
+  align-self: flex-start;
+  min-height: 44px;
+  margin-top: 0.65rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--line, #c9c5bd);
+  border-radius: 0.55rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.product-inline-button:hover:not(:disabled) {
+  border-color: currentColor;
+}
+
+.product-inline-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.product-code-fields,
+.product-form-grid,
+.product-nutrients-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.product-code-fields label,
+.product-form label,
+.product-list-field,
+.product-nutrient {
+  display: grid;
+  gap: 7px;
+}
+
+.product-panel input,
+.product-panel select,
+.product-panel textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #8d908a;
+  border-radius: 8px;
+  background: #fff;
+  color: #182018;
+  font: inherit;
+}
+
+.product-panel textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.product-form fieldset {
+  margin: 0;
+  padding: 18px;
+  border: 1px solid #c7c5bc;
+  border-radius: 12px;
+}
+
+.product-form legend {
+  padding: 0 7px;
+  font-weight: 800;
+}
+
+.product-resolution-summary {
+  align-items: stretch;
+}
+
+.product-resolution-summary > div {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid #d2d0c8;
+  border-radius: 8px;
+  background: #f7f4ec;
+}
+
+.product-resolution-summary span,
+.product-confirmed dt,
+.product-candidate dt {
+  color: #59605b;
+  font-size: 0.78rem;
+}
+
+.product-nutrient {
+  padding: 12px;
+  border: 1px solid #dbd9d0;
+  border-radius: 8px;
+}
+
+.product-nutrient > label:last-child {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.product-uncertainties {
+  padding: 14px 16px;
+  border: 1px solid #c8a65e;
+  border-radius: 9px;
+  background: #fff8e8;
+}
+
+.product-uncertainties ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.product-confirmed dl,
+.product-candidate dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.product-confirmed dl > div,
+.product-candidate dl > div {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.35fr) 1fr;
+  gap: 12px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid #dedcd4;
+}
+
+.product-confirmed dd,
+.product-candidate dd {
+  margin: 0;
+}
+
+.food-product-action {
+  justify-self: start;
+  min-height: 40px;
+  margin-top: 7px;
+  padding: 8px 11px;
+  border: 1px solid #326b46;
+  border-radius: 999px;
+  background: transparent;
+  color: #214f31;
+  font-weight: 700;
+}
+
+@media (max-width: 680px) {
+  .product-panel > header,
+  .product-actions,
+  .product-code-fields,
+  .product-resolution-summary,
+  .product-form-grid,
+  .product-nutrients-grid {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .product-panel > header,
+  .product-actions,
+  .product-resolution-summary {
+    display: grid;
+  }
+
+  .product-progress {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .product-confirmed dl > div,
+  .product-candidate dl > div {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-overlay,
+  .product-panel {
+    scroll-behavior: auto;
+  }
+}

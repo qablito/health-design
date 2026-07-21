@@ -2,8 +2,12 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { PlanVersionDetailSchema } from "@health-design/contracts";
 import type { QuestionnaireAnswers } from "@health-design/domain";
-import { generateNutritionWeek } from "@health-design/engine";
+import {
+  applyConfirmedCommercialProduct,
+  generateNutritionWeek,
+} from "@health-design/engine";
 import { effectiveNutritionFoods } from "@health-design/test-fixtures/nutrition-plan";
+import { COMMERCIAL_PRODUCT_FIXTURE } from "@health-design/test-fixtures/products";
 
 const userId = "00000000-0000-4000-8000-000000001001";
 const sessionId = "21000000-0000-4000-8000-000000001001";
@@ -501,4 +505,241 @@ test("recarga el plan actual de nutrición sin volver a ofrecer generación", as
         method === "GET" && path.endsWith(`/v1/profiles/${profileId}/plans/current`),
     ),
   ).toBe(true);
+});
+
+test("confirma un código explícitamente y crea un candidato sin alterar el plan activo", async ({
+  page,
+}) => {
+  const candidateVersionId = "54000000-0000-4000-8000-000000001002";
+  const confirmationId = "61000000-0000-4000-8000-000000001001";
+  const productId = "62000000-0000-4000-8000-000000001001";
+  const revisionId = "63000000-0000-4000-8000-000000001001";
+  const candidateId = "64000000-0000-4000-8000-000000001001";
+  const changeEventId = "65000000-0000-4000-8000-000000001001";
+  const manifestId = "66000000-0000-4000-8000-000000001001";
+  const firstFood = nutritionWeek.days[0]!.meals[0]!.foods[0]!;
+  const candidate = applyConfirmedCommercialProduct(nutritionWeek, {
+    answers,
+    product: {
+      calculationHash: "c".repeat(64),
+      confirmationId,
+      manifestId,
+      matchingState: "exact",
+      productId,
+      revisionId,
+      snapshot: COMMERCIAL_PRODUCT_FIXTURE,
+    },
+    selection: {
+      dayIndex: 0,
+      expectedCanonicalFoodKey: firstFood.canonicalFoodKey,
+      foodIndex: 0,
+      mealIndex: 0,
+    },
+  });
+  const productRequests: Array<{ body: unknown; method: string; path: string }> = [];
+
+  await installSession(page);
+  await page.addInitScript(() => {
+    class TestBarcodeDetector {
+      static getSupportedFormats() {
+        return Promise.resolve(["ean_13"]);
+      }
+
+      detect() {
+        return Promise.resolve([]);
+      }
+    }
+    Object.defineProperty(window, "BarcodeDetector", {
+      configurable: true,
+      value: TestBarcodeDetector,
+    });
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: () =>
+          Promise.reject(new DOMException("Permiso denegado", "NotAllowedError")),
+      },
+    });
+  });
+  await mockNutritionApi(page);
+  await page.route("http://127.0.0.1:54321/functions/v1/catalogs/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const body = request.postData() ? (request.postDataJSON() as unknown) : null;
+    productRequests.push({ body, method: request.method(), path });
+
+    if (request.method() === "GET") {
+      await route.fulfill({
+        body: JSON.stringify({
+          completeness: "provisional",
+          confirmedForProfile: false,
+          contentHash: "d".repeat(64),
+          gtin: COMMERCIAL_PRODUCT_FIXTURE.gtin,
+          matching: {
+            canonicalFoodKey: firstFood.canonicalFoodKey,
+            messageKey: "commercial_product.match.exact",
+            state: "exact",
+          },
+          revisionId,
+          schemaVersion: 1,
+          snapshot: COMMERCIAL_PRODUCT_FIXTURE,
+          source: "global",
+          sourceAvailability: "available",
+          uncertainties: ["fiberG_unknown"],
+        }),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+
+    await route.fulfill({
+      body: JSON.stringify({
+        completeness: "provisional",
+        confirmationId,
+        confirmedAt: createdAt,
+        correctionId: null,
+        productId,
+        reusedRevision: true,
+        revisionId,
+        schemaVersion: 1,
+        scope: "profile",
+      }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.route("http://127.0.0.1:54321/functions/v1/plans/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path.endsWith(`/plans/v1/plans/${planId}/product-applications`)) {
+      const body = request.postData() ? (request.postDataJSON() as unknown) : null;
+      productRequests.push({ body, method: request.method(), path });
+      await route.fulfill({
+        body: JSON.stringify({
+          activatedAt: null,
+          activeVersionId: planVersionId,
+          aggregateVersion: 3,
+          archivedAt: null,
+          baseVersionId: planVersionId,
+          candidateId,
+          candidateStatus: "pending",
+          changeEventId,
+          completeness: candidate.completeness,
+          contextSnapshotId,
+          createdAt,
+          diff: {
+            affectedModules: ["nutrition"],
+            changedFields: ["nutrition.days.0.meals.0.foods.0"],
+          },
+          impact: "module_only",
+          ordinal: 2,
+          planId,
+          planVersionId: candidateVersionId,
+          resolvedAt: null,
+          status: "draft",
+          validation: { status: "valid" },
+          validationStatus: "valid",
+        }),
+        contentType: "application/json",
+        status: 201,
+      });
+      return;
+    }
+    if (path.endsWith(`/plans/v1/plans/${planId}/versions/${candidateVersionId}`)) {
+      const detail = PlanVersionDetailSchema.parse({
+        activatedAt: null,
+        archivedAt: null,
+        canonicalizationVersion: "canonical-json-v1",
+        completeness: candidate.completeness,
+        contextSnapshotId,
+        createdAt,
+        engineVersion: "engine-v3",
+        hashAlgorithm: "sha256",
+        id: candidateVersionId,
+        inputHash: "a".repeat(64),
+        moduleResults: [
+          {
+            confidence: "medium",
+            createdAt,
+            id: "67000000-0000-4000-8000-000000001001",
+            module: "nutrition",
+            payload: candidate.nutrition,
+            status: "provisional",
+            uncertainties: candidate.uncertainties,
+          },
+        ],
+        ordinal: 2,
+        outputHash: "e".repeat(64),
+        planId,
+        ruleSetRevisionId: "04edd58c-5fff-4f6b-85ad-472ec538885c",
+        safetyFindings: [],
+        sourceManifestId: manifestId,
+        status: "draft",
+        validatedAt: createdAt,
+        validation: { status: "valid" },
+        validationStatus: "valid",
+      });
+      await route.fulfill({
+        body: JSON.stringify(detail),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.goto("/nutrition");
+  await page.getByRole("button", { name: "Generar semana estable" }).click();
+  await page.getByRole("button", { name: "Activar plan" }).click();
+  await expect(page.getByRole("button", { name: "Plan activo" })).toBeVisible();
+
+  const opener = page.getByRole("button", { name: "Usar producto comercial" }).first();
+  await opener.click();
+  await expect(
+    page.getByRole("dialog", { name: "Código, revisión y aplicación" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Escanear con la cámara" }).click();
+  await expect(page.getByText(/introducir el código manualmente/i)).toBeVisible();
+
+  await page.getByLabel("Código numérico").fill(
+    COMMERCIAL_PRODUCT_FIXTURE.gtin.displayGtin,
+  );
+  await page.getByRole("button", { name: "Consultar ficha" }).click();
+  await expect(page.getByLabel("Nombre")).toHaveValue(
+    COMMERCIAL_PRODUCT_FIXTURE.name,
+  );
+  expect(productRequests.filter(({ method }) => method === "POST")).toHaveLength(0);
+
+  await page.getByRole("button", { name: "Confirmar estos datos" }).click();
+  await expect(page.getByRole("heading", { name: "Ficha confirmada" })).toBeVisible();
+  expect(
+    productRequests.filter(({ path }) => path.includes("/catalogs/") && path.endsWith("/confirm")),
+  ).toHaveLength(1);
+  expect(
+    productRequests.filter(({ path }) => path.endsWith("/product-applications")),
+  ).toHaveLength(0);
+  await expect(page.getByText("Sin cambios", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Crear candidato" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Candidato listo para revisar" }),
+  ).toBeVisible();
+  await expect(page.getByText(/versión anterior sigue activa/i)).toBeVisible();
+  await expect(
+    page
+      .getByRole("dialog", { name: "Código, revisión y aplicación" })
+      .getByText(candidate.nutrition.days[0]!.meals[0]!.foods[0]!.name),
+  ).toBeVisible();
+  expect(
+    productRequests.filter(({ path }) => path.endsWith("/product-applications")),
+  ).toHaveLength(1);
+
+  await page.getByRole("button", { name: "Cerrar y revisar candidato" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Código, revisión y aplicación" }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Activar plan" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Activar plan" })).toBeEnabled();
 });

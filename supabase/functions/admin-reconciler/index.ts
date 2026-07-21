@@ -247,14 +247,27 @@ function firstRow(data: unknown): Record<string, unknown> | null {
 }
 
 function parseAction(value: unknown): AdminAuditAction {
-  if (value !== "impersonation_start" && value !== "impersonation_end") {
+  if (
+    value !== "barcode_correction_approve" &&
+    value !== "barcode_correction_correct" &&
+    value !== "barcode_correction_reject" &&
+    value !== "impersonation_start" &&
+    value !== "impersonation_end" &&
+    value !== "matching_rule_activate"
+  ) {
     throw new Error("invalid_action");
   }
   return value;
 }
 
 function parseTargetType(value: unknown): AdminAuditTargetType {
-  if (value !== "profile" && value !== "impersonation_session") {
+  if (
+    value !== "barcode_correction" &&
+    value !== "commercial_product_revision" &&
+    value !== "impersonation_session" &&
+    value !== "product_matching_rule" &&
+    value !== "profile"
+  ) {
     throw new Error("invalid_target_type");
   }
   return value;

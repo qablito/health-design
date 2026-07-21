@@ -9,7 +9,9 @@ body {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -81,6 +83,10 @@ input {
   border: 1px solid #ccd5cf;
 }
 
+.admin-card + .admin-card {
+  margin-top: 1.5rem;
+}
+
 .admin-error {
   max-width: 64rem;
   margin: 0 auto 1rem;
@@ -113,6 +119,112 @@ input {
   width: 100%;
   padding: 0.75rem;
   border: 1px solid #85958b;
+}
+
+.product-review-header,
+.product-review-list li,
+.matching-activation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.product-review-header label,
+.product-review-actions form,
+.product-review-actions label {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.product-review input,
+.product-review select,
+.product-review textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.7rem;
+  color: inherit;
+  background: #fff;
+  border: 1px solid #85958b;
+}
+
+.product-review-list {
+  padding: 0;
+  margin: 1rem 0;
+  list-style: none;
+  border-bottom: 1px solid #e2e7e3;
+}
+
+.product-review-list li {
+  padding-block: 0.85rem;
+  border-top: 1px solid #e2e7e3;
+}
+
+.product-review-list li div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.product-review-list span {
+  color: #52635a;
+  font-size: 0.875rem;
+}
+
+.product-review-detail {
+  padding-top: 1.25rem;
+  margin-top: 1.25rem;
+  border-top: 2px solid #244c3a;
+}
+
+.product-review table {
+  width: 100%;
+  margin-block: 1rem;
+  border-collapse: collapse;
+}
+
+.product-review caption {
+  margin-bottom: 0.5rem;
+  text-align: left;
+}
+
+.product-review th,
+.product-review td {
+  padding: 0.7rem;
+  text-align: left;
+  vertical-align: top;
+  border: 1px solid #dce3de;
+}
+
+.product-review-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.product-review-actions > details,
+.product-review-actions > form,
+.matching-activation {
+  padding: 1rem;
+  background: #f7f9f7;
+  border: 1px solid #d8e0da;
+}
+
+.product-review-actions details form {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.product-review-actions summary {
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.matching-activation {
+  margin-top: 1rem;
+  background: #fff9e8;
+  border-color: #d8b45a;
 }
 
 .admin-shell button {
@@ -158,5 +270,45 @@ input {
   .admin-profile-list li {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .product-review-header,
+  .product-review-list li,
+  .matching-activation {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .product-review-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .product-review table,
+  .product-review tbody,
+  .product-review tr,
+  .product-review th,
+  .product-review td {
+    display: block;
+  }
+
+  .product-review thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .product-review tr {
+    margin-bottom: 0.75rem;
+    border: 1px solid #dce3de;
+  }
+
+  .product-review td::before {
+    display: block;
+    color: #52635a;
+    font-size: 0.75rem;
+    font-weight: 800;
+    content: attr(data-label);
   }
 }

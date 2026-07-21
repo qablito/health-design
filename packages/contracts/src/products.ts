@@ -266,6 +266,107 @@ export const ConfirmedProductApplicationSchema = z
   })
   .strict();
 
+export const ADMIN_BARCODE_CORRECTION_STATUSES = [
+  "pending",
+  "approved",
+  "rejected",
+  "superseded",
+] as const;
+
+export const ADMIN_BARCODE_REJECTION_REASONS = [
+  "duplicate",
+  "insufficient_evidence",
+  "invalid_data",
+  "safety_risk",
+] as const;
+
+const AdminBarcodeCorrectionSummarySchema = z
+  .object({
+    brand: LimitedTextSchema(200).optional(),
+    completeness: z.enum(COMMERCIAL_PRODUCT_COMPLETENESS),
+    correctionId: z.uuid(),
+    createdAt: z.iso.datetime({ offset: true }),
+    duplicateCount: z.number().int().min(1).max(10_000),
+    gtin14: z.string().regex(/^\d{14}$/),
+    name: LimitedTextSchema(200),
+    profileId: z.uuid(),
+    status: z.enum(ADMIN_BARCODE_CORRECTION_STATUSES),
+    version: z.number().int().min(1),
+  })
+  .strict();
+
+export const AdminBarcodeCorrectionListSchema = z
+  .object({
+    items: z.array(AdminBarcodeCorrectionSummarySchema).max(50),
+    nextCursor: z.uuid().nullable(),
+    schemaVersion: z.literal(1),
+  })
+  .strict();
+
+export const AdminBarcodeCorrectionDetailSchema = z
+  .object({
+    baseSnapshot: CommercialProductSnapshotSchema.nullable(),
+    correctionId: z.uuid(),
+    createdAt: z.iso.datetime({ offset: true }),
+    globalSnapshot: CommercialProductSnapshotSchema.nullable(),
+    profileId: z.uuid(),
+    productId: z.uuid(),
+    proposedSnapshot: CommercialProductSnapshotSchema,
+    reviewRevisionId: z.uuid(),
+    schemaVersion: z.literal(1),
+    status: z.enum(ADMIN_BARCODE_CORRECTION_STATUSES),
+    version: z.number().int().min(1),
+  })
+  .strict();
+
+const AdminProductMutationBaseSchema = z
+  .object({
+    expectedVersion: z.number().int().min(1),
+    schemaVersion: z.literal(1),
+  })
+  .strict();
+
+export const AdminBarcodeCorrectionRequestSchema =
+  AdminProductMutationBaseSchema.extend({
+    snapshot: CommercialProductSnapshotSchema,
+  }).strict();
+
+export const AdminBarcodeCorrectionApproveRequestSchema =
+  AdminProductMutationBaseSchema.extend({
+    canonicalFoodKey: z.string().regex(/^food:[a-z0-9][a-z0-9._:-]{0,127}$/),
+    evidence: z.array(LimitedTextSchema(300)).min(1).max(20),
+    matchState: z.enum(["exact", "allowed", "review", "excluded", "insufficient"]),
+  }).strict();
+
+export const AdminBarcodeCorrectionRejectRequestSchema =
+  AdminProductMutationBaseSchema.extend({
+    reason: z.enum(ADMIN_BARCODE_REJECTION_REASONS),
+  }).strict();
+
+export const AdminMatchingRuleActivateRequestSchema = AdminProductMutationBaseSchema;
+
+export const AdminBarcodeCorrectionMutationAckSchema = z
+  .object({
+    auditClosure: z.literal("pending").optional(),
+    correctionId: z.uuid(),
+    globalRevisionId: z.uuid().nullable(),
+    matchingRuleId: z.uuid().nullable(),
+    schemaVersion: z.literal(1),
+    status: z.enum(ADMIN_BARCODE_CORRECTION_STATUSES),
+    version: z.number().int().min(1),
+  })
+  .strict();
+
+export const AdminMatchingRuleMutationAckSchema = z
+  .object({
+    auditClosure: z.literal("pending").optional(),
+    matchingRuleId: z.uuid(),
+    schemaVersion: z.literal(1),
+    status: z.enum(["active", "draft", "superseded", "withdrawn"]),
+    version: z.number().int().min(1),
+  })
+  .strict();
+
 export type ProductSymbology = (typeof PRODUCT_SYMBOLOGIES)[number];
 export type ProductGtin = z.infer<typeof ProductGtinSchema>;
 export type ProductNutrientValue = z.infer<typeof ProductNutrientValueSchema>;
@@ -282,4 +383,16 @@ export type ProductConfirmationRequest = z.infer<
 export type ProductConfirmationAck = z.infer<typeof ProductConfirmationAckSchema>;
 export type ConfirmedProductApplication = z.infer<
   typeof ConfirmedProductApplicationSchema
+>;
+export type AdminBarcodeCorrectionList = z.infer<
+  typeof AdminBarcodeCorrectionListSchema
+>;
+export type AdminBarcodeCorrectionDetail = z.infer<
+  typeof AdminBarcodeCorrectionDetailSchema
+>;
+export type AdminBarcodeCorrectionMutationAck = z.infer<
+  typeof AdminBarcodeCorrectionMutationAckSchema
+>;
+export type AdminMatchingRuleMutationAck = z.infer<
+  typeof AdminMatchingRuleMutationAckSchema
 >;

@@ -1,8 +1,17 @@
 import {
+  AdminBarcodeCorrectionDetailSchema,
+  AdminBarcodeCorrectionListSchema,
+  AdminBarcodeCorrectionMutationAckSchema,
   AdminImpersonationContextSchema,
+  AdminMatchingRuleMutationAckSchema,
   AdminProfileSummarySchema,
+  type AdminBarcodeCorrectionDetail,
+  type AdminBarcodeCorrectionList,
+  type AdminBarcodeCorrectionMutationAck,
   type AdminImpersonationContext,
+  type AdminMatchingRuleMutationAck,
   type AdminProfileSummary,
+  type CommercialProductSnapshot,
 } from "@health-design/contracts";
 
 import { supabaseAuth } from "../../services/supabase";
@@ -65,8 +74,14 @@ export function createAdminClient(dependencies: AdminClientDependencies) {
     path: string,
     schema: Schema<T>,
     method: "GET" | "POST",
+    body?: unknown,
+    allowQuery = false,
   ): Promise<T> {
-    if (!path.startsWith("/v1/admin/") || path.includes("?") || path.includes("#")) {
+    if (
+      !path.startsWith("/v1/admin/") ||
+      (!allowQuery && path.includes("?")) ||
+      path.includes("#")
+    ) {
       throw new Error("invalid_admin_path");
     }
     const accessToken = await dependencies.getAccessToken();
@@ -79,17 +94,62 @@ export function createAdminClient(dependencies: AdminClientDependencies) {
     if (method === "POST") headers["idempotency-key"] = crypto.randomUUID();
     const fetcher = dependencies.fetcher;
     const response = await fetcher(`${dependencies.baseUrl}${path}`, {
-      ...(method === "POST" ? { body: JSON.stringify({ schemaVersion: 1 }) } : {}),
+      ...(method === "POST"
+        ? { body: JSON.stringify(body ?? { schemaVersion: 1 }) }
+        : {}),
       headers,
       method,
       referrerPolicy: "no-referrer",
     });
-    const body = await parseJson(response);
-    if (!response.ok) throw new AdminApiError(response.status, body ?? {});
-    return validate(schema, body);
+    const responseBody = await parseJson(response);
+    if (!response.ok) throw new AdminApiError(response.status, responseBody ?? {});
+    return validate(schema, responseBody);
   }
 
   return {
+    activateMatchingRule(matchingRuleId: string, expectedVersion: number) {
+      return request<AdminMatchingRuleMutationAck>(
+        `/v1/admin/matching-rules/${matchingRuleId}/activate`,
+        AdminMatchingRuleMutationAckSchema,
+        "POST",
+        { expectedVersion, schemaVersion: 1 },
+      );
+    },
+    approveBarcodeCorrection(
+      correctionId: string,
+      input: {
+        canonicalFoodKey: string;
+        evidence: string[];
+        expectedVersion: number;
+        matchState: "allowed" | "exact" | "excluded" | "insufficient" | "review";
+      },
+    ) {
+      return request<AdminBarcodeCorrectionMutationAck>(
+        `/v1/admin/barcode-corrections/${correctionId}/approve`,
+        AdminBarcodeCorrectionMutationAckSchema,
+        "POST",
+        { ...input, schemaVersion: 1 },
+      );
+    },
+    barcodeCorrection(correctionId: string) {
+      return request<AdminBarcodeCorrectionDetail>(
+        `/v1/admin/barcode-corrections/${correctionId}`,
+        AdminBarcodeCorrectionDetailSchema,
+        "GET",
+      );
+    },
+    correctBarcodeCorrection(
+      correctionId: string,
+      expectedVersion: number,
+      snapshot: CommercialProductSnapshot,
+    ) {
+      return request<AdminBarcodeCorrectionMutationAck>(
+        `/v1/admin/barcode-corrections/${correctionId}/correct`,
+        AdminBarcodeCorrectionMutationAckSchema,
+        "POST",
+        { expectedVersion, schemaVersion: 1, snapshot },
+      );
+    },
     currentContext() {
       return request<AdminImpersonationContext>(
         "/v1/admin/context",
@@ -109,6 +169,32 @@ export function createAdminClient(dependencies: AdminClientDependencies) {
         "/v1/admin/profiles",
         AdminProfileSummarySchema.array(),
         "GET",
+      );
+    },
+    listBarcodeCorrections(
+      status: "approved" | "pending" | "rejected" | "superseded" = "pending",
+      cursor?: string,
+    ) {
+      const query = new URLSearchParams({ status });
+      if (cursor) query.set("cursor", cursor);
+      return request<AdminBarcodeCorrectionList>(
+        `/v1/admin/barcode-corrections?${query.toString()}`,
+        AdminBarcodeCorrectionListSchema,
+        "GET",
+        undefined,
+        true,
+      );
+    },
+    rejectBarcodeCorrection(
+      correctionId: string,
+      expectedVersion: number,
+      reason: "duplicate" | "insufficient_evidence" | "invalid_data" | "safety_risk",
+    ) {
+      return request<AdminBarcodeCorrectionMutationAck>(
+        `/v1/admin/barcode-corrections/${correctionId}/reject`,
+        AdminBarcodeCorrectionMutationAckSchema,
+        "POST",
+        { expectedVersion, reason, schemaVersion: 1 },
       );
     },
     startImpersonation(profileId: string) {

@@ -6,6 +6,7 @@ import {
   type AdminImpersonationContext,
   type AdminProfileSummary,
 } from "./admin-client";
+import { ProductReviewPanel } from "./ProductReviewPanel";
 import { supabaseAuth } from "../../services/supabase";
 import { clearPublicAssetCaches } from "../../services/client-cache";
 import { requestTurnstileToken } from "../../services/turnstile";
@@ -108,24 +109,28 @@ export function AdminApp() {
     });
   }, [resolveSession]);
 
-  async function run(operation: () => Promise<void>) {
-    setBusy(true);
-    setError(undefined);
-    try {
-      await operation();
-    } catch (operationError) {
-      if (
-        operationError instanceof AdminApiError &&
-        operationError.code === "AAL2_REQUIRED" &&
-        !(await prepareMfa())
-      ) {
-        return;
+  const run = useCallback(
+    async <T,>(operation: () => Promise<T>): Promise<T | undefined> => {
+      setBusy(true);
+      setError(undefined);
+      try {
+        return await operation();
+      } catch (operationError) {
+        if (
+          operationError instanceof AdminApiError &&
+          operationError.code === "AAL2_REQUIRED" &&
+          !(await prepareMfa())
+        ) {
+          return undefined;
+        }
+        setError(friendlyError(operationError));
+        return undefined;
+      } finally {
+        setBusy(false);
       }
-      setError(friendlyError(operationError));
-    } finally {
-      setBusy(false);
-    }
-  }
+    },
+    [prepareMfa],
+  );
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -287,29 +292,32 @@ export function AdminApp() {
       ) : null}
 
       {stage === "ready" ? (
-        <section aria-labelledby="admin-profiles-title" className="admin-card">
-          <h2 id="admin-profiles-title">Perfiles</h2>
-          {profiles.length === 0 ? <p>No hay perfiles disponibles.</p> : null}
-          <ul className="admin-profile-list">
-            {profiles.map((profile) => (
-              <li key={profile.profileId}>
-                <div>
-                  <strong>{profile.alias}</strong>
-                  <span>
-                    {profile.status === "active" ? "Activo" : "Borrado solicitado"}
-                  </span>
-                </div>
-                <button
-                  disabled={busy || context.active || profile.status !== "active"}
-                  onClick={() => void start(profile.profileId)}
-                  type="button"
-                >
-                  Acceder como este perfil
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <>
+          <ProductReviewPanel busy={busy} execute={run} />
+          <section aria-labelledby="admin-profiles-title" className="admin-card">
+            <h2 id="admin-profiles-title">Perfiles</h2>
+            {profiles.length === 0 ? <p>No hay perfiles disponibles.</p> : null}
+            <ul className="admin-profile-list">
+              {profiles.map((profile) => (
+                <li key={profile.profileId}>
+                  <div>
+                    <strong>{profile.alias}</strong>
+                    <span>
+                      {profile.status === "active" ? "Activo" : "Borrado solicitado"}
+                    </span>
+                  </div>
+                  <button
+                    disabled={busy || context.active || profile.status !== "active"}
+                    onClick={() => void start(profile.profileId)}
+                    type="button"
+                  >
+                    Acceder como este perfil
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </>
       ) : null}
     </main>
   );

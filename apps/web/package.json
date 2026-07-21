@@ -8,10 +8,12 @@
     "dev": "vite"
   },
   "dependencies": {
+    "@health-design/catalog": "workspace:*",
     "@health-design/contracts": "workspace:*",
     "@health-design/engine": "workspace:*",
     "@health-design/export": "workspace:*",
     "@supabase/auth-js": "2.110.6",
+    "barcode-detector": "3.2.1",
     "qrcode": "1.5.4",
     "react": "19.2.7",
     "react-dom": "19.2.7"

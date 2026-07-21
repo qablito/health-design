@@ -1,11 +1,22 @@
 import { createClient } from "@supabase/supabase-js";
 
+import { classifyCommercialProductCompleteness } from "@health-design/catalog/products";
 import {
+  AdminBarcodeCorrectionApproveRequestSchema,
+  AdminBarcodeCorrectionDetailSchema,
+  AdminBarcodeCorrectionListSchema,
+  AdminBarcodeCorrectionMutationAckSchema,
+  AdminBarcodeCorrectionRejectRequestSchema,
+  AdminBarcodeCorrectionRequestSchema,
   AdminImpersonationContextSchema,
+  AdminMatchingRuleActivateRequestSchema,
+  AdminMatchingRuleMutationAckSchema,
   AdminMutationRequestSchema,
   AdminProfileSummarySchema,
   LedgerReceiptSchema,
+  type AdminBarcodeCorrectionMutationAck,
   type AdminImpersonationContext,
+  type AdminMatchingRuleMutationAck,
   type LedgerReceipt,
 } from "@health-design/contracts";
 import {
@@ -20,10 +31,16 @@ import { resolveCors, type EdgeEnvironment } from "../_shared/cors.ts";
 
 export type { AdminIntentInput } from "../_shared/audit.ts";
 
-const MAX_BODY_BYTES = 16_384;
+const MAX_BODY_BYTES = 131_072;
 const RECENT_MFA_SECONDS = 5 * 60;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ADMIN_CORRECTION_STATUSES = new Set([
+  "approved",
+  "pending",
+  "rejected",
+  "superseded",
+]);
 
 type AuthContext = {
   aal: "aal1" | "aal2";
@@ -60,9 +77,15 @@ export interface AdminDependencies {
 }
 
 type AdminRoute =
+  | { kind: "barcode-correction-approve"; correctionId: string }
+  | { kind: "barcode-correction-correct"; correctionId: string }
+  | { kind: "barcode-correction-detail"; correctionId: string }
+  | { cursor: string | null; kind: "barcode-corrections-list"; status: string }
+  | { kind: "barcode-correction-reject"; correctionId: string }
   | { kind: "context" }
   | { kind: "impersonation-end"; impersonationSessionId: string }
   | { kind: "impersonation-start"; profileId: string }
+  | { kind: "matching-rule-activate"; matchingRuleId: string }
   | { kind: "profiles-list" };
 
 type ErrorCode =
@@ -138,6 +161,50 @@ function parseRoute(url: URL): AdminRoute | null {
   const path = url.pathname;
   if (path.endsWith("/v1/admin/context")) return { kind: "context" };
   if (path.endsWith("/v1/admin/profiles")) return { kind: "profiles-list" };
+  if (path.endsWith("/v1/admin/barcode-corrections")) {
+    const keys = [...url.searchParams.keys()];
+    if (
+      keys.some((key) => key !== "status" && key !== "cursor") ||
+      new Set(keys).size !== keys.length
+    ) {
+      throw new AdminHttpError("INVALID_INPUT", 400);
+    }
+    const status = url.searchParams.get("status") ?? "pending";
+    if (!ADMIN_CORRECTION_STATUSES.has(status)) {
+      throw new AdminHttpError("INVALID_INPUT", 400);
+    }
+    const cursor = url.searchParams.get("cursor");
+    if (cursor !== null && !UUID_PATTERN.test(cursor)) {
+      throw new AdminHttpError("INVALID_INPUT", 400);
+    }
+    return { cursor, kind: "barcode-corrections-list", status };
+  }
+
+  const correction = path.match(
+    /\/v1\/admin\/barcode-corrections\/([0-9a-f-]{36})(?:\/(correct|approve|reject))?$/i,
+  );
+  if (correction?.[1] && UUID_PATTERN.test(correction[1])) {
+    const action = correction[2];
+    if (action === "correct") {
+      return { correctionId: correction[1], kind: "barcode-correction-correct" };
+    }
+    if (action === "approve") {
+      return { correctionId: correction[1], kind: "barcode-correction-approve" };
+    }
+    if (action === "reject") {
+      return { correctionId: correction[1], kind: "barcode-correction-reject" };
+    }
+    if (action === undefined) {
+      return { correctionId: correction[1], kind: "barcode-correction-detail" };
+    }
+  }
+
+  const matching = path.match(
+    /\/v1\/admin\/matching-rules\/([0-9a-f-]{36})\/activate$/i,
+  );
+  if (matching?.[1] && UUID_PATTERN.test(matching[1])) {
+    return { kind: "matching-rule-activate", matchingRuleId: matching[1] };
+  }
 
   const start = path.match(/\/v1\/admin\/profiles\/([0-9a-f-]{36})\/impersonations$/i);
   if (start?.[1] && UUID_PATTERN.test(start[1])) {
@@ -152,7 +219,12 @@ function parseRoute(url: URL): AdminRoute | null {
 }
 
 function expectedMethod(route: AdminRoute): "GET" | "POST" {
-  return route.kind === "context" || route.kind === "profiles-list" ? "GET" : "POST";
+  return route.kind === "context" ||
+    route.kind === "profiles-list" ||
+    route.kind === "barcode-corrections-list" ||
+    route.kind === "barcode-correction-detail"
+    ? "GET"
+    : "POST";
 }
 
 function bearerToken(request: Request): string {
@@ -484,6 +556,180 @@ async function listProfiles(
   return parsed.data;
 }
 
+async function listBarcodeCorrections(
+  dependencies: AdminDependencies,
+  auth: AuthContext,
+  route: Extract<AdminRoute, { kind: "barcode-corrections-list" }>,
+): Promise<unknown> {
+  const result = await dependencies.rpc("internal_admin_list_barcode_corrections", {
+    p_auth_session_id: auth.sessionId,
+    p_auth_subject: auth.userId,
+    p_cursor: route.cursor,
+    p_limit: 51,
+    p_status: route.status,
+  });
+  if (result.error) throw mapRpcError(result.error);
+  if (!Array.isArray(result.data)) {
+    throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  }
+  const rows = result.data.slice(0, 50).map((value: unknown) => {
+    const row = firstRow(value);
+    return {
+      ...(typeof row?.brand === "string" ? { brand: row.brand } : {}),
+      completeness: row?.completeness,
+      correctionId: row?.correction_id,
+      createdAt: row?.created_at,
+      duplicateCount: Number(row?.duplicate_count),
+      gtin14: row?.gtin14,
+      name: row?.name,
+      profileId: row?.profile_id,
+      status: row?.status,
+      version: row?.version,
+    };
+  });
+  const parsed = AdminBarcodeCorrectionListSchema.safeParse({
+    items: rows,
+    nextCursor:
+      result.data.length > 50 && rows.length > 0
+        ? rows[rows.length - 1]?.correctionId
+        : null,
+    schemaVersion: 1,
+  });
+  if (!parsed.success) throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  return parsed.data;
+}
+
+async function barcodeCorrectionDetail(
+  dependencies: AdminDependencies,
+  auth: AuthContext,
+  correctionId: string,
+): Promise<unknown> {
+  const result = await dependencies.rpc("internal_admin_get_barcode_correction", {
+    p_auth_session_id: auth.sessionId,
+    p_auth_subject: auth.userId,
+    p_correction_id: correctionId,
+  });
+  if (result.error) throw mapRpcError(result.error);
+  const row = firstRow(result.data);
+  if (!row) throw new AdminHttpError("NOT_FOUND", 404);
+  const parsed = AdminBarcodeCorrectionDetailSchema.safeParse({
+    baseSnapshot: row.base_snapshot ?? null,
+    correctionId: row.correction_id,
+    createdAt: row.created_at,
+    globalSnapshot: row.global_snapshot ?? null,
+    productId: row.product_id,
+    profileId: row.profile_id,
+    proposedSnapshot: row.proposed_snapshot,
+    reviewRevisionId: row.review_revision_id,
+    schemaVersion: 1,
+    status: row.status,
+    version: row.version,
+  });
+  if (!parsed.success) throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  return parsed.data;
+}
+
+type ProductAuditContext = Readonly<{
+  effectiveProfileId: string;
+  originalActorId: string;
+  targetId: string;
+  targetType:
+    "barcode_correction" | "commercial_product_revision" | "product_matching_rule";
+}>;
+
+async function productAuditContext(
+  dependencies: AdminDependencies,
+  auth: AuthContext,
+  action: AdminIntentInput["action"],
+  targetId: string,
+): Promise<ProductAuditContext> {
+  const result = await dependencies.rpc("internal_admin_product_audit_context", {
+    p_action: action,
+    p_auth_session_id: auth.sessionId,
+    p_auth_subject: auth.userId,
+    p_target_id: targetId,
+  });
+  if (result.error) throw mapRpcError(result.error);
+  const row = firstRow(result.data);
+  if (
+    !row ||
+    typeof row.original_actor_id !== "string" ||
+    !UUID_PATTERN.test(row.original_actor_id) ||
+    typeof row.effective_profile_id !== "string" ||
+    !UUID_PATTERN.test(row.effective_profile_id) ||
+    typeof row.audit_target_id !== "string" ||
+    !UUID_PATTERN.test(row.audit_target_id) ||
+    (row.audit_target_type !== "barcode_correction" &&
+      row.audit_target_type !== "commercial_product_revision" &&
+      row.audit_target_type !== "product_matching_rule")
+  ) {
+    throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  }
+  return {
+    effectiveProfileId: row.effective_profile_id,
+    originalActorId: row.original_actor_id,
+    targetId: row.audit_target_id,
+    targetType: row.audit_target_type,
+  };
+}
+
+async function mutateProductAdmin<T>(
+  dependencies: AdminDependencies,
+  auth: AuthContext,
+  input: Readonly<{
+    action: AdminIntentInput["action"];
+    requestId: string;
+    rpcArgs: Record<string, unknown>;
+    rpcName: string;
+    schema: {
+      safeParse(value: unknown): { data: T; success: true } | { success: false };
+    };
+    targetId: string;
+  }>,
+): Promise<{ auditClosed: boolean; value: T }> {
+  const context = await productAuditContext(
+    dependencies,
+    auth,
+    input.action,
+    input.targetId,
+  );
+  const intent: AdminIntentInput = {
+    action: input.action,
+    effectiveProfileId: context.effectiveProfileId,
+    originalActorId: context.originalActorId,
+    requestId: input.requestId,
+    targetId: context.targetId,
+    targetType: context.targetType,
+  };
+  const receipt = await verifiedIntent(dependencies, intent);
+  let result;
+  try {
+    result = await dependencies.rpc(input.rpcName, {
+      ...input.rpcArgs,
+      p_auth_session_id: auth.sessionId,
+      p_auth_subject: auth.userId,
+      p_request_id: input.requestId,
+      ...receiptRpcArgs(receipt),
+    });
+  } catch {
+    await appendFailureBestEffort(dependencies, intent, receipt, {});
+    throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  }
+  if (result.error) {
+    await appendFailureBestEffort(dependencies, intent, receipt, result.error);
+    throw mapRpcError(result.error);
+  }
+  const parsed = input.schema.safeParse(firstRow(result.data));
+  if (!parsed.success) {
+    await appendFailureBestEffort(dependencies, intent, receipt, {});
+    throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  }
+  return {
+    auditClosed: await completeSuccessOutcome(dependencies, intent, receipt),
+    value: parsed.data,
+  };
+}
+
 export async function handleAdmin(
   request: Request,
   dependencies: AdminDependencies,
@@ -511,9 +757,12 @@ export async function handleAdmin(
 
   try {
     const url = new URL(request.url);
-    if (url.search || url.hash) throw new AdminHttpError("INVALID_INPUT", 400);
+    if (url.hash) throw new AdminHttpError("INVALID_INPUT", 400);
     const route = parseRoute(url);
     if (!route) throw new AdminHttpError("NOT_FOUND", 404);
+    if (route.kind !== "barcode-corrections-list" && url.search) {
+      throw new AdminHttpError("INVALID_INPUT", 400);
+    }
     if (request.method !== expectedMethod(route)) {
       throw new AdminHttpError("NOT_FOUND", 404);
     }
@@ -532,6 +781,108 @@ export async function handleAdmin(
     }
     if (route.kind === "profiles-list") {
       return jsonResponse(await listProfiles(dependencies, auth), 200, cors.headers);
+    }
+    if (route.kind === "barcode-corrections-list") {
+      return jsonResponse(
+        await listBarcodeCorrections(dependencies, auth, route),
+        200,
+        cors.headers,
+      );
+    }
+    if (route.kind === "barcode-correction-detail") {
+      return jsonResponse(
+        await barcodeCorrectionDetail(dependencies, auth, route.correctionId),
+        200,
+        cors.headers,
+      );
+    }
+
+    if (
+      route.kind === "barcode-correction-correct" ||
+      route.kind === "barcode-correction-approve" ||
+      route.kind === "barcode-correction-reject" ||
+      route.kind === "matching-rule-activate"
+    ) {
+      requireRecentMfa(auth, dependencies.now());
+      const idempotencyKey = requireUuid(request.headers.get("idempotency-key"));
+      const body = await readJson(request);
+      let mutation:
+        | { auditClosed: boolean; value: AdminBarcodeCorrectionMutationAck }
+        | { auditClosed: boolean; value: AdminMatchingRuleMutationAck };
+      if (route.kind === "barcode-correction-correct") {
+        const parsed = AdminBarcodeCorrectionRequestSchema.safeParse(body);
+        if (!parsed.success) throw new AdminHttpError("INVALID_INPUT", 400);
+        const classification = classifyCommercialProductCompleteness(
+          parsed.data.snapshot,
+        );
+        mutation = await mutateProductAdmin(dependencies, auth, {
+          action: "barcode_correction_correct",
+          requestId: idempotencyKey,
+          rpcArgs: {
+            p_completeness: classification.completeness,
+            p_correction_id: route.correctionId,
+            p_expected_version: parsed.data.expectedVersion,
+            p_snapshot: parsed.data.snapshot,
+            p_uncertainties: classification.uncertainties,
+          },
+          rpcName: "internal_admin_correct_barcode_correction",
+          schema: AdminBarcodeCorrectionMutationAckSchema,
+          targetId: route.correctionId,
+        });
+      } else if (route.kind === "barcode-correction-approve") {
+        const parsed = AdminBarcodeCorrectionApproveRequestSchema.safeParse(body);
+        if (!parsed.success) throw new AdminHttpError("INVALID_INPUT", 400);
+        mutation = await mutateProductAdmin(dependencies, auth, {
+          action: "barcode_correction_approve",
+          requestId: idempotencyKey,
+          rpcArgs: {
+            p_canonical_food_key: parsed.data.canonicalFoodKey,
+            p_correction_id: route.correctionId,
+            p_evidence: parsed.data.evidence,
+            p_expected_version: parsed.data.expectedVersion,
+            p_match_state: parsed.data.matchState,
+          },
+          rpcName: "internal_admin_approve_barcode_correction",
+          schema: AdminBarcodeCorrectionMutationAckSchema,
+          targetId: route.correctionId,
+        });
+      } else if (route.kind === "barcode-correction-reject") {
+        const parsed = AdminBarcodeCorrectionRejectRequestSchema.safeParse(body);
+        if (!parsed.success) throw new AdminHttpError("INVALID_INPUT", 400);
+        mutation = await mutateProductAdmin(dependencies, auth, {
+          action: "barcode_correction_reject",
+          requestId: idempotencyKey,
+          rpcArgs: {
+            p_correction_id: route.correctionId,
+            p_expected_version: parsed.data.expectedVersion,
+            p_reason: parsed.data.reason,
+          },
+          rpcName: "internal_admin_reject_barcode_correction",
+          schema: AdminBarcodeCorrectionMutationAckSchema,
+          targetId: route.correctionId,
+        });
+      } else {
+        const parsed = AdminMatchingRuleActivateRequestSchema.safeParse(body);
+        if (!parsed.success) throw new AdminHttpError("INVALID_INPUT", 400);
+        mutation = await mutateProductAdmin(dependencies, auth, {
+          action: "matching_rule_activate",
+          requestId: idempotencyKey,
+          rpcArgs: {
+            p_expected_version: parsed.data.expectedVersion,
+            p_matching_rule_id: route.matchingRuleId,
+          },
+          rpcName: "internal_admin_activate_product_matching_rule",
+          schema: AdminMatchingRuleMutationAckSchema,
+          targetId: route.matchingRuleId,
+        });
+      }
+      return jsonResponse(
+        mutation.auditClosed
+          ? mutation.value
+          : { ...mutation.value, auditClosure: "pending" },
+        mutation.auditClosed ? 200 : 202,
+        cors.headers,
+      );
     }
 
     if (route.kind === "impersonation-start") {

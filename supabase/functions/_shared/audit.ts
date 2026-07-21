@@ -36,8 +36,19 @@ export async function recordAccessAudit(
   if (error) throw new Error("audit_unavailable");
 }
 
-export type AdminAuditAction = "impersonation_end" | "impersonation_start";
-export type AdminAuditTargetType = "impersonation_session" | "profile";
+export type AdminAuditAction =
+  | "barcode_correction_approve"
+  | "barcode_correction_correct"
+  | "barcode_correction_reject"
+  | "impersonation_end"
+  | "impersonation_start"
+  | "matching_rule_activate";
+export type AdminAuditTargetType =
+  | "barcode_correction"
+  | "commercial_product_revision"
+  | "impersonation_session"
+  | "product_matching_rule"
+  | "profile";
 
 export type AdminIntentInput = {
   action: AdminAuditAction;

@@ -28,6 +28,37 @@ const orphanIntent: PendingAuditIdentity = {
   targetType: "profile",
 };
 
+const productPending: PendingAuditIdentity[] = [
+  {
+    ...pendingOutbox,
+    action: "barcode_correction_correct",
+    requestId: "61000000-0000-4000-8000-000000005201",
+    targetId: "51000000-0000-4000-8000-000000005201",
+    targetType: "barcode_correction",
+  },
+  {
+    ...pendingOutbox,
+    action: "barcode_correction_approve",
+    requestId: "61000000-0000-4000-8000-000000005202",
+    targetId: "51000000-0000-4000-8000-000000005202",
+    targetType: "commercial_product_revision",
+  },
+  {
+    ...pendingOutbox,
+    action: "barcode_correction_reject",
+    requestId: "61000000-0000-4000-8000-000000005203",
+    targetId: "51000000-0000-4000-8000-000000005203",
+    targetType: "barcode_correction",
+  },
+  {
+    ...pendingOutbox,
+    action: "matching_rule_activate",
+    requestId: "61000000-0000-4000-8000-000000005204",
+    targetId: "51000000-0000-4000-8000-000000005204",
+    targetType: "product_matching_rule",
+  },
+];
+
 function request() {
   return new Request(
     "https://project.supabase.co/functions/v1/admin-reconciler/v1/admin-audit/reconcile",
@@ -119,6 +150,24 @@ describe("reconciliador administrativo", () => {
     await expect(response.json()).resolves.toEqual({
       closed: 0,
       pending: 1,
+      reconciledFailures: 0,
+    });
+  });
+
+  it("cierra idempotentemente las cuatro acciones administrativas de producto", async () => {
+    const state = setup();
+    state.dependencies.listPendingOutbox = () => Promise.resolve(productPending);
+    state.dependencies.listExternalPending = () => Promise.resolve([]);
+
+    const response = await handleAdminReconciliation(request(), state.dependencies);
+
+    expect(response.status).toBe(200);
+    for (const item of productPending) {
+      expect(state.calls).toContain(`success:${item.requestId}`);
+    }
+    await expect(response.json()).resolves.toEqual({
+      closed: 4,
+      pending: 0,
       reconciledFailures: 0,
     });
   });
