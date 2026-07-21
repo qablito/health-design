@@ -20,6 +20,8 @@ import {
 } from "./package-parser.ts";
 
 export * from "./manifest.ts";
+export * from "./matching.ts";
+export * from "./coverage.ts";
 export * from "./package-parser.ts";
 
 export type RawSupermarketCatalogRecord = Readonly<{
