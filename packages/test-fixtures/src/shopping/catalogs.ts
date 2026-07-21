@@ -1,0 +1,30 @@
+export const supermarketCatalogFixture = [
+  {
+    basePrice: "3,25",
+    categoryPath: [" Carne ", "Pollo"],
+    currency: "EUR",
+    externalSku: "sku-123",
+    formatText: "Bandeja 500 g",
+    gtin14: "08412345678905",
+    name: "  Pechuga   de pollo  ",
+    purchaseForm: "fresh",
+    sourceFields: {
+      nombre: "  Pechuga   de pollo  ",
+      nota: '=HIPERVINCULO("https://example.test")',
+      precio: "3,25",
+    },
+    sourceRecordIndex: 1,
+  },
+  {
+    basePrice: null,
+    categoryPath: ["Fruta"],
+    currency: "EUR",
+    externalSku: "sku-456",
+    formatText: "1 kg",
+    gtin14: null,
+    name: "Manzana",
+    purchaseForm: "fresh",
+    sourceFields: { nombre: "Manzana", precio: "" },
+    sourceRecordIndex: 2,
+  },
+] as const;

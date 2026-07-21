@@ -8,7 +8,8 @@
     "./nutrition": "./src/nutrition/index.ts",
     "./nutrition-plan": "./src/profiles/nutrition/index.ts",
     "./products": "./src/products/index.ts",
-    "./shopping": "./src/shopping/basket-seed.ts"
+    "./shopping": "./src/shopping/basket-seed.ts",
+    "./shopping-catalogs": "./src/shopping/catalogs.ts"
   },
   "dependencies": {
     "@health-design/contracts": "workspace:*",
