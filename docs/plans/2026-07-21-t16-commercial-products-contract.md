@@ -1,10 +1,11 @@
 # Contrato T16 — Productos comerciales, códigos de barras y aplicación al plan
 
-**Estado:** `T16_PLANNED`
+**Estado:** `T16_LOCAL_PASS`
 **Fecha:** 2026-07-21
 **Aprobación:** contrato confirmado por el usuario el 2026-07-21.
-**Naturaleza de este documento:** planificación; no acredita implementación, migración,
-despliegue ni validación remota.
+**Naturaleza de este documento:** contrato aprobado y ejecutado localmente; la evidencia
+está en [`TASK_16_VERIFICATION.md`](../quality/TASK_16_VERIFICATION.md). No acredita
+migración, despliegue ni validación remota.
 **Dependencias ya disponibles:** identidad y acceso, RLS y borrado, planes versionados,
 catálogo nutricional genérico, seguimiento, exportaciones PDF/XLSX y administración AAL2.
 **Requisitos cubiertos:** `REQ-DAT-001`, `REQ-DAT-003`, `REQ-DAT-005`,
@@ -890,6 +891,8 @@ pnpm lint
 - Crear `docs/runbooks/commercial-product-publication.md`.
 - Crear `scripts/commercial-products-remote-smoke.mjs`.
 - Crear `docs/quality/TASK_16_VERIFICATION.md`.
+- Añadir una migración `CREATE OR REPLACE` no destructiva si la comprobación de
+  reproducibilidad detecta deriva entre la base local y el historial aplicado.
 - Editar `REQUIREMENTS.md`.
 - Editar `docs/architecture/DOMAIN_DATA_MODEL.md`.
 - Editar `docs/architecture/API_CONTRACT.md`.
@@ -1024,7 +1027,7 @@ de T16 salvo autorización posterior y explícita.
 
 ## 20. Decisión registrada
 
-El usuario ha aprobado este documento y T16 queda registrado como `T16_PLANNED`. Esta
-aprobación no autoriza implementar. La implementación solo comenzará cuando el usuario
-ordene expresamente **Implementa T16**. Antes de ese momento no se crearán migraciones,
-endpoints, dependencias, componentes ni despliegues.
+El usuario aprobó el contrato y ordenó expresamente **Implementa T16**. Los tramos
+T16A–T16E están implementados y validados localmente, por lo que el estado documental es
+`T16_LOCAL_PASS`. La secuencia remota sigue separada: no se crearán copias, aplicarán
+migraciones ni desplegarán funciones hasta recibir autorización explícita posterior.

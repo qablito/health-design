@@ -12,8 +12,9 @@
 3. Un dato ausente permanece ausente; el motor puede ofrecer una alternativa
    provisional visible, nunca inventar precisión.
 4. Los planes históricos quedan congelados con su manifiesto de fuentes.
-5. El catálogo comercial sirve para SKU, formato, precio base y disponibilidad;
-   no es autoridad nutricional del plan.
+5. La ficha nutricional comercial por GTIN y el SKU de compra son capas
+   distintas. Solo una ficha confirmada puede proponerse para una línea del
+   plan; cadena, precio y disponibilidad nunca son autoridad nutricional.
 
 ## 2. Fuentes y precedencia
 
@@ -83,21 +84,33 @@ o la regla los necesita. No se muestra una falsa exhaustividad.
 ## 4. Productos comerciales y códigos de barras
 
 - La identidad primaria de un código es GTIN/GS1 cuando esté disponible.
-- Open Food Facts y la etiqueta confirmada son fuentes de producto; la
-  confirmación del usuario tras escaneo es obligatoria.
-- La corrección se guarda como `BarcodeCorrection(scope=profile,
-  status=profile_confirmed)` con `owner_profile_id`; RLS permite reutilizarla
-  inmediatamente solo a ese perfil.
-- La propuesta privada no se muta al aprobarla. El superadministrador crea una
-  nueva revisión `scope=global,status=global_approved` que referencia la
-  propuesta y conserva quién, cuándo y con qué evidencia la aprobó.
-- La precedencia para un GTIN es: corrección del perfil, corrección global
-  aprobada, etiqueta confirmada y fuente comercial importada. Una propuesta
-  privada nunca se filtra a otro perfil.
-- Si el producto no tiene macros/kcal fiables, se mantiene el producto para
-  compra, pero la nutrición del plan sigue usando el alimento canónico.
+- Open Food Facts y la etiqueta confirmada son fuentes de producto; consultar o
+  escanear no persiste y la confirmación estructurada del usuario es obligatoria.
+- Una confirmación crea/reutiliza `ProductConfirmation` y una revisión privada
+  inmutable. Si difiere de la base, crea `BarcodeCorrection(status=pending)`;
+  solo el perfil propietario la resuelve de inmediato.
+- La propuesta privada no se muta al corregirla o aprobarla. El
+  superadministrador crea revisiones nuevas, conserva anterior/nueva por hash y
+  exige AAL2+TOTP reciente. Aprobar crea una revisión `global_approved` y una
+  regla de matching `draft`; activar el matching es una acción independiente.
+- La precedencia para un GTIN es: confirmación del perfil, revisión global
+  aprobada, etiqueta confirmada, Open Food Facts y ficha manual vacía. Una
+  propuesta privada nunca se filtra a otro perfil.
+- La ficha conserva ocho nutrientes base con estado
+  `known|estimated|unknown`, ingredientes, alérgenos, contaminación cruzada,
+  base por 100 g/ml y densidad cuando corresponde. `unknown` no se convierte en
+  cero; una densidad necesaria ausente impide la aplicación.
+- La aplicación exige confirmación, posición canónica exacta y versión activa.
+  Recalcula cantidad, kcal, macros, fibra, totales y lista semanal, conserva la
+  función nutricional y exactamente dos sustituciones, y crea un candidato.
+  Nunca muta la versión activa.
 - Alérgenos “puede contener” o desconocidos no se auto-seleccionan cuando el
   perfil exige exclusión por alergia.
+
+La eliminación del perfil purga confirmaciones, correcciones privadas y
+eventos de aplicación dependientes. Una revisión global ya aprobada conserva
+solo procedencia anonimizada y no vuelve a exponer `profile_id` ni el snapshot
+privado que la originó.
 
 ## 5. Catálogo de supermercados
 

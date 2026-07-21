@@ -29,7 +29,9 @@
 
 - Datos totalmente sintéticos; nunca usar perfiles reales en CI, screenshots o fixtures.
 - Catálogo nutricional pequeño pero con procedencia, estado crudo/cocinado, parte comestible, unidad y revisión.
-- Catálogo comercial con SKU exacto, variantes permitidas, exclusiones, “puede contener”, precio, formato y disponibilidad caducable.
+- Fichas comerciales T16 por GTIN con estados conocidos/estimados/desconocidos,
+  densidad, ingredientes, alérgenos y contaminación cruzada. Los SKU con cadena,
+  precio, formato comercial y disponibilidad pertenecen a T17.
 - Medicación/farmacología representada por identidades ficticias y reglas de prueba; CIMA/AEMPS real se usa solo en ingestión controlada.
 - Laboratorios con valor, unidad, fecha, rango y ausencia; incluir valores antiguos, fuera de rango y sin intervalo.
 - Semillas de aleatoriedad fijadas para fixtures; el plan activo debe producir el mismo hash ante el mismo contexto y revisión.
@@ -64,6 +66,9 @@
 | INV-24 | No se crea perfil/plan fuera de admisión | invitación válida recibida solo por body POST, edad adulta y al menos un módulo |
 | INV-25 | El contrato numérico es único | precisión, redondeo, umbrales y hashes coinciden en todas las capas |
 | INV-26 | Importar no publica | reglas, correcciones y cadenas requieren activación y mantienen historia |
+| INV-27 | Escanear no confirma | lectura de cámara o entrada manual no crea revisión, confirmación ni candidato antes de pulsar confirmar |
+| INV-28 | Compartir ficha no activa matching | aprobar crea revisión global y matching `draft`; solo la segunda acción AAL2 activa una regla única |
+| INV-29 | Aplicar producto no muta el activo | cantidad, nutrientes, agregados y dos sustituciones aparecen en candidato; base activa e histórico conservan revisión/hash |
 
 ## 5. Matriz de cobertura
 
@@ -79,7 +84,8 @@ comportamiento normal, bordes, fallo, concurrencia y autorización según
 | Nutrición y sustituciones | aritmética decimal y solver | comida→día→semana y restricciones | G2,G4 |
 | Entrenamiento/movilidad/sueño | progresión y estados | plan integrado y seguimiento | G4 |
 | Hidratación/suplementos | bandas, precedencia y evidencia | conflictos clínicos/farmacológicos | G3,G4 |
-| Catálogos/compras | parsing, matching y optimizador | publicación, cobertura y cesta | G6 |
+| Productos comerciales T16 | GTIN, snapshots, coherencia, matching y recálculo | dos perfiles, confirmación, AAL2, candidato, exportación y borrado | G3,G5,G6,G7,G8 |
+| Catálogos de compra T17 | SKU, parsing, cobertura y optimizador | publicación de cadena y cesta | G6 |
 | Exportación y accesibilidad | serialización y sanitización | UI/PDF/XLSX/impresión equivalentes | G6,G8 |
 | Backups/borrado/operación | manifests y tombstones | restore de cuatro copias | G7 |
 
@@ -90,6 +96,9 @@ comportamiento normal, bordes, fallo, concurrencia y autorización según
 - **Autorización:** IDOR por `profile_id`, cross-tenant, RLS, permisos de superadmin, impersonación y funciones privilegiadas.
 - **Entrada:** XSS almacenado/reflejado, HTML/Markdown, fórmulas Excel, path traversal, JSON profundo, unicode y límites.
 - **Fuente externa:** feed envenenado, redirección SSRF, contenido gigante, discrepancias, publicación no autorizada.
+- **Producto comercial:** GTIN inválido, corrección privada cruzada, replay con
+  cuerpo distinto, carrera de aprobación/activación, snapshot sobrelímite y
+  AAL1/TOTP envejecido.
 - **Disponibilidad:** cuotas, concurrencia, exportaciones repetidas, almacenamiento y presupuesto de Luna.
 - **Recuperación:** restore de cada rotación, tombstones, sesiones revocadas y separación dev/prod.
 - **Cadena de suministro:** lockfile, SCA, SBOM, procedencia, hash/firma del
@@ -118,6 +127,8 @@ Los tests deben comparar el documento estructurado del motor antes y después de
 - Comprobar que provisionalidad, confianza, alertas y experimental no dependen solo del color.
 - Probar anchuras móvil, escritorio y PDF impreso; la tabla no debe ocultar unidades ni cantidades.
 - Verificar que el texto libre mínimo no impide añadir un alimento, medicación o nota desconocida.
+- En T16, denegar cámara y desmontar el diálogo conserva la entrada manual,
+  detiene tracks, restaura foco a un control utilizable y nunca sube fotogramas.
 
 ## 9. Evidencia y salida
 

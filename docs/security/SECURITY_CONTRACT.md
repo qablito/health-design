@@ -123,6 +123,8 @@ autenticada que valida autorización y transmite un único objeto privado con
 | Generar/recalcular plan | 1 | 6/h | 12/h | 30/h |
 | Generar exportación | 1; reutiliza mismo artefacto/version/config | 20/h | 30/h | 60/h |
 | Resolver compra/comparación | 1 | 30/h | 60/h | 100/h |
+| Resolver GTIN comercial | deduplicación por GTIN | 60/h | 120/h | control Edge |
+| Confirmar etiqueta comercial | idempotente por clave | 30/h | 60/h | control Edge |
 | Explicación Luna | 1 | 6/h y cuota diaria | 12/h | 30/h |
 
 - Los contadores se aplican por la clave más restrictiva y no se promedian.
@@ -157,6 +159,8 @@ reclasifica como gasto autorizado.
 | Crear o revocar `ProfileAccess` | no | no | sí |
 | Escribir rol o claim administrativo | no | no | solo proceso operativo controlado |
 | Publicar reglas, fuentes o catálogo | no | no | sí, con AAL2 y auditoría |
+| Resolver/confirmar ficha comercial del perfil | sí, solo su perfil | no directamente | sí, tras autorizar actor, sesión y membresía |
+| Corregir/aprobar/rechazar ficha o activar matching | no | no directamente | sí, AAL2, TOTP reciente, idempotencia y auditoría |
 | Borrado permanente/restore | no | no | sí, con AAL2 y confirmación reforzada |
 | Consultar log técnico | no | no directamente | sí, solo superadministrador |
 
@@ -238,7 +242,9 @@ ruta, tamaño y `request_id`.
 | Comando de generación o cambio | 64 KiB; referencia snapshots por ID, no los duplica |
 | Borrador de cuestionario | 256 KiB, máximo 500 respuestas |
 | Seguimiento/laboratorio | 64 KiB y 50 observaciones por petición |
-| Código de barras/corrección SKU | 64 KiB, nombre 200 grafemas, máximo 100 nutrientes/campos |
+| Snapshot comercial | 64 KiB, nombre/marca 200 grafemas, 64 nutrientes clínicos y 100 elementos por lista estructurada |
+| Confirmación de etiqueta | body 80 KiB; GTIN, base, unidades y decimales con esquema cerrado |
+| Mutación administrativa comercial | body 128 KiB; snapshot completo, `expectedVersion` e `idempotency-key` obligatorios |
 | Explicación Luna interna | request 64 KiB, response 32 KiB, profundidad JSON 8 |
 | Configuración de exportación | 16 KiB; artefacto generado máximo 25 MiB |
 | Importación administrativa | 25 MiB por archivo, 100.000 filas, 200 columnas, 2 KiB por celda y 100 MiB descomprimidos; lotes mayores se fragmentan |
@@ -286,9 +292,9 @@ son:
 - código de error allowlisted, versión o hash técnico cuando proceda.
 
 Se descartan antes de cualquier sink `Authorization`, cookies, refresh/access
-tokens, token Turnstile, payload/código QR, código privado, invitación, handle
-de exportación, body, query, respuestas, valores clínicos, nombres de medicación,
-prompts y contenido de planes. El proxy y los proveedores externos tienen
+tokens, token Turnstile, payload/código QR, GTIN, código privado, invitación,
+handle de exportación, body, query, snapshots de etiqueta, respuestas, valores
+clínicos, nombres de medicación, prompts y contenido de planes. El proxy y los proveedores externos tienen
 desactivada la captura automática de body/header. Las excepciones se
 serializan desde códigos y metadatos seguros, nunca con el objeto de petición
 crudo.
@@ -408,6 +414,13 @@ Antes de la primera invitación deben existir:
 - saturación e idempotencia de generación, exportación, compra y Luna;
 - rechazo de payloads justo por encima de cada límite de bytes/profundidad;
 - AAL2 obligatorio para superadministrador;
+- AAL2 más TOTP de menos de cinco minutos para corregir, aprobar, rechazar o
+  activar matching comercial; AAL1 es rechazado y cada mutación deja
+  `intent/outcome` con hashes, no snapshots;
+- dos perfiles demuestran que la corrección privada no se resuelve de forma
+  cruzada y que una revisión solo se comparte después de aprobación global;
+- cámara revocada/desmontada sin subida de fotogramas, entrada manual operativa
+  y ausencia de GTIN/snapshot en logs, cachés, historial y Storage;
 - revocación inmediata aun con JWT vigente;
 - exportaciones privadas proxyficadas, sin bearer en URL, `no-referrer`,
   `no-store` y neutralización de fórmulas;

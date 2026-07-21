@@ -1041,17 +1041,25 @@ pnpm test:a11y -- print
 
 ## Tarea 16 — Productos comerciales, código de barras y publicación
 
+**Estado:** `T16_LOCAL_PASS`; implementación y validación local completas. Copia,
+migración, despliegue y smoke de desarrollo pendientes de autorización explícita.
+
 **Resultado:** los datos de producto se confirman, corrigen, revisan y comparten
 sin contaminar el canon genérico.
 
 **Archivos previstos**
 
 - `packages/catalog/src/products/`
-- `supabase/migrations/*_commercial_products.sql`
-- `supabase/functions/catalogs/products.ts`
+- `supabase/migrations/20260721084023_commercial_products.sql`
+- `supabase/migrations/20260721114021_commercial_product_plan_application.sql`
+- `supabase/migrations/20260721143000_commercial_product_admin_audit.sql`
+- `supabase/migrations/20260721154500_commercial_product_concurrency_sync.sql`
+- `supabase/migrations/20260721160000_commercial_product_application_lint.sql`
+- `supabase/functions/catalogs/products.ts`, `plans/lifecycle.ts` y `admin/index.ts`
 - `apps/web/src/features/barcode/`
-- `scripts/import-commercial-catalog/`
-- `docs/runbooks/catalog-publication.md`
+- `apps/web/src/features/admin/ProductReviewPanel.tsx`
+- `scripts/commercial-products-remote-smoke.mjs`
+- `docs/runbooks/commercial-product-publication.md`
 
 **Prueba primero**
 
@@ -1082,13 +1090,17 @@ sin contaminar el canon genérico.
 - Aplicar límites de SKU e importación antes de parsear; lotes grandes se
   fragmentan.
 - Auditar la activación manual.
+- Mantener la adquisición de Open Food Facts bajo demanda: T16 no importa un
+  catálogo masivo ni introduce SKU/cadena/precio, que siguen en T17.
 
 **Verificación**
 
 ```bash
-pnpm test --filter barcode
-pnpm test --filter product-matching
-pnpm test:e2e -- barcode-confirmation.spec.ts
+pnpm exec vitest run tests/commercial-products.test.ts tests/products-edge.test.ts tests/commercial-product-application.test.ts tests/admin-product-review.test.ts
+pnpm test:db
+pnpm exec playwright test tests/e2e/nutrition-plan.spec.ts --grep "confirma un código"
+CI=true pnpm verify
+pnpm test:t16:remote # solo después de autorización explícita y copia precrítica
 ```
 
 **Commit sugerido:** `feat: add reviewed commercial product catalog`

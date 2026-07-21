@@ -18,6 +18,13 @@ La evidencia específica de T15 para los fragmentos de G6–G8 se conserva en
 sí solo ninguna puerta completa en `PASS`: G6 mantiene T16–T17 y G8 mantiene la
 auditoría AA final de T19.
 
+La evidencia local de productos comerciales T16 se conserva en
+[`TASK_16_VERIFICATION.md`](TASK_16_VERIFICATION.md). Cubre los fragmentos
+locales de G3/G5–G8, pero no declara `T16-G8 Remoto`: copia precrítica,
+migraciones/funciones de desarrollo, dos perfiles reales sintéticos y recorrido
+AAL2 siguen pendientes de autorización y ejecución remota. G6 mantiene además
+los SKU/precios/cobertura de T17.
+
 ## Criterio de evaluación por puerta
 
 ### G1 — Cuestionario y contexto
@@ -82,6 +89,11 @@ auditoría AA final de T19.
 - Una corrección de código de barras es privada y reutilizable por su perfil
   hasta que una nueva revisión global sea aprobada; nunca se filtra una
   propuesta entre perfiles.
+- Consultar o escanear no confirma. Aprobar una ficha global no activa el
+  matching; ambas acciones son manuales, versionadas e idempotentes.
+- Aplicar una confirmación a una posición exacta recalcula cantidad,
+  kcal/macros/fibra, agregados y exactamente dos sustituciones dentro de un
+  candidato; la versión activa no cambia hasta su activación manual.
 - Un SKU comercial nunca sustituye la verdad nutricional canónica; solo determina formato, coste y sobrante.
 - Comparativa de supermercados respeta el habitual del usuario; alternativas de ahorro son avisos, no cambios silenciosos.
 - Precio base, sin ofertas/cupones/transporte; “cesta más barata” solo cuando todos los ingredientes están cubiertos.

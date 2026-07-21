@@ -140,10 +140,13 @@ respuesta.
 | `FoodCompositionRevision` | valores nutricionales con procedencia | `id`, `canonical_food_id`, `basis`, `state`, `edible_part`, `method`, `nutrients`, `source_ref`, `source_version`, `observed_at`, `confidence`, `status` |
 | `EffectiveFoodRevision` | selección efectiva por contexto | `canonical_food_id`, `resolution_context`, `revision_id`, `precedence_reason`, `activated_at`, `approved_by` |
 | `SourceManifest` | inventario verificable usado por una revisión o plan | `id`, `source_ref`, `license_status`, `version`, `retrieved_at`, `transformations`, `coverage`, `raw_content_hash`, `normalized_content_hash`, `hash_algorithm`, `canonicalization_version`, `reviewer` |
-| `CommercialProduct` | identidad estable de producto de marca o supermercado | `id`, `barcode_gtin?`, `chain?`, `created_at`, `active_revision_id?` |
-| `CommercialProductRevision` | etiqueta/formato/precio versionados | `id`, `commercial_product_id`, `name`, `format`, `package_quantity`, `base_price`, `availability`, `ingredients?`, `allergen_state`, `nutrition_label?`, `observed_at`, `catalog_revision_id?`, `source_manifest_id`, `status=quarantined\|confirmed\|published\|superseded`, `created_at` |
-| `BarcodeCorrection` | corrección versionada de etiqueta | `id`, `barcode_gtin`, `commercial_product_revision_id`, `scope=profile\|global`, `owner_profile_id?`, `proposed_by_actor_id`, `fields`, `evidence`, `status=profile_confirmed\|global_approved\|rejected\|superseded`, `supersedes_id?`, `created_at`, `approved_by?`, `approved_at?` |
-| `MatchingRule` | relación canónico-SKU | `id`, `canonical_food_id`, `rule_version`, `aliases`, `exclusions`, `accepted_states`, `match_state`, `review_reason`, `active` |
+| `CommercialProduct` | identidad estable de una ficha de marca por GTIN | `id`, `gtin14`, `created_at`; no contiene cadena, precio ni disponibilidad |
+| `CommercialProductManifest` | procedencia reproducible de una revisión | `id`, `source_kind=confirmed_label\|profile_correction\|global_approval`, `normalized_content_hash`, `hash_algorithm`, `canonicalization_version`, `metadata`, `created_at` |
+| `CommercialProductRevision` | snapshot nutricional comercial inmutable | `id`, `product_id`, `manifest_id`, `owner_profile_id?`, `supersedes_id?`, `source_kind`, `snapshot`, `completeness`, `uncertainties`, `content_hash`, `status=profile_confirmed\|global_candidate\|global_approved\|superseded\|withdrawn\|rejected`, `created_at`, `approved_at?` |
+| `ProductConfirmation` | elección explícita de una revisión por un perfil | `id`, `profile_id`, `product_id`, `revision_id`, `confirmed_by`, `supersedes_id?`, `status=active\|superseded`, `confirmed_at`, `superseded_at?` |
+| `BarcodeCorrection` | propuesta privada y su decisión administrativa | `id`, `profile_id`, `product_id`, `revision_id`, `base_revision_id?`, `review_revision_id?`, `global_revision_id?`, `matching_rule_id?`, `proposed_by`, `snapshot_hash`, `status=pending\|approved\|rejected\|superseded`, `version`, `rejection_reason?`, `reviewed_by?`, `reviewed_at?` |
+| `ProductMatchingRuleRevision` | relación versionada GTIN-alimento canónico | `id`, `product_id`, `canonical_food_id`, `match_state=exact\|allowed\|review\|excluded\|insufficient`, `criteria`, `exclusions`, `evidence`, `correction_id?`, `supersedes_id?`, `status=draft\|active\|superseded\|withdrawn`, `version`, `created_at`, `activated_at?` |
+| `ProductApplicationEvent` | procedencia de un producto aplicado a un candidato | `id`, `profile_id`, `plan_id`, `base_version_id`, `candidate_version_id`, `confirmation_id`, `product_revision_id`, `selection`, `calculation_hash`, `created_at` |
 | `CatalogRevision` | lote versionado de cadena | `id`, `chain`, `source_location_internal`, `collected_at`, `catalog_version`, `quality`, `publication_state`, `source_manifest_id`, `capture_evidence_ref` |
 | `CatalogPublication` | revisión visible | `id`, `catalog_revision_id`, `published_at`, `hidden_at?`, `activation_note` |
 
@@ -151,12 +154,13 @@ Estados de compatibilidad: `exact`, `allowed`, `review`, `excluded`,
 `insufficient`. La fuente del supermercado no sustituye la composición
 nutricional canónica del plan.
 
-Una corrección `profile_confirmed` requiere `owner_profile_id` y solo se
-resuelve para ese perfil mediante RLS. La aprobación administrativa no muta la
-propuesta: crea una nueva revisión `global_approved` que la referencia. La
-precedencia para un GTIN es: corrección confirmada del perfil solicitante,
-corrección global aprobada, etiqueta de producto confirmada y, por último,
-fuente comercial importada.
+Una revisión privada requiere `owner_profile_id` y solo se resuelve para ese
+perfil mediante autorización servidora y RLS cerrada. La aprobación
+administrativa no muta la propuesta: crea una revisión `global_approved` nueva
+y una regla de matching `draft`; compartir la ficha y activar el matching son
+acciones distintas. La precedencia para un GTIN es: confirmación del perfil,
+revisión global aprobada, etiqueta confirmada, Open Food Facts y ficha manual
+vacía. El SKU/cadena/precio de T17 permanece fuera de estas entidades.
 
 ### Compra y exportación
 

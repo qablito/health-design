@@ -199,12 +199,26 @@ El acceso total del superadministrador es un requisito de producto; no se preten
 
 - La ingestión externa deposita datos en cuarentena; no publica directamente.
 - El superadministrador revisa discrepancias, identidad, formato, precio base y cobertura.
-- Una corrección de código de barras confirmada se reutiliza de inmediato solo
-  en el perfil propietario. La aprobación crea una nueva revisión global,
-  inmutable y referenciada; solo entonces otros perfiles la reciben.
+- T16 separa la ficha nutricional comercial del SKU/cadena/precio de T17. Una
+  consulta a Open Food Facts o una lectura de cámara no confirma ni publica.
+- Una etiqueta estructurada confirmada se reutiliza de inmediato solo en el
+  perfil propietario. La aprobación AAL2 crea una revisión global nueva,
+  inmutable y referenciada; solo entonces otros perfiles la reciben. El
+  matching queda en borrador hasta otra activación manual AAL2.
+- Aplicar una confirmación a un alimento del plan crea un candidato recalculado
+  y conserva la versión activa. La activación posterior sigue el lifecycle
+  ordinario y nunca es automática.
+- Las acciones `correct`, `approve`, `reject` y `matching activate` exigen TOTP
+  de menos de cinco minutos, clave idempotente, versión esperada y pares
+  `intent/outcome`; el log conserva hashes anterior/nuevo, no snapshots ni GTIN.
 - Precio y disponibilidad pueden caducar sin alterar la verdad nutricional canónica.
 - El origen de Sevilla se mantiene como metadato interno y no se muestra al usuario como explicación del precio nacional.
 - El scraper local (`supermercados/mercadona_chrome.mjs`) no debe ejecutarse con credenciales de producción ni conectarse a la base de perfiles.
+
+La activación remota de T16 sigue
+[`commercial-product-publication.md`](../runbooks/commercial-product-publication.md)
+y solo se ejecuta en desarrollo después de copia precrítica verificada y
+autorización expresa.
 
 ## 8. Presupuesto y disponibilidad
 

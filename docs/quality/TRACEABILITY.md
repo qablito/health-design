@@ -37,9 +37,13 @@ recálculo selectivo tienen recibo remoto de desarrollo
 `T13_COMPLETE_REMOTE_PASS` en
 [`TASK_13_VERIFICATION.md`](TASK_13_VERIFICATION.md). La preparación versionada,
 el modelo común, PDF/XLSX privados e impresión A4 de T15 tienen recibo local
-`T15B_COMPLETE_LOCAL_PASS`; su estado remoto se registra en
-[`TASK_15_VERIFICATION.md`](TASK_15_VERIFICATION.md). La puerta AA final continúa
-en T19; los productos comerciales, en T16; y supermercados/precios, en T17.
+`T15_COMPLETE_REMOTE_PASS` en
+[`TASK_15_VERIFICATION.md`](TASK_15_VERIFICATION.md). Los contratos, persistencia,
+matching, aplicación a candidato, escáner/entrada manual y consola de revisión
+de productos comerciales tienen recibo local T16 en
+[`TASK_16_VERIFICATION.md`](TASK_16_VERIFICATION.md); la puerta remota de T16
+sigue pendiente. La puerta AA final continúa en T19 y los SKU,
+supermercados/precios permanecen en T17.
 
 ## 1. Bloques de producto
 
@@ -60,7 +64,7 @@ en T19; los productos comerciales, en T16; y supermercados/precios, en T17.
 | B13 | suplementación | REQ-SUP-001–002 | C10, C15, F55–F60 | G3,G4,G6,G8 |
 | B14 | evidencia y datos | REQ-DAT-001–007 | C01, F22, F61–F67 | G2,G3,G5,G6 |
 | B15 | compra | REQ-SHP-001–005 | C22, F64–F66 | G4,G6,G8 |
-| B16 | catálogo comercial | REQ-DAT-003, REQ-DAT-005–007 | C22, F61–F66 | G3,G5–G7 |
+| B16 | ficha comercial GTIN | REQ-DAT-003, REQ-DAT-005, REQ-DAT-007 | C22, F61–F64 | G3,G5–G8 |
 | B17 | generación y versionado | REQ-PLN-001–007 | C06, F18, F39, F40, F48, F67 | G2,G4,G5 |
 | B18 | consulta, exportación y seguimiento | REQ-EXP-001–004, REQ-FOL-001–002 | C06, C22, F36, F47, F60, F70 | G4–G8 |
 | B19 | arquitectura, IA, seguridad, calidad e identidad | REQ-AI-001–005, REQ-OPS-001–005, REQ-QA-001–003 | F01–F10, F16, F66, F68–F70 | G2,G3,G5–G8 |
@@ -157,11 +161,11 @@ en T19; los productos comerciales, en T16; y supermercados/precios, en T17.
 |---|---|
 | REQ-DAT-001 | F21, F22, F67 |
 | REQ-DAT-002 | C01, F67 |
-| REQ-DAT-003 | F61, F62, F63 |
+| REQ-DAT-003 | F61, F62, F63; INV-17, INV-27 |
 | REQ-DAT-004 | F19, F20, F22, F28, F50 |
-| REQ-DAT-005 | C07, F24, F64 |
+| REQ-DAT-005 | C07, F24, F64; INV-28 |
 | REQ-DAT-006 | C22, F66 |
-| REQ-DAT-007 | C22, F61, F63 |
+| REQ-DAT-007 | C22, F61, F63; INV-09, INV-29 |
 | REQ-SHP-001 | C22, F65 |
 | REQ-SHP-002 | C22, F64 |
 | REQ-SHP-003 | C22, F65 |

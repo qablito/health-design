@@ -148,6 +148,7 @@ incertidumbre y permite snapshot provisional.
 | `POST /v1/candidates/{id}/discard` | descarta propuesta | conserva razón técnica opcional |
 | `POST /v1/plans/{plan_id}/adjustments/preview` | previsualiza cambio controlado | no muta activo |
 | `POST /v1/plans/{plan_id}/adjustments` | confirma una edición controlada | crea evento, versión candidata y candidato; nunca muta activo |
+| `POST /v1/plans/{plan_id}/product-applications` | aplica una confirmación comercial a una posición exacta de la versión activa | recalcula nutrición, dos sustitutos y agregados; crea candidato y conserva activa la base |
 
 `generate` no puede saltarse validaciones normativas. Si falla una restricción
 o la salida es inconsistente, devuelve `PLAN_VALIDATION_FAILED` y mantiene el
@@ -158,8 +159,8 @@ plan activo. Las puertas G1–G8 evalúan el lanzamiento, no cada petición.
 | Operación | Propósito |
 |---|---|
 | `GET /v1/foods/search?q=` | busca alimento canónico y aliases |
-| `GET /v1/profiles/{id}/products/barcode/{gtin}` | resuelve producto comercial con precedencia del perfil |
-| `POST /v1/profiles/{id}/products/barcode/{gtin}/confirm` | confirma o corrige etiqueta para reutilización privada inmediata; crea revisión `profile_confirmed` |
+| `GET /v1/profiles/{id}/products/barcode/{gtin}?symbology=&canonicalFoodKey=` | valida GTIN y resuelve `profile → global → confirmed_label → open_food_facts → manual_blank`; no persiste confirmación |
+| `POST /v1/profiles/{id}/products/barcode/{gtin}/confirm?symbology=` | exige snapshot completo, `idempotency-key` y confirmación explícita; crea/reutiliza revisión privada y confirmación, más corrección `pending` cuando difiere |
 | `GET /v1/catalogs?chain=` | consulta revisión publicada y cobertura |
 | `PUT /v1/profiles/{id}/shopping-preference` | guarda cadena habitual, comparación y orden |
 | `POST /v1/plans/{version_id}/shopping` | calcula cesta consultiva |
@@ -171,10 +172,21 @@ queda `Sin producto confirmado`; no se sustituye alimento ni se oculta la
 carencia. La comparación multitienda es opcional y nunca cambia la cadena
 habitual.
 
-La aprobación administrativa crea una nueva corrección `global_approved`
+La aprobación administrativa crea una revisión `global_approved` nueva
 referenciando la propuesta; nunca muta ni expone a otros perfiles la revisión
-privada. La resolución aplica: corrección del perfil, global aprobada, etiqueta
-confirmada y fuente importada.
+privada. El matching queda `draft` hasta su propia activación. Una ficha
+confirmada solo se vuelve autoridad de una línea del plan mediante
+`product-applications` y la activación manual posterior del candidato. Un SKU
+de compra nunca adquiere esa autoridad.
+
+Las únicas queries T16 admitidas son `symbology` y, en resolución,
+`canonicalFoodKey`. Cualquier otra query o duplicado administrativo se rechaza.
+Los errores públicos de catálogo son `UNAUTHENTICATED`, `FORBIDDEN`,
+`INVALID_GTIN`, `INVALID_INPUT`, `PAYLOAD_TOO_LARGE`, `RATE_LIMITED`,
+`IDEMPOTENCY_KEY_REUSED`, `DOMAIN_CONSTRAINT`, `NOT_FOUND`,
+`DEPENDENCY_UNAVAILABLE` e `INTERNAL_ERROR`. La aplicación al plan añade
+`STALE_PLAN_VERSION`, `PRODUCT_DATA_INSUFFICIENT`, `PRODUCT_MATCH_EXCLUDED` y
+`PRODUCT_MATCH_REVIEW_REQUIRED`.
 
 `shopping` devuelve `422 NUTRITION_MODULE_REQUIRED` si la versión no contiene
 un resultado válido de alimentación.
@@ -228,8 +240,12 @@ los cierra idempotentemente; restore no es el único mecanismo de compensación:
 | `POST /v1/admin/impersonations/{id}/end` | termina impersonación |
 | `DELETE /v1/admin/profiles/{id}/permanent` | crea/reanuda `DeletionJob`, registra ledger externo y ejecuta purga idempotente |
 | `GET /v1/admin/deletion-jobs/{id}` | consulta estado, pasos completados y error redactado |
-| `POST /v1/admin/barcode-corrections/{id}/approve` | crea una nueva revisión global compartida desde una propuesta privada |
-| `POST /v1/admin/matching-rules/{id}/activate` | activa revisión de matching |
+| `GET /v1/admin/barcode-corrections?status=&cursor=` | cola paginada de correcciones por estado; no acepta otras queries |
+| `GET /v1/admin/barcode-corrections/{id}` | compara snapshot propuesto, base y global sin mezclar estados desconocidos |
+| `POST /v1/admin/barcode-corrections/{id}/correct` | crea una revisión privada inmutable corregida; exige versión esperada y TOTP reciente |
+| `POST /v1/admin/barcode-corrections/{id}/approve` | crea/reutiliza revisión global y matching `draft`; exige alimento, estado, evidencia, versión y TOTP reciente |
+| `POST /v1/admin/barcode-corrections/{id}/reject` | cierra con `duplicate`, `insufficient_evidence`, `invalid_data` o `safety_risk` |
+| `POST /v1/admin/matching-rules/{id}/activate` | activa manualmente una revisión y supersede cualquier otra activa del GTIN |
 | `POST /v1/admin/rule-sets/{id}/activate` | activa conjunto de reglas |
 | `POST /v1/admin/ai-provider-revisions/{id}/activate` | habilita proveedor solo tras validar región, retención, no entrenamiento, precio y minimización |
 | `POST /v1/admin/catalog-revisions/{id}/publish` | publica revisión de cadena |
@@ -242,6 +258,13 @@ los cierra idempotentemente; restore no es el único mecanismo de compensación:
 Cada acción registra actor administrador, objetivo, timestamp, resultado y
 `request_id`; durante impersonación conserva actor original y perfil efectivo.
 No se muestra al usuario común.
+
+Las cuatro mutaciones T16 requieren AAL2 y un método TOTP de menos de cinco
+minutos. `idempotency-key` y `expectedVersion` son obligatorios: repetir el mismo
+cuerpo devuelve la misma respuesta y reutilizar la clave con otro cuerpo o una
+versión obsoleta devuelve conflicto. El ledger externo recibe `intent` antes de
+la RPC y `outcome` después; solo registra hashes anterior/nuevo, nunca snapshots
+de etiqueta, GTIN, queries o cuerpos.
 
 ## 8. Versionado del contrato
 
