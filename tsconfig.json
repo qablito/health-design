@@ -26,6 +26,9 @@
       ],
       "@health-design/test-fixtures/products": [
         "./packages/test-fixtures/src/products/index.ts"
+      ],
+      "@health-design/test-fixtures/shopping": [
+        "./packages/test-fixtures/src/shopping/basket-seed.ts"
       ]
     },
     "types": ["node"]
