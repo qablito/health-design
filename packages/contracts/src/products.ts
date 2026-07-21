@@ -164,6 +164,79 @@ export const CommercialProductSnapshotSchema = z
   })
   .strict();
 
+const ContentHashSchema = z.string().regex(/^[0-9a-f]{64}$/);
+const ProductUncertaintiesSchema = z
+  .array(z.string().regex(/^[a-z][A-Za-z0-9_]{0,95}$/))
+  .max(50);
+
+export const ProductMatchingSummarySchema = z
+  .object({
+    canonicalFoodKey: z.string().regex(/^food:[a-z0-9][a-z0-9._:-]{0,127}$/),
+    messageKey: z.string().min(1).max(160),
+    state: z.enum(["exact", "allowed", "review", "excluded", "insufficient"]),
+  })
+  .strict();
+
+export const ProductResolutionResponseSchema = z
+  .object({
+    completeness: z.enum(COMMERCIAL_PRODUCT_COMPLETENESS),
+    confirmedForProfile: z.boolean(),
+    contentHash: ContentHashSchema.nullable(),
+    gtin: ProductGtinSchema,
+    matching: ProductMatchingSummarySchema.nullable(),
+    revisionId: z.uuid().nullable(),
+    schemaVersion: z.literal(1),
+    snapshot: CommercialProductSnapshotSchema.nullable(),
+    source: z.enum(COMMERCIAL_PRODUCT_SOURCES),
+    sourceAvailability: z.enum(["available", "not_found", "unavailable"]),
+    uncertainties: ProductUncertaintiesSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.source === "manual_blank" &&
+      (value.snapshot !== null ||
+        value.contentHash !== null ||
+        value.revisionId !== null ||
+        value.completeness !== "insufficient")
+    ) {
+      context.addIssue({ code: "custom", message: "manual_blank_must_be_empty" });
+    }
+    if (
+      (value.source === "profile" ||
+        value.source === "global" ||
+        value.source === "confirmed_label") &&
+      (value.snapshot === null ||
+        value.contentHash === null ||
+        value.revisionId === null)
+    ) {
+      context.addIssue({ code: "custom", message: "internal_revision_required" });
+    }
+  });
+
+export const ProductConfirmationRequestSchema = z
+  .object({
+    baseRevisionId: z.uuid().optional(),
+    expectedContentHash: ContentHashSchema.optional(),
+    schemaVersion: z.literal(1),
+    snapshot: CommercialProductSnapshotSchema,
+  })
+  .strict();
+
+export const ProductConfirmationAckSchema = z
+  .object({
+    completeness: z.enum(COMMERCIAL_PRODUCT_COMPLETENESS),
+    confirmationId: z.uuid(),
+    confirmedAt: z.iso.datetime({ offset: true }),
+    correctionId: z.uuid().nullable(),
+    productId: z.uuid(),
+    reusedRevision: z.boolean(),
+    revisionId: z.uuid(),
+    schemaVersion: z.literal(1),
+    scope: z.literal("profile"),
+  })
+  .strict();
+
 export type ProductSymbology = (typeof PRODUCT_SYMBOLOGIES)[number];
 export type ProductGtin = z.infer<typeof ProductGtinSchema>;
 export type ProductNutrientValue = z.infer<typeof ProductNutrientValueSchema>;
@@ -172,3 +245,8 @@ export type CommercialProductSnapshot = z.infer<typeof CommercialProductSnapshot
 export type CommercialProductSource = (typeof COMMERCIAL_PRODUCT_SOURCES)[number];
 export type CommercialProductCompleteness =
   (typeof COMMERCIAL_PRODUCT_COMPLETENESS)[number];
+export type ProductResolutionResponse = z.infer<typeof ProductResolutionResponseSchema>;
+export type ProductConfirmationRequest = z.infer<
+  typeof ProductConfirmationRequestSchema
+>;
+export type ProductConfirmationAck = z.infer<typeof ProductConfirmationAckSchema>;

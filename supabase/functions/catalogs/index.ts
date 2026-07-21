@@ -5,6 +5,11 @@ import {
   handleNutritionCatalog,
   type NutritionCatalogDependencies,
 } from "./nutrition.ts";
+import {
+  fetchOpenFoodFactsProduct,
+  handleProductCatalog,
+  type ProductCatalogDependencies,
+} from "./products.ts";
 
 function runtimeValue(name: string): string | undefined {
   const deno = (
@@ -21,7 +26,7 @@ function secret(name: string, fallback?: string): string {
   return value;
 }
 
-function dependencies(): NutritionCatalogDependencies {
+function dependencies(): NutritionCatalogDependencies & ProductCatalogDependencies {
   const url = secret("SUPABASE_URL");
   const publishableKey =
     runtimeValue("SUPABASE_PUBLISHABLE_KEY") ?? secret("SUPABASE_ANON_KEY");
@@ -58,6 +63,10 @@ function dependencies(): NutritionCatalogDependencies {
       };
     },
     environment,
+    fetchOpenFoodFacts: (gtin) => {
+      const userAgent = runtimeValue("OPEN_FOOD_FACTS_USER_AGENT");
+      return fetchOpenFoodFactsProduct(gtin, userAgent ? { userAgent } : {});
+    },
     hashCanonical: sha256CanonicalJson,
     rpc: async (name, args) => {
       const result: unknown = await serviceClient.rpc(name as never, args as never);
@@ -72,6 +81,9 @@ function dependencies(): NutritionCatalogDependencies {
 
 export default {
   fetch(request: Request) {
-    return handleNutritionCatalog(request, dependencies());
+    const currentDependencies = dependencies();
+    return new URL(request.url).pathname.includes("/products/barcode/")
+      ? handleProductCatalog(request, currentDependencies)
+      : handleNutritionCatalog(request, currentDependencies);
   },
 };

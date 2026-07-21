@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   CommercialProductSnapshotSchema,
+  ProductConfirmationAckSchema,
+  ProductConfirmationRequestSchema,
   ProductNutrientValueSchema,
+  ProductResolutionResponseSchema,
   type CommercialProductSnapshot,
 } from "@health-design/contracts";
 
@@ -83,5 +86,61 @@ describe("contrato estructurado de producto comercial", () => {
         },
       }).success,
     ).toBe(false);
+  });
+
+  it("separa resolución efímera de confirmación persistente", () => {
+    expect(
+      ProductResolutionResponseSchema.safeParse({
+        completeness: "complete",
+        confirmedForProfile: false,
+        contentHash: "ab".repeat(32),
+        gtin: snapshot.gtin,
+        matching: null,
+        revisionId: null,
+        schemaVersion: 1,
+        snapshot,
+        source: "open_food_facts",
+        sourceAvailability: "available",
+        uncertainties: ["fiberG_unknown"],
+      }).success,
+    ).toBe(true);
+    expect(
+      ProductConfirmationRequestSchema.safeParse({
+        expectedContentHash: "ab".repeat(32),
+        schemaVersion: 1,
+        snapshot,
+      }).success,
+    ).toBe(true);
+    expect(
+      ProductConfirmationAckSchema.safeParse({
+        completeness: "complete",
+        confirmationId: "10000000-0000-4000-8000-000000000001",
+        confirmedAt: "2026-07-21T08:00:00.000Z",
+        correctionId: null,
+        productId: "20000000-0000-4000-8000-000000000001",
+        reusedRevision: false,
+        revisionId: "30000000-0000-4000-8000-000000000001",
+        schemaVersion: 1,
+        scope: "profile",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("mantiene el formulario manual vacío como insuficiente y sin snapshot supuesto", () => {
+    expect(
+      ProductResolutionResponseSchema.safeParse({
+        completeness: "insufficient",
+        confirmedForProfile: false,
+        contentHash: null,
+        gtin: snapshot.gtin,
+        matching: null,
+        revisionId: null,
+        schemaVersion: 1,
+        snapshot: null,
+        source: "manual_blank",
+        sourceAvailability: "not_found",
+        uncertainties: ["product_snapshot_missing"],
+      }).success,
+    ).toBe(true);
   });
 });
