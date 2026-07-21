@@ -121,6 +121,25 @@ describe("contrato compartido entre runtimes", () => {
     );
   });
 
+  it("declara las dependencias transitivas del catálogo comercial en admin", async () => {
+    const denoConfig = JSON.parse(
+      await readFile(
+        new URL("../supabase/functions/admin/deno.json", import.meta.url),
+        "utf8",
+      ),
+    ) as { imports?: Record<string, string> };
+
+    expect(denoConfig.imports?.["@health-design/catalog/products"]).toBe(
+      "../../../packages/catalog/src/products/index.ts",
+    );
+    expect(denoConfig.imports?.["@health-design/engine"]).toBe(
+      "../../../packages/engine/src/index.ts",
+    );
+    expect(denoConfig.imports?.["@health-design/domain"]).toBe(
+      "../../../packages/domain/src/index.ts",
+    );
+  });
+
   it("mantiene JWT obligatorio y renderizadores fijados en exports", async () => {
     const config = await readFile(
       new URL("../supabase/config.toml", import.meta.url),
