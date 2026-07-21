@@ -64,7 +64,7 @@ select
   jsonb_build_object(
     'market', 'ES',
     'chain', 'mercadona',
-    'sourceKind', 'api_capture',
+    'sourceKind', 'json_capture',
     'sourceLocationInternal', 'postal-code:41006',
     'collectedAt', '2026-07-21T18:00:00+00:00',
     'importerVersion', 'supermarket-import-v1',

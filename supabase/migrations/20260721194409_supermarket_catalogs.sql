@@ -3,7 +3,7 @@ create table private.supermarket_source_manifests (
   market text not null check (market = 'ES'),
   chain text not null check (chain in ('mercadona', 'dia', 'aldi')),
   source_kind text not null check (
-    source_kind in ('api_capture', 'feed_capture', 'browser_capture', 'file_import')
+    source_kind in ('csv_capture', 'json_capture', 'manual_export')
   ),
   source_location_internal text not null check (
     length(source_location_internal) between 1 and 500
@@ -93,7 +93,7 @@ create table private.supermarket_sku_revisions (
   name text not null check (length(name) between 1 and 500),
   category_path jsonb not null check (
     jsonb_typeof(category_path) = 'array'
-    and jsonb_array_length(category_path) between 1 and 30
+    and jsonb_array_length(category_path) between 0 and 30
     and octet_length(category_path::text) <= 8192
   ),
   format_text text check (format_text is null or length(format_text) <= 500),
@@ -315,11 +315,12 @@ begin
     ) values (
       v_revision_id, v_sku_id, v_record ->> 'name', v_record -> 'categoryPath',
       v_record ->> 'formatText', v_record ->> 'purchaseForm',
-      v_record -> 'package',
+      nullif(v_record -> 'package', 'null'::jsonb),
       nullif(v_record ->> 'equivalentEdibleMassG', '')::numeric,
-      v_record -> 'equivalenceEvidence',
+      nullif(v_record -> 'equivalenceEvidence', 'null'::jsonb),
       nullif(v_record ->> 'basePriceEur', '')::numeric,
-      v_record -> 'normalizedPrice', v_record -> 'sourceFields',
+      nullif(v_record -> 'normalizedPrice', 'null'::jsonb),
+      v_record -> 'sourceFields',
       v_record ->> 'usability', coalesce(v_record -> 'exclusionReasons', '[]'::jsonb),
       private.decode_supermarket_sha256(v_record ->> 'contentHash', 'content_hash')
     );
