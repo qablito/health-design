@@ -145,6 +145,25 @@ async function signedRequest(
 }
 
 describe("Worker de continuidad", () => {
+  it("acepta las acciones administrativas cerradas de productos T16", () => {
+    const expectedTargets = {
+      barcode_correction_approve: "commercial_product_revision",
+      barcode_correction_correct: "barcode_correction",
+      barcode_correction_reject: "barcode_correction",
+      matching_rule_activate: "product_matching_rule",
+    } as const;
+
+    for (const [action, targetType] of Object.entries(expectedTargets)) {
+      expect(() =>
+        validateAdminAuditPayload({
+          ...payload(crypto.randomUUID()),
+          action,
+          targetType,
+        }),
+      ).not.toThrow();
+    }
+  });
+
   it("rechaza payload libre, canarios, cuerpos grandes y HMAC débil", async () => {
     expect(() =>
       validateAdminAuditPayload({ ...payload(crypto.randomUUID()), note: "x" }),

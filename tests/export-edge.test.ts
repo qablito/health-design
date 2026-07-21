@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { EXPORT_MAX_ARTIFACT_BYTES } from "@health-design/contracts";
+import {
+  EXPORT_MAX_ARTIFACT_BYTES,
+  EXPORT_RENDERER_VERSION,
+} from "@health-design/contracts";
 import { exportNutrition } from "@health-design/test-fixtures/exports";
 import {
   handlePlanExports,
@@ -47,7 +50,7 @@ const reservation = {
   planVersionId,
   presentation: "ingredients",
   profileId: "51000000-0000-4000-8000-000000015201",
-  rendererVersion: "export-v1",
+  rendererVersion: EXPORT_RENDERER_VERSION,
   schemaVersion: 1,
   sizeBytes: null,
   status: "pending",
@@ -264,7 +267,7 @@ describe("Edge de exportaciones privadas", () => {
     expect(current.renderedModels[0]).toMatchObject({
       planOutputHash: source.outputHash,
       planVersionId,
-      rendererVersion: "export-v1",
+      rendererVersion: EXPORT_RENDERER_VERSION,
     });
     expect(current.events).toContain("upload");
     expect(response.headers.get("cache-control")).toBe("no-store, private");

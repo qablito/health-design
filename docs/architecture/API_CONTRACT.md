@@ -212,7 +212,7 @@ La solicitud de exportación usa `schemaVersion=1`, formato `pdf|xlsx`, detalle
 `compact|complete`, presentación `ingredients|preparation`, alcance de día o
 semana, opciones de compra/preparación semanal y una lista acotada de elecciones
 `[dayIndex,mealIndex,foodIndex,choice]`. El servidor incorpora
-`rendererVersion=export-v1` al hash de configuración. La respuesta pública solo
+`rendererVersion=export-v2` al hash de configuración. La respuesta pública solo
 contiene identificadores, formato, detalle, presentación, estado y fecha; no
 contiene perfil, actor, ruta, digest ni URL.
 

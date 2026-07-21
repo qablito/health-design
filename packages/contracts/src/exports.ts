@@ -1,10 +1,12 @@
 import { z } from "zod";
 
 export const EXPORT_SCHEMA_VERSION = 1 as const;
-export const EXPORT_RENDERER_VERSION = "export-v1" as const;
+export const EXPORT_RENDERER_VERSION = "export-v2" as const;
 export const EXPORT_MAX_BODY_BYTES = 16 * 1024;
 export const EXPORT_MAX_ARTIFACT_BYTES = 25 * 1024 * 1024;
 export const EXPORT_MAX_CHOICES = 7 * 6 * 4;
+
+export type ExportRendererVersion = typeof EXPORT_RENDERER_VERSION;
 
 export const ExportFormatSchema = z.enum(["pdf", "xlsx"]);
 export const ExportDetailSchema = z.enum(["compact", "complete"]);

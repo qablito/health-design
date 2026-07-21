@@ -1,4 +1,7 @@
-import { QuestionnaireAnswersSchema } from "@health-design/contracts";
+import {
+  EXPORT_RENDERER_VERSION,
+  QuestionnaireAnswersSchema,
+} from "@health-design/contracts";
 import {
   applyConfirmedCommercialProduct,
   generateNutritionWeek,
@@ -44,6 +47,7 @@ const productApplicationIds = {
 } as const;
 
 export const commercialProductName = "Alimento proteico envasado";
+const commercialProductSourceName = `${commercialProductName} ${COMMERCIAL_PRODUCT_FIXTURE.gtin.displayGtin}`;
 export const commercialProductPrivateSentinels = [
   COMMERCIAL_PRODUCT_FIXTURE.gtin.displayGtin,
   COMMERCIAL_PRODUCT_FIXTURE.gtin.gtin14,
@@ -76,7 +80,7 @@ const commercialProductNutrition = applyConfirmedCommercialProduct(exportNutriti
     snapshot: {
       ...COMMERCIAL_PRODUCT_FIXTURE,
       brand: "Marca comercial",
-      name: commercialProductName,
+      name: commercialProductSourceName,
       nutrients: {
         carbohydratesG: { state: "known", unit: "g", value: "0" },
         clinical: {},
@@ -107,7 +111,7 @@ const shared = {
   nutrition: exportNutrition,
   planOutputHash: "ab".repeat(32),
   planVersionId: "20000000-0000-4000-8000-000000000001",
-  rendererVersion: "export-v1",
+  rendererVersion: EXPORT_RENDERER_VERSION,
 } as const;
 
 export const exportModels = {

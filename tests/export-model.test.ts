@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { ExportCreateRequestContract } from "@health-design/contracts";
+import {
+  EXPORT_RENDERER_VERSION,
+  type ExportCreateRequestContract,
+} from "@health-design/contracts";
 import { createExportModel } from "@health-design/export/model";
 import {
   applyNutritionSubstitution,
@@ -57,7 +60,7 @@ function model(config: ExportCreateRequestContract, extra: object = {}) {
     nutrition,
     planOutputHash,
     planVersionId,
-    rendererVersion: "export-v1",
+    rendererVersion: EXPORT_RENDERER_VERSION,
     ...extra,
   });
 }

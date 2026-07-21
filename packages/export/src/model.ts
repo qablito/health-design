@@ -3,6 +3,7 @@ import {
   normalizeNutritionWeek,
   type ExportChoice,
   type ExportCreateRequestContract,
+  type ExportRendererVersion,
 } from "@health-design/contracts";
 import {
   addDecimals,
@@ -14,6 +15,10 @@ type NutritionFood =
   PreparedNutrition["days"][number]["meals"][number]["foods"][number];
 type NutritionAlternative = NutritionFood["substitutes"][number];
 type NutritionTotals = PreparedNutrition["weekTotals"];
+
+const COMMERCIAL_GTIN_TOKEN_PATTERN = /(?<!\d)(?:\d{8}|\d{12,14})(?!\d)/g;
+const PRIVATE_UUID_TOKEN_PATTERN =
+  /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
 
 export type ExportFoodRow = Readonly<{
   amountG: string;
@@ -40,7 +45,7 @@ export type ExportModel = Readonly<{
   planVersionId: string;
   presentation: ExportCreateRequestContract["presentation"];
   range: ExportCreateRequestContract["range"];
-  rendererVersion: "export-v1";
+  rendererVersion: ExportRendererVersion;
   rows: readonly ExportFoodRow[];
   schemaVersion: 1;
   shoppingList?: readonly Readonly<{
@@ -61,7 +66,7 @@ type ExportModelInput = Readonly<{
   nutrition: unknown;
   planOutputHash: string;
   planVersionId: string;
-  rendererVersion: "export-v1";
+  rendererVersion: ExportRendererVersion;
 }>;
 
 function positionKey([day, meal, food]: ExportChoice): string {
@@ -73,6 +78,17 @@ function optionAt(food: NutritionFood, choice: 0 | 1 | 2): NutritionAlternative 
   const option = food.substitutes[choice - 1];
   if (!option) throw new Error("invalid_export_choice");
   return option;
+}
+
+function publicFoodName(food: NutritionAlternative): string {
+  if (!food.commercialProduct) return food.name;
+  const sanitized = food.name
+    .replace(PRIVATE_UUID_TOKEN_PATTERN, "")
+    .replace(COMMERCIAL_GTIN_TOKEN_PATTERN, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[\s,;:|/\\-]+|[\s,;:|/\\-]+$/g, "")
+    .trim();
+  return sanitized || "Producto comercial";
 }
 
 function row(
@@ -99,7 +115,7 @@ function row(
     foodState: food.foodState,
     function: food.function,
     mealIndex: position.mealIndex,
-    name: food.name,
+    name: publicFoodName(food),
     nutrients: food.nutrients,
     preparation: food.preparation,
     rowKind: position.rowKind,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  EXPORT_RENDERER_VERSION,
   ExportArtifactAckSchema,
   ExportCreateRequestSchema,
 } from "@health-design/contracts";
@@ -17,6 +18,10 @@ const baseRequest = {
 } as const;
 
 describe("contrato de exportación v1", () => {
+  it("invalida artefactos previos cuando cambia la proyección pública", () => {
+    expect(EXPORT_RENDERER_VERSION).toBe("export-v2");
+  });
+
   it("acepta semana o día y rechaza preparación semanal para un solo día", () => {
     expect(ExportCreateRequestSchema.parse(baseRequest)).toEqual(baseRequest);
     expect(

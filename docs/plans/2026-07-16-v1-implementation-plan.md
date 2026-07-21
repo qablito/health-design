@@ -1041,10 +1041,12 @@ pnpm test:a11y -- print
 
 ## Tarea 16 — Productos comerciales, código de barras y publicación
 
-**Estado:** `T16_REMOTE_DEPLOYED_SMOKE_PENDING`; implementación y validación
-local completas, copia T16 verificada, cinco migraciones aplicadas y cuatro Edge
-Functions activas en desarrollo. El smoke funcional, la activación manual y las
-salidas remotas permanecen pendientes; producción no se ha modificado.
+**Estado:** `T16_COMPLETE_REMOTE_PASS`; implementación y validación local
+completas, copia T16 verificada, cinco migraciones, cinco Edge Functions y Worker
+de continuidad activos en desarrollo. El smoke con dos perfiles, AAL2 real,
+revisión y activación manual, PDF/XLSX privados, auditoría `intent/outcome` y
+limpieza sin residuos privados han superado la validación remota. Producción no
+se ha modificado.
 
 **Resultado:** los datos de producto se confirman, corrigen, revisan y comparten
 sin contaminar el canon genérico.

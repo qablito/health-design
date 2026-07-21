@@ -25,8 +25,12 @@ const INTENT_KEYS = new Set([
 ]);
 const OUTCOME_KEYS = new Set([...INTENT_KEYS, "errorCode", "intentRecordHash"]);
 const ACTION_TARGETS = {
+  barcode_correction_approve: "commercial_product_revision",
+  barcode_correction_correct: "barcode_correction",
+  barcode_correction_reject: "barcode_correction",
   impersonation_end: "impersonation_session",
   impersonation_start: "profile",
+  matching_rule_activate: "product_matching_rule",
 };
 
 function json(body, status) {
