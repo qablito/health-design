@@ -244,6 +244,9 @@ describe("contratos T17 de preferencias y resolución", () => {
         {
           canonicalFoodKey: "food:chicken-breast-raw",
           matchState: "exact",
+          matchedEdiblePart: "meat_without_skin",
+          matchedFoodState: "raw",
+          matchedPurchaseForm: "fresh",
           projection,
         },
       ],
@@ -253,11 +256,27 @@ describe("contratos T17 de preferencias y resolución", () => {
       planVersionId: uuid(8),
       preferenceRevision: preference,
       profileId: uuid(4),
+      resolutionMetadata: {
+        createdAt: "2026-07-21T10:00:00.000Z",
+        createdBy: uuid(2),
+        id: uuid(9),
+        itemIds: [
+          {
+            canonicalFoodKey: "food:chicken-breast-raw",
+            shoppingItemId: uuid(10),
+          },
+        ],
+        resolverVersion: "shopping-resolver-v1",
+        revision: 1,
+        status: "active",
+        supersedesId: null,
+      },
       schemaVersion: 1,
       shoppingList: [
         {
           amountG: "1000",
           canonicalFoodKey: "food:chicken-breast-raw",
+          ediblePart: "meat_without_skin",
           foodState: "raw",
           name: "Pechuga de pollo",
           purchaseForm: "fresh",
@@ -301,7 +320,13 @@ describe("contratos T17 de preferencias y resolución", () => {
       inputDigest: "ef".repeat(32),
       items: [
         {
-          alternatives: [projection],
+          alternatives: [
+            {
+              selection: selected,
+              state: "resolved",
+              uncertainties: [],
+            },
+          ],
           amountG: "1000",
           canonicalFoodKey: "food:chicken-breast-raw",
           name: "Pechuga de pollo",
@@ -323,6 +348,12 @@ describe("contratos T17 de preferencias y resolución", () => {
       ],
       planVersionId: uuid(8),
       preferenceRevisionId: preference.id,
+      preference: {
+        comparedChains: ["dia", "mercadona"],
+        mode: "multistore",
+        preferredChain: "mercadona",
+        sorting: "normalized_price_asc",
+      },
       profileId: uuid(4),
       resolverVersion: "shopping-resolver-v1",
       revision: 1,
@@ -330,9 +361,22 @@ describe("contratos T17 de preferencias y resolución", () => {
       status: "active",
       supersedesId: null,
       totals: {
+        coverage: { resolvedItems: 1, totalItems: 2 },
+        kind: "partial",
+        partialSubtotalEur: "6.5",
         resolvedItems: 1,
-        subtotalEur: "6.5",
         unresolvedItems: 1,
+      },
+      comparison: {
+        baselineChains: ["mercadona"],
+        baselineSubtotalEur: "6.5",
+        candidateChains: ["dia", "mercadona"],
+        candidateKind: "multistore",
+        candidateSubtotalEur: "6.49",
+        comparableItems: 1,
+        savingsEur: null,
+        scope: "partial",
+        totalItems: 2,
       },
     } as const;
 
@@ -355,7 +399,13 @@ describe("contratos T17 de preferencias y resolución", () => {
             },
           },
         ],
-        totals: { resolvedItems: 1, subtotalEur: "6.5", unresolvedItems: 0 },
+        totals: {
+          coverage: { resolvedItems: 1, totalItems: 2 },
+          kind: "partial",
+          partialSubtotalEur: "6.5",
+          resolvedItems: 1,
+          unresolvedItems: 0,
+        },
       }).success,
     ).toBe(false);
     expect(
@@ -364,11 +414,70 @@ describe("contratos T17 de preferencias y resolución", () => {
         items: [
           {
             ...snapshot.items[0],
-            alternatives: Array.from({ length: 5 }, () => projection),
+            alternatives: Array.from({ length: 5 }, () => ({
+              selection: selected,
+              state: "resolved" as const,
+              uncertainties: [],
+            })),
           },
         ],
       }).success,
     ).toBe(false);
+  });
+
+  it("admite cero envases y separa total completo de subtotal parcial", () => {
+    const zeroSelection = {
+      estimatedRemainderG: "0",
+      packageCount: "0",
+      projection,
+      requiredAfterLeftoverG: "0",
+      totalCostEur: "0",
+    } as const;
+    expect(
+      ShoppingSnapshotSchema.safeParse({
+        basketSeedRevisionId: uuid(6),
+        catalogPublicationIds: [uuid(7)],
+        comparison: null,
+        completeness: "complete",
+        createdAt: "2026-07-21T10:00:00.000Z",
+        createdBy: uuid(2),
+        id: uuid(9),
+        inputDigest: "ef".repeat(32),
+        items: [
+          {
+            alternatives: [],
+            amountG: "1000",
+            canonicalFoodKey: "food:chicken-breast-raw",
+            name: "Pechuga de pollo",
+            selected: zeroSelection,
+            shoppingItemId: uuid(10),
+            state: "resolved",
+            uncertainties: [],
+          },
+        ],
+        planVersionId: uuid(8),
+        preference: {
+          comparedChains: [],
+          mode: "single",
+          preferredChain: "mercadona",
+          sorting: "price_asc",
+        },
+        preferenceRevisionId: preference.id,
+        profileId: uuid(4),
+        resolverVersion: "shopping-resolver-v1",
+        revision: 1,
+        schemaVersion: 1,
+        status: "active",
+        supersedesId: null,
+        totals: {
+          coverage: { resolvedItems: 1, totalItems: 1 },
+          estimatedTotalEur: "0",
+          kind: "complete",
+          resolvedItems: 1,
+          unresolvedItems: 0,
+        },
+      }).success,
+    ).toBe(true);
   });
 
   it("separa la clave de línea, el SKU y la clave canónica en mutaciones", () => {
