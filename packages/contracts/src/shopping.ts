@@ -445,7 +445,9 @@ export const ShoppingResolutionInputSchema = z
         "shopping_catalog_skus_not_unique",
       ],
       [
-        value.resolutionMetadata.itemIds.map(({ canonicalFoodKey }) => canonicalFoodKey),
+        value.resolutionMetadata.itemIds.map(
+          ({ canonicalFoodKey }) => canonicalFoodKey,
+        ),
         "shopping_item_metadata_keys_not_unique",
       ],
       [
@@ -657,7 +659,10 @@ export const ShoppingSnapshotSchema = z
       value.totals.coverage.totalItems !== value.items.length ||
       (value.completeness === "complete") !== (value.totals.kind === "complete")
     ) {
-      context.addIssue({ code: "custom", message: "shopping_totals_coverage_mismatch" });
+      context.addIssue({
+        code: "custom",
+        message: "shopping_totals_coverage_mismatch",
+      });
     }
   });
 
