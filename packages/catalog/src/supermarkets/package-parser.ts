@@ -85,6 +85,26 @@ export function parseSupermarketPackage(value: string): ParsedSupermarketPackage
   }
 
   const unitPattern = "(kg|g|ml|l|unidades?|unidad|uds?|ud)";
+  const countedMultipack = lowered.match(
+    new RegExp(
+      `(?:^|\\s)(\\d+(?:[.,]\\d+)?)\\s*(?:mini\\s+)?(?:unidades?|uds?|ud|latas?|botellas?|briks?|yogures?|sobres?|bandejas?|bolsas?|botes?|envases?)\\.?\\s*[x×]\\s*(\\d+(?:[.,]\\d+)?)\\s*${unitPattern}\\b`,
+    ),
+  );
+  if (countedMultipack) {
+    try {
+      const countText = countedMultipack[1];
+      const quantityText = countedMultipack[2];
+      const unit = countedMultipack[3];
+      if (countText === undefined || quantityText === undefined || unit === undefined) {
+        return review("invalid_content");
+      }
+      const count = sourceDecimal(countText);
+      const quantity = sourceDecimal(quantityText);
+      return confirmedPackage(measure(multiplyDecimals(count, quantity), unit));
+    } catch {
+      return review("invalid_content");
+    }
+  }
   const multipack = lowered.match(
     new RegExp(
       `(?:^|\\s)(\\d+(?:[.,]\\d+)?)\\s*[x×]\\s*(\\d+(?:[.,]\\d+)?)\\s*${unitPattern}\\b`,

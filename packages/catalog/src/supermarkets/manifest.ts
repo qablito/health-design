@@ -5,8 +5,8 @@ import {
   type SupermarketSourceManifest,
 } from "@health-design/contracts";
 
-export const SUPERMARKET_CANONICALIZATION_VERSION = "supermarket-canonical-v1" as const;
-export const SUPERMARKET_IMPORTER_VERSION = "supermarket-import-v1" as const;
+export const SUPERMARKET_CANONICALIZATION_VERSION = "supermarket-canonical-v2" as const;
+export const SUPERMARKET_IMPORTER_VERSION = "supermarket-import-v2" as const;
 
 export type SupermarketManifestInput = Readonly<{
   captureEvidenceRef: string;

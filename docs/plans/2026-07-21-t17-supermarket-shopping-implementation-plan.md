@@ -475,11 +475,14 @@ git commit -m "feat(catalog): add quarantined supermarket import pipeline"
 
 # T17B — Persistencia, matching y publicación
 
-> **Estado 2026-07-21:** `T17B_LOCAL_PASS`. B.1–B.3 están implementadas y
-> verificadas localmente: revisiones inmutables, matching determinista con revisión y
-> activación manual separadas, gate 60 + 20, administración AAL2, idempotencia,
-> auditoría y panel de publicación. No se han aplicado migraciones, desplegado funciones
-> ni publicado catálogos en remoto.
+> **Estado 2026-07-22:** `T17B_REMOTE_PASS` en desarrollo. Las capturas v2 de
+> Mercadona, DIA y ALDI están en R2 privado e importadas de forma idempotente; la cesta
+> activa `t17-basket-v1.1` conserva 60 fijos + 20 dinámicos. AAL1 fue rechazado y AAL2
+> permitió revisar y activar 176 reglas con pares `intent/outcome` y outbox cerrados.
+> Mercadona superó la puerta con 73/80 y ≥75 % en cada grupo, y quedó publicada. DIA
+> (62/80) y ALDI (41/80) permanecen sin publicar. `pnpm test:db` pasó 381 pruebas y
+> `CI=true pnpm verify` pasó 655 unitarias, 4 de navegador, tipos, lint, formato y build.
+> Producción no se modificó. Este recibo cierra T17B, no T17C–T17E ni T17 completo.
 
 ## Tarea B.1: Crear esquema inmutable de catálogos
 

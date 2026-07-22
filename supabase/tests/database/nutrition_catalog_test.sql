@@ -49,7 +49,7 @@ select is(
     select string_agg(source_key, ',' order by precedence)
     from public.nutrition_sources
   ),
-  'ciqual_2025,bls_4_0,fineli,livsmedelsverket,usda_foundation,usda_sr_legacy',
+  'ciqual_2025,bls_4_0,fineli,livsmedelsverket,usda_foundation,usda_sr_legacy,bedca_public',
   'la precedencia federada canónica queda fijada en datos'
 );
 

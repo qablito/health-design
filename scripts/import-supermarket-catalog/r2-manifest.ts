@@ -23,7 +23,7 @@ export function supermarketR2ObjectKeys(descriptor: SupermarketR2Descriptor): Re
   raw: string;
 }> {
   const capture = descriptor.collectedAt.replace(/[^0-9A-Za-z._-]/g, "-");
-  const prefix = `supermarkets/ES/${descriptor.chain}/${capture}`;
+  const prefix = `supermarkets/ES/${descriptor.chain}/${capture}-${descriptor.normalizedSha256.slice(0, 16)}`;
   return {
     errors: `${prefix}/errors.json`,
     manifest: `${prefix}/manifest.json`,

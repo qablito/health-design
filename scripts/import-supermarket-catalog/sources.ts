@@ -250,19 +250,122 @@ function normalizeGtin14(value: string): string | null {
     : null;
 }
 
-function inferPurchaseForm(
-  row: Readonly<Record<string, string>>,
-): ShoppingPurchaseForm {
-  const text = `${row.source_category ?? ""} ${row.name ?? ""}`
+function supermarketIdentityText(row: Readonly<Record<string, string>>): string {
+  return `${row.source_category ?? ""} ${row.name ?? ""}`
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLocaleLowerCase("es");
+}
+
+function supermarketNameText(row: Readonly<Record<string, string>>): string {
+  return (row.name ?? "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLocaleLowerCase("es");
+}
+
+function supermarketCategoryText(row: Readonly<Record<string, string>>): string {
+  return (row.source_category ?? "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLocaleLowerCase("es");
+}
+
+function inferPurchaseForm(
+  row: Readonly<Record<string, string>>,
+): ShoppingPurchaseForm {
+  const text = supermarketIdentityText(row);
+  const dryText = text.replace(/\bsin semillas?\b/g, "");
+  if (
+    /(?:al natural|escurrid)/.test(text) &&
+    /atun|caballa|sardina|alcachofa|maiz|legumbre/.test(text)
+  ) {
+    return "drained";
+  }
+  if (
+    /conservas? de verdura|conservas? verdura/.test(supermarketCategoryText(row)) &&
+    /^(?:maiz dulce|corazones? de alcachofa)\b/.test(supermarketNameText(row))
+  ) {
+    return "drained";
+  }
   if (/marinad|adobad/.test(text)) return "marinated";
   if (/conserva|en lata|enlatad/.test(text)) return "canned";
-  if (/arroz|pasta|legumbre seca|cereal|harina/.test(text)) return "dry";
-  if (/fruta|verdura|hortaliza|carne|pescado|huevo/.test(text)) return "fresh";
-  if (/natural/.test(text)) return "natural";
+  if (/queso fresco.+burgos/.test(text)) return "fresh";
+  if (
+    /(?:almendra|nuez|nueces)\b.*\bnatural|\bnatural\b.*\b(?:almendra|nuez|nueces)/.test(
+      supermarketNameText(row),
+    )
+  ) {
+    return "natural";
+  }
+  if (
+    /almendra|alubia|arroz|avena|cereal|chia|cuscus|fruto seco|garbanzo|harina|legumbre|lenteja|lino|nuez|pasta|quinoa|semilla|soja texturizada|trigo sarraceno/.test(
+      dryText,
+    )
+  ) {
+    return "dry";
+  }
+  if (
+    /aceite|bebida de (?:avena|soja)|kefir|leche|queso fresco batido|seitan|tempeh|tofu|yogur.*natural/.test(
+      text,
+    )
+  ) {
+    return "natural";
+  }
+  if (
+    /ahumad|asado|batido|bizcocho|burger|chocolate|cocid|crema|empanad|frit|galleta|helado|hummus|lasaña|mermelada|nugget|papilla|pure|rebozad|salsa|sopa|tortilla|zumo/.test(
+      text,
+    )
+  ) {
+    return "prepared";
+  }
+  if (
+    /fruta|verdura|hortaliza|carne|pescado|marisco|huevo/.test(
+      supermarketCategoryText(row),
+    )
+  ) {
+    return "fresh";
+  }
   return "prepared";
+}
+
+function inferFoodState(
+  row: Readonly<Record<string, string>>,
+  purchaseForm: ShoppingPurchaseForm,
+): "cooked" | "raw" | "unspecified" {
+  const text = supermarketIdentityText(row);
+  if (/\bpan\b|queso/.test(text)) return "unspecified";
+  if (purchaseForm === "fresh") return "raw";
+  if (purchaseForm === "canned" || purchaseForm === "drained") {
+    return "cooked";
+  }
+  if (purchaseForm === "dry") {
+    return /chia|lino/.test(text) ? "unspecified" : "raw";
+  }
+  if (purchaseForm === "natural") return /tofu/.test(text) ? "raw" : "unspecified";
+  if (purchaseForm === "prepared") return "cooked";
+  return "unspecified";
+}
+
+function inferPackageEquivalence(
+  row: Readonly<Record<string, string>>,
+): RawSupermarketCatalogRecord["packageEquivalence"] {
+  const name = supermarketNameText(row);
+  if (/\bleche semidesnatada\b/.test(name)) {
+    return {
+      densityGPerMl: "1.03",
+      evidenceRef:
+        "FAO/INFOODS Density Database v2.0, Table 2: liquid milk (whole, semi-skimmed, skimmed), 1.03 g/ml",
+    };
+  }
+  if (/\baceite de oliva virgen extra\b/.test(name)) {
+    return {
+      densityGPerMl: "0.918",
+      evidenceRef:
+        "FAO/INFOODS Density Database v2.0, Table 2: oil, vegetable, olive, 0.918 g/ml",
+    };
+  }
+  return null;
 }
 
 function fallbackName(row: Readonly<Record<string, string>>): string {
@@ -277,9 +380,11 @@ function rawRecord(
   row: Readonly<Record<string, string>>,
   sourceRecordIndex: number,
 ): RawSupermarketCatalogRecord {
+  const purchaseForm = inferPurchaseForm(row);
   const sourceFields = Object.fromEntries(
     Object.entries(row).filter(([key]) => T17_SOURCE_FIELDS.has(key)),
   );
+  sourceFields.foodState = inferFoodState(row, purchaseForm);
   return {
     basePrice: row.price_eur?.trim() || null,
     categoryPath: (row.source_category ?? "Sin categoría")
@@ -291,7 +396,8 @@ function rawRecord(
     formatText: row.package_text?.trim() || null,
     gtin14: normalizeGtin14(row.gtin ?? ""),
     name: fallbackName(row),
-    purchaseForm: inferPurchaseForm(row),
+    packageEquivalence: inferPackageEquivalence(row) ?? null,
+    purchaseForm,
     sourceFields,
     sourceRecordIndex,
   };

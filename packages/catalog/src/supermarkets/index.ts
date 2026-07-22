@@ -9,11 +9,13 @@ import {
 } from "@health-design/contracts";
 import {
   compareDecimals,
+  multiplyDecimals,
   normalizeDecimal,
   sha256CanonicalJson,
 } from "@health-design/engine";
 
 import {
+  confirmEquivalentEdibleMass,
   normalizePackagePrice,
   packageSupportsShoppingGrams,
   parseSupermarketPackage,
@@ -32,6 +34,10 @@ export type RawSupermarketCatalogRecord = Readonly<{
   formatText: string | null;
   gtin14: string | null;
   name: string;
+  packageEquivalence?: Readonly<{
+    densityGPerMl: string;
+    evidenceRef: string;
+  }> | null;
   purchaseForm: ShoppingPurchaseForm;
   sourceFields: Readonly<Record<string, string>>;
   sourceRecordIndex: number;
@@ -104,7 +110,17 @@ async function normalizeRecord(
   const name = normalizeText(raw.name);
   const categoryPath = raw.categoryPath.map(normalizeText);
   const externalSku = normalizeText(raw.externalSku);
-  const package_ = parsedPackage.package;
+  let package_ = parsedPackage.package;
+  if (package_?.saleMeasure.dimension === "volume" && raw.packageEquivalence) {
+    package_ = confirmEquivalentEdibleMass(
+      package_,
+      multiplyDecimals(
+        package_.saleMeasure.quantity,
+        raw.packageEquivalence.densityGPerMl,
+      ),
+      raw.packageEquivalence.evidenceRef,
+    );
+  }
   const exclusionReasons: string[] = [];
   if (basePriceEur === null) exclusionReasons.push("base_price_missing");
   if (package_ === null) exclusionReasons.push("package_unconfirmed");

@@ -111,6 +111,94 @@ describe("CLI local de cuarentena T17", () => {
     expect(batch.artifact.records[0]?.source.sourceFields.name).toBe(
       "Pechuga, de pollo",
     );
+    expect(batch.artifact.records[0]?.source.sourceFields.foodState).toBe("raw");
+    expect(batch.manifest).toMatchObject({
+      canonicalizationVersion: "supermarket-canonical-v2",
+      importerVersion: "supermarket-import-v2",
+    });
+  });
+
+  it("clasifica alimento y equivalencia líquida con evidencia curada", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "health-design-t17a-state-"));
+    const input = join(directory, "catalog.csv");
+    const product = (
+      sku: string,
+      category: string,
+      name: string,
+      packageText: string,
+    ) =>
+      [
+        "mercadona",
+        sku,
+        `https://tienda.mercadona.es/product/${sku}/test`,
+        `test-${sku}`,
+        category,
+        "",
+        "",
+        name,
+        "",
+        packageText,
+        "1.5",
+        "2026-07-22T12:00:00.000Z",
+        "41006",
+        "postal_code",
+        "hydrated",
+        "",
+      ].join(",");
+    await writeFile(
+      input,
+      `${header}\n${product("uva", "Fruta > Uva", "Uva blanca sin semillas", "600 g")}\n${product("yogur", "Postres > Yogures", "Yogur griego natural", "1 kg")}\n${product("queso", "Quesos", "Queso semicurado de vaca", "400 g")}\n${product("burgos", "Quesos", "Queso fresco tipo Burgos", "250 g")}\n${product("pan", "Panadería", "Pan integral", "500 g")}\n${product("lino", "Fruta > Frutos secos", "Semillas de lino dorado", "250 g")}\n${product("nuez", "Frutos secos", "Nuez natural pelada", "200 g")}\n${product("maiz", "Conservas de verdura > Conservas verdura", "Maíz dulce", "3 latas x 0.14 kg")}\n${product("papilla", "Alimentación infantil", "Papilla pera y manzana", "250 g")}\n${product("leche", "Leche", "Leche semidesnatada", "1 L")}\n${product("aove", "Aceite", "Aceite de oliva virgen extra", "1 L")}\n`,
+      "utf8",
+    );
+
+    const batch = await importSupermarketCatalogFile({
+      chain: "mercadona",
+      input,
+      licenseStatus: "restricted",
+      sourceTermsStatus: "restricted",
+    });
+    const records = Object.fromEntries(
+      batch.artifact.records.map((record) => [record.projection.externalSku, record]),
+    );
+
+    expect(records.uva?.projection.purchaseForm).toBe("fresh");
+    expect(records.uva?.source.sourceFields.foodState).toBe("raw");
+    expect(records.yogur?.projection.purchaseForm).toBe("natural");
+    expect(records.yogur?.source.sourceFields.foodState).toBe("unspecified");
+    expect(records.queso?.projection.purchaseForm).toBe("prepared");
+    expect(records.queso?.source.sourceFields.foodState).toBe("unspecified");
+    expect(records.burgos?.projection.purchaseForm).toBe("fresh");
+    expect(records.burgos?.source.sourceFields.foodState).toBe("unspecified");
+    expect(records.pan?.projection.purchaseForm).toBe("prepared");
+    expect(records.pan?.source.sourceFields.foodState).toBe("unspecified");
+    expect(records.lino?.projection.purchaseForm).toBe("dry");
+    expect(records.lino?.source.sourceFields.foodState).toBe("unspecified");
+    expect(records.nuez?.projection.purchaseForm).toBe("natural");
+    expect(records.nuez?.source.sourceFields.foodState).toBe("unspecified");
+    expect(records.maiz?.projection.purchaseForm).toBe("drained");
+    expect(records.maiz?.source.sourceFields.foodState).toBe("cooked");
+    expect(records.papilla?.projection.purchaseForm).toBe("prepared");
+    expect(records.papilla?.source.sourceFields.foodState).toBe("cooked");
+    expect(records.leche?.projection).toMatchObject({
+      usability: "calculable",
+      package: {
+        equivalentEdibleMassG: "1030",
+        saleMeasure: { dimension: "volume", quantity: "1000", unit: "ml" },
+      },
+    });
+    expect(records.leche?.projection.package?.equivalenceEvidenceRef).toContain(
+      "FAO/INFOODS Density Database v2.0",
+    );
+    expect(records.aove?.projection).toMatchObject({
+      usability: "calculable",
+      package: {
+        equivalentEdibleMassG: "918",
+        saleMeasure: { dimension: "volume", quantity: "1000", unit: "ml" },
+      },
+    });
+    expect(records.aove?.projection.package?.equivalenceEvidenceRef).toContain(
+      "FAO/INFOODS Density Database v2.0",
+    );
   });
 
   it("--dry-run no crea artefactos ni llama a R2", async () => {
@@ -219,6 +307,7 @@ describe("CLI local de cuarentena T17", () => {
 
     expect(resolveR2ManifestCollision(descriptor, descriptor)).toBe("reuse");
     expect(keys.manifest).toContain("dia");
+    expect(keys.manifest).toContain(descriptor.normalizedSha256.slice(0, 16));
     expect(() =>
       resolveR2ManifestCollision(descriptor, {
         ...descriptor,

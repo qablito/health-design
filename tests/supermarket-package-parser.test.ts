@@ -14,6 +14,8 @@ describe("parser determinista de envases T17", () => {
     ["750 ml", { dimension: "volume", quantity: "750", unit: "ml" }],
     ["6 x 1,5 L", { dimension: "volume", quantity: "9000", unit: "ml" }],
     ["6 x 1.5 l", { dimension: "volume", quantity: "9000", unit: "ml" }],
+    ["Pack: 6 ud. x 0.125 kg", { dimension: "mass", quantity: "750", unit: "g" }],
+    ["Pack-3: 3 latas x 0.14 kg", { dimension: "mass", quantity: "420", unit: "g" }],
     ["12 unidades", { dimension: "count", quantity: "12", unit: "unit" }],
   ])("normaliza %s sin usar conversiones implícitas", (text, saleMeasure) => {
     expect(parseSupermarketPackage(text)).toEqual({
