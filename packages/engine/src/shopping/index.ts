@@ -155,28 +155,47 @@ function chooseBest(options: readonly CalculatedOption[]): CalculatedOption {
   )[0]!;
 }
 
-function rankCalculated(options: readonly CalculatedOption[]): CalculatedOption[] {
-  const dimensionCounts = new Map<string, number>();
-  for (const { selection } of options) {
-    const dimension = selection.projection.normalizedPrice?.dimension;
-    if (dimension !== undefined) {
-      dimensionCounts.set(dimension, (dimensionCounts.get(dimension) ?? 0) + 1);
-    }
-  }
-  const comparable = options.filter(({ selection }) => {
-    const dimension = selection.projection.normalizedPrice?.dimension;
-    return dimension !== undefined && (dimensionCounts.get(dimension) ?? 0) > 1;
-  });
-  const incomparable = options.filter((option) => !comparable.includes(option));
+function rankCalculated(
+  options: readonly CalculatedOption[],
+  referenceDimension: string | undefined,
+): CalculatedOption[] {
   const ranked: CalculatedOption[] = [];
-  for (const group of [comparable, incomparable]) {
+  const rankGroup = (group: readonly CalculatedOption[]) => {
     const remaining = [...group];
     while (remaining.length > 0) {
       const best = chooseBest(remaining);
       ranked.push(best);
       remaining.splice(remaining.indexOf(best), 1);
     }
+  };
+  let remaining = [...options];
+  if (referenceDimension !== undefined) {
+    const referenceGroup = remaining.filter(
+      ({ selection }) =>
+        selection.projection.normalizedPrice?.dimension === referenceDimension,
+    );
+    rankGroup(referenceGroup);
+    const referenceOptions = new Set(referenceGroup);
+    remaining = remaining.filter((option) => !referenceOptions.has(option));
   }
+
+  const dimensions = new Map<string, CalculatedOption[]>();
+  for (const option of remaining) {
+    const dimension = option.selection.projection.normalizedPrice?.dimension;
+    if (dimension !== undefined) {
+      const group = dimensions.get(dimension) ?? [];
+      group.push(option);
+      dimensions.set(dimension, group);
+    }
+  }
+  const comparableOptions = new Set<CalculatedOption>();
+  for (const [, group] of [...dimensions.entries()]
+    .filter(([, candidates]) => candidates.length > 1)
+    .sort(([left], [right]) => compareText(left, right))) {
+    rankGroup(group);
+    for (const option of group) comparableOptions.add(option);
+  }
+  rankGroup(remaining.filter((option) => !comparableOptions.has(option)));
   return ranked;
 }
 
@@ -203,8 +222,12 @@ function alternativesFor(
   candidates: readonly CatalogItem[],
   selectedSkuId: string | null,
 ): Alternative[] {
+  const referenceDimension = calculated.find(
+    ({ selection }) => selection.projection.skuId === selectedSkuId,
+  )?.selection.projection.normalizedPrice?.dimension;
   const resolved = rankCalculated(
     calculated.filter(({ selection }) => selection.projection.skuId !== selectedSkuId),
+    referenceDimension,
   ).map<Alternative>(({ selection }) => ({
     selection,
     state: "resolved",

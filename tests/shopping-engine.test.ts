@@ -452,6 +452,98 @@ describe("resolver puro de compra T17C.1", () => {
     ).toEqual(["z-mass", "y-mass", "a-volume", "b-without-normalized"]);
   });
 
+  it("compara las alternativas con la dimensión del producto seleccionado", async () => {
+    const selected = catalogItem({
+      basePriceEur: "2",
+      externalSku: "selected-mass",
+      normalizedPrice: "4",
+      sku: 49,
+    });
+    const comparableMass = catalogItem({
+      basePriceEur: "5",
+      externalSku: "z-comparable-mass",
+      normalizedPrice: "5",
+      package: massPackage("1000"),
+      sku: 50,
+    });
+    const volumeA = catalogItem({
+      basePriceEur: "5",
+      externalSku: "a-volume",
+      normalizedPrice: "1",
+      package: {
+        equivalenceEvidenceRef: "Equivalencia confirmada",
+        equivalentEdibleMassG: "1000",
+        saleMeasure: { dimension: "volume", quantity: "1000", unit: "ml" },
+      },
+      sku: 51,
+    });
+    const volumeB = catalogItem({
+      basePriceEur: "5",
+      externalSku: "b-volume",
+      normalizedPrice: "2",
+      package: {
+        equivalenceEvidenceRef: "Equivalencia confirmada",
+        equivalentEdibleMassG: "1000",
+        saleMeasure: { dimension: "volume", quantity: "1000", unit: "ml" },
+      },
+      sku: 52,
+    });
+
+    const snapshot = await resolveShopping(
+      input({ catalogItems: [volumeB, comparableMass, selected, volumeA] }),
+    );
+    expect(
+      snapshot.items[0]?.alternatives.map((alternative) =>
+        alternative.state === "resolved"
+          ? alternative.selection.projection.externalSku
+          : alternative.projection.externalSku,
+      ),
+    ).toEqual(["z-comparable-mass", "a-volume", "b-volume"]);
+  });
+
+  it("mantiene grupos comparables antes de incomparables con selección manual obsoleta", async () => {
+    const massA = catalogItem({
+      basePriceEur: "5",
+      externalSku: "z-mass",
+      normalizedPrice: "5",
+      package: massPackage("1000"),
+      sku: 53,
+    });
+    const massB = catalogItem({
+      basePriceEur: "5",
+      externalSku: "y-mass",
+      normalizedPrice: "6",
+      package: massPackage("1000"),
+      sku: 54,
+    });
+    const volume = catalogItem({
+      basePriceEur: "5",
+      externalSku: "a-volume",
+      normalizedPrice: "1",
+      package: {
+        equivalenceEvidenceRef: "Equivalencia confirmada",
+        equivalentEdibleMassG: "1000",
+        saleMeasure: { dimension: "volume", quantity: "1000", unit: "ml" },
+      },
+      sku: 55,
+    });
+
+    const snapshot = await resolveShopping(
+      input({ catalogItems: [volume, massB, massA], manualSkuId: uuid(99) }),
+    );
+    expect(snapshot.items[0]?.selected).toBeNull();
+    expect(snapshot.items[0]?.uncertainties).toEqual([
+      "shopping_manual_selection_stale",
+    ]);
+    expect(
+      snapshot.items[0]?.alternatives.map((alternative) =>
+        alternative.state === "resolved"
+          ? alternative.selection.projection.externalSku
+          : alternative.projection.externalSku,
+      ),
+    ).toEqual(["z-mass", "y-mass", "a-volume"]);
+  });
+
   it("desempata SKU pendientes equivalentes mediante skuId", async () => {
     const higher = catalogItem({
       externalSku: "same-external-sku",
