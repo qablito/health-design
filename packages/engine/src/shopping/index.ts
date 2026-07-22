@@ -217,6 +217,7 @@ function resolveLine(
   line: ShoppingLine,
   input: ShoppingResolutionInput,
   allowedChains: ReadonlySet<string>,
+  respectManualSelection = true,
 ): SnapshotItem {
   const leftover = input.leftovers.find(
     ({ canonicalFoodKey }) => canonicalFoodKey === line.canonicalFoodKey,
@@ -235,9 +236,11 @@ function resolveLine(
     const selection = calculateSelection(catalogItem, requiredAfterLeftoverG);
     return selection === null ? [] : [{ catalogItem, selection }];
   });
-  const manualSelection = input.manualSelections.find(
-    ({ canonicalFoodKey }) => canonicalFoodKey === line.canonicalFoodKey,
-  );
+  const manualSelection = respectManualSelection
+    ? input.manualSelections.find(
+        ({ canonicalFoodKey }) => canonicalFoodKey === line.canonicalFoodKey,
+      )
+    : undefined;
   const itemId = input.resolutionMetadata.itemIds.find(
     ({ canonicalFoodKey }) => canonicalFoodKey === line.canonicalFoodKey,
   )!.shoppingItemId;
@@ -349,6 +352,146 @@ function comparePresentation(
   return compareText(stableItemIdentity(left), stableItemIdentity(right));
 }
 
+function compareSnapshotItems(
+  left: SnapshotItem,
+  right: SnapshotItem,
+  preference: ShoppingResolutionInput["preferenceRevision"],
+): number {
+  const leftChain = left.selected?.projection.chain ?? null;
+  const rightChain = right.selected?.projection.chain ?? null;
+  if ((leftChain === null) !== (rightChain === null))
+    return leftChain === null ? 1 : -1;
+  if (leftChain !== null && rightChain !== null && leftChain !== rightChain) {
+    if (leftChain === preference.preferredChain) return -1;
+    if (rightChain === preference.preferredChain) return 1;
+    return compareText(leftChain, rightChain);
+  }
+  return comparePresentation(left, right, preference.sorting);
+}
+
+function resolveLines(
+  input: ShoppingResolutionInput,
+  chains: readonly string[],
+  respectManualSelection: boolean,
+): SnapshotItem[] {
+  const allowedChains = new Set(chains);
+  return input.shoppingList.map((line) =>
+    resolveLine(line, input, allowedChains, respectManualSelection),
+  );
+}
+
+function selectedCosts(items: readonly SnapshotItem[]): Map<string, string> {
+  return new Map(
+    items.flatMap(({ canonicalFoodKey, selected }) =>
+      selected === null ? [] : [[canonicalFoodKey, selected.totalCostEur] as const],
+    ),
+  );
+}
+
+type Comparison = NonNullable<ShoppingSnapshot["comparison"]>;
+type RankedComparison = Readonly<{
+  comparison: Comparison;
+  differenceEur: string;
+}>;
+
+function buildComparison(
+  baselineItems: readonly SnapshotItem[],
+  candidateItems: readonly SnapshotItem[],
+  candidateChains: readonly ShoppingSnapshot["preference"]["comparedChains"][number][],
+  candidateKind: Comparison["candidateKind"],
+  preferredChain: ShoppingSnapshot["preference"]["preferredChain"],
+): RankedComparison | null {
+  const baselineCosts = selectedCosts(baselineItems);
+  const candidateCosts = selectedCosts(candidateItems);
+  const comparableKeys = [...baselineCosts.keys()]
+    .filter((key) => candidateCosts.has(key))
+    .sort(compareText);
+  if (comparableKeys.length === 0) return null;
+  const baselineSubtotalEur = sumDecimals(
+    comparableKeys.map((key) => baselineCosts.get(key)!),
+  );
+  const candidateSubtotalEur = sumDecimals(
+    comparableKeys.map((key) => candidateCosts.get(key)!),
+  );
+  if (compareDecimals(candidateSubtotalEur, baselineSubtotalEur) >= 0) return null;
+  const complete =
+    comparableKeys.length === baselineItems.length &&
+    comparableKeys.length === candidateItems.length;
+  const differenceEur = subtractDecimals(baselineSubtotalEur, candidateSubtotalEur);
+  return {
+    comparison: {
+      baselineChains: [preferredChain],
+      baselineSubtotalEur,
+      candidateChains: [...candidateChains].sort(compareText),
+      candidateKind,
+      candidateSubtotalEur,
+      comparableItems: comparableKeys.length,
+      savingsEur: complete ? differenceEur : null,
+      scope: complete ? "complete" : "partial",
+      totalItems: baselineItems.length,
+    },
+    differenceEur,
+  };
+}
+
+function chooseComparison(
+  comparisons: readonly RankedComparison[],
+): ShoppingSnapshot["comparison"] {
+  return (
+    [...comparisons].sort((left, right) => {
+      if (left.comparison.scope !== right.comparison.scope) {
+        return left.comparison.scope === "complete" ? -1 : 1;
+      }
+      if (left.comparison.comparableItems !== right.comparison.comparableItems) {
+        return right.comparison.comparableItems - left.comparison.comparableItems;
+      }
+      const difference = compareDecimals(right.differenceEur, left.differenceEur);
+      if (difference !== 0) return difference;
+      return compareText(
+        left.comparison.candidateChains.join("\u0000"),
+        right.comparison.candidateChains.join("\u0000"),
+      );
+    })[0]?.comparison ?? null
+  );
+}
+
+function resolveComparison(
+  input: ShoppingResolutionInput,
+  items: readonly SnapshotItem[],
+): ShoppingSnapshot["comparison"] {
+  const preferredChain = input.preferenceRevision.preferredChain;
+  if (input.preferenceRevision.mode === "multistore") {
+    const baseline = resolveLines(input, [preferredChain], false);
+    const comparison = buildComparison(
+      baseline,
+      items,
+      input.preferenceRevision.comparedChains,
+      "multistore",
+      preferredChain,
+    );
+    return comparison?.comparison ?? null;
+  }
+  const alternativeChains = [
+    ...new Set(
+      input.catalogItems
+        .map(({ projection }) => projection.chain)
+        .filter((chain) => chain !== preferredChain),
+    ),
+  ].sort(compareText);
+  return chooseComparison(
+    alternativeChains.flatMap((chain) => {
+      const comparison = buildComparison(
+        items,
+        resolveLines(input, [chain], false),
+        [chain],
+        "chain",
+        preferredChain,
+      );
+      return comparison === null ? [] : [comparison];
+    }),
+  );
+}
+
 function canonicalDigestInput(input: ShoppingResolutionInput) {
   const byFoodKey = <T extends { canonicalFoodKey: string }>(left: T, right: T) =>
     compareText(left.canonicalFoodKey, right.canonicalFoodKey);
@@ -386,16 +529,13 @@ export async function resolveShopping(
   if (input.resolutionMetadata.resolverVersion !== SHOPPING_RESOLVER_VERSION) {
     throw new Error("shopping_resolver_version_mismatch");
   }
-  const allowedChains = new Set(
+  const allowedChains =
     input.preferenceRevision.mode === "single"
       ? [input.preferenceRevision.preferredChain]
-      : input.preferenceRevision.comparedChains,
+      : input.preferenceRevision.comparedChains;
+  const items = resolveLines(input, allowedChains, true).sort((left, right) =>
+    compareSnapshotItems(left, right, input.preferenceRevision),
   );
-  const items = input.shoppingList
-    .map((line) => resolveLine(line, input, allowedChains))
-    .sort((left, right) =>
-      comparePresentation(left, right, input.preferenceRevision.sorting),
-    );
   const resolvedItems = items.filter(({ selected }) => selected !== null).length;
   const unresolvedItems = items.length - resolvedItems;
   const subtotalEur = sumDecimals(
@@ -406,7 +546,7 @@ export async function resolveShopping(
   return ShoppingSnapshotSchema.parse({
     basketSeedRevisionId: input.basketSeedRevisionId,
     catalogPublicationIds: [...input.catalogPublicationIds].sort(compareText),
-    comparison: null,
+    comparison: resolveComparison(input, items),
     completeness,
     createdAt: metadata.createdAt,
     createdBy: metadata.createdBy,
