@@ -487,6 +487,10 @@ begin
         where rule.canonical_food_id = item.canonical_food_id
           and rule.status = 'active'
           and rule.match_state in ('exact', 'allowed')
+          and rule.criteria ->> 'catalogRevisionId' = p_catalog_revision_id::text
+          and rule.criteria ->> 'skuContentHash' = encode(
+            sku_revision.content_hash, 'hex'
+          )
           and rule.food_state = item.food_state
           and rule.purchase_form = item.purchase_form
           and rule.edible_part = item.edible_part
@@ -524,6 +528,10 @@ begin
             and sku_revision.catalog_revision_id = p_catalog_revision_id
           where rule.canonical_food_id = item.canonical_food_id
             and rule.status = 'active' and rule.match_state in ('exact', 'allowed')
+            and rule.criteria ->> 'catalogRevisionId' = p_catalog_revision_id::text
+            and rule.criteria ->> 'skuContentHash' = encode(
+              sku_revision.content_hash, 'hex'
+            )
             and rule.food_state = item.food_state
             and rule.purchase_form = item.purchase_form
             and rule.edible_part = item.edible_part
@@ -546,6 +554,10 @@ begin
             and sku_revision.catalog_revision_id = p_catalog_revision_id
           where rule.canonical_food_id = item.canonical_food_id
             and rule.status = 'active' and rule.match_state in ('exact', 'allowed')
+            and rule.criteria ->> 'catalogRevisionId' = p_catalog_revision_id::text
+            and rule.criteria ->> 'skuContentHash' = encode(
+              sku_revision.content_hash, 'hex'
+            )
             and rule.food_state = item.food_state
             and rule.purchase_form = item.purchase_form
             and rule.edible_part = item.edible_part
@@ -616,9 +628,6 @@ begin
   then
     raise exception using errcode = '40001', message = 'stale_catalog_publication_context';
   end if;
-  if (v_coverage ->> 'publishable')::boolean is not true then
-    raise exception using errcode = '55000', message = 'catalog_publication_gate_failed';
-  end if;
   if v_context ->> 'licenseStatus' = 'unknown'
     or v_context ->> 'sourceTermsStatus' = 'unknown'
   then
@@ -634,6 +643,9 @@ begin
     and p_source_use_decision <> 'development_approved'
   ) then
     raise exception using errcode = '55000', message = 'catalog_source_use_not_permitted';
+  end if;
+  if (v_coverage ->> 'publishable')::boolean is not true then
+    raise exception using errcode = '55000', message = 'catalog_publication_gate_failed';
   end if;
 
   select revision.market, revision.chain, revision.quality_status

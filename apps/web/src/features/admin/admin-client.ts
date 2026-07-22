@@ -2,15 +2,25 @@ import {
   AdminBarcodeCorrectionDetailSchema,
   AdminBarcodeCorrectionListSchema,
   AdminBarcodeCorrectionMutationAckSchema,
+  AdminCatalogMatchCandidatesAckSchema,
+  AdminCatalogPublicationMutationAckSchema,
+  AdminCatalogRevisionListSchema,
   AdminImpersonationContextSchema,
   AdminMatchingRuleMutationAckSchema,
   AdminProfileSummarySchema,
+  AdminSupermarketMatchingRuleListSchema,
+  AdminSupermarketMatchingRuleReviewAckSchema,
   type AdminBarcodeCorrectionDetail,
   type AdminBarcodeCorrectionList,
   type AdminBarcodeCorrectionMutationAck,
+  type AdminCatalogMatchCandidatesAck,
+  type AdminCatalogPublicationMutationAck,
+  type AdminCatalogRevisionList,
   type AdminImpersonationContext,
   type AdminMatchingRuleMutationAck,
   type AdminProfileSummary,
+  type AdminSupermarketMatchingRuleList,
+  type AdminSupermarketMatchingRuleReviewAck,
   type CommercialProductSnapshot,
 } from "@health-design/contracts";
 
@@ -115,6 +125,45 @@ export function createAdminClient(dependencies: AdminClientDependencies) {
         { expectedVersion, schemaVersion: 1 },
       );
     },
+    generateCatalogMatchCandidates(catalogRevisionId: string, expectedVersion: number) {
+      return request<AdminCatalogMatchCandidatesAck>(
+        `/v1/admin/catalog-revisions/${catalogRevisionId}/match-candidates`,
+        AdminCatalogMatchCandidatesAckSchema,
+        "POST",
+        { expectedVersion, schemaVersion: 1 },
+      );
+    },
+    listSupermarketMatchingRules(catalogRevisionId: string, cursor?: string) {
+      const query = new URLSearchParams({ catalogRevisionId });
+      if (cursor) query.set("cursor", cursor);
+      return request<AdminSupermarketMatchingRuleList>(
+        `/v1/admin/matching-rules?${query.toString()}`,
+        AdminSupermarketMatchingRuleListSchema,
+        "GET",
+        undefined,
+        true,
+      );
+    },
+    reviewSupermarketMatchingRule(
+      matchingRuleId: string,
+      expectedVersion: number,
+      matchState: "exact" | "allowed" | "excluded",
+    ) {
+      return request<AdminSupermarketMatchingRuleReviewAck>(
+        `/v1/admin/matching-rules/${matchingRuleId}/review`,
+        AdminSupermarketMatchingRuleReviewAckSchema,
+        "POST",
+        { expectedVersion, matchState, schemaVersion: 1 },
+      );
+    },
+    hideCatalogPublication(catalogPublicationId: string, expectedVersion: number) {
+      return request<AdminCatalogPublicationMutationAck>(
+        `/v1/admin/catalog-publications/${catalogPublicationId}/hide`,
+        AdminCatalogPublicationMutationAckSchema,
+        "POST",
+        { expectedVersion, schemaVersion: 1 },
+      );
+    },
     approveBarcodeCorrection(
       correctionId: string,
       input: {
@@ -183,6 +232,41 @@ export function createAdminClient(dependencies: AdminClientDependencies) {
         "GET",
         undefined,
         true,
+      );
+    },
+    listCatalogRevisions(input?: {
+      chain?: "mercadona" | "dia" | "aldi";
+      cursor?: string;
+      state?: "quarantine" | "review" | "publishable" | "published" | "hidden";
+    }) {
+      const query = new URLSearchParams();
+      if (input?.chain) query.set("chain", input.chain);
+      if (input?.state) query.set("state", input.state);
+      if (input?.cursor) query.set("cursor", input.cursor);
+      const suffix = query.size > 0 ? `?${query.toString()}` : "";
+      return request<AdminCatalogRevisionList>(
+        `/v1/admin/catalog-revisions${suffix}`,
+        AdminCatalogRevisionListSchema,
+        "GET",
+        undefined,
+        true,
+      );
+    },
+    publishCatalogRevision(
+      catalogRevisionId: string,
+      input: {
+        expectedCatalogHash: string;
+        expectedCoverageHash: string;
+        expectedSeedHash: string;
+        expectedVersion: number;
+        sourceUseDecision: "development_approved" | "development_restricted_approved";
+      },
+    ) {
+      return request<AdminCatalogPublicationMutationAck>(
+        `/v1/admin/catalog-revisions/${catalogRevisionId}/publish`,
+        AdminCatalogPublicationMutationAckSchema,
+        "POST",
+        { ...input, schemaVersion: 1 },
       );
     },
     rejectBarcodeCorrection(

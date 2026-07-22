@@ -8,15 +8,25 @@ import {
   AdminBarcodeCorrectionMutationAckSchema,
   AdminBarcodeCorrectionRejectRequestSchema,
   AdminBarcodeCorrectionRequestSchema,
+  AdminCatalogMatchCandidatesAckSchema,
+  AdminCatalogMatchCandidatesRequestSchema,
+  AdminCatalogPublicationHideRequestSchema,
+  AdminCatalogPublicationMutationAckSchema,
+  AdminCatalogPublishRequestSchema,
   AdminImpersonationContextSchema,
   AdminMatchingRuleActivateRequestSchema,
   AdminMatchingRuleMutationAckSchema,
   AdminMutationRequestSchema,
   AdminProfileSummarySchema,
+  AdminSupermarketMatchingRuleReviewAckSchema,
+  AdminSupermarketMatchingRuleReviewRequestSchema,
   LedgerReceiptSchema,
   type AdminBarcodeCorrectionMutationAck,
+  type AdminCatalogMatchCandidatesAck,
+  type AdminCatalogPublicationMutationAck,
   type AdminImpersonationContext,
   type AdminMatchingRuleMutationAck,
+  type AdminSupermarketMatchingRuleReviewAck,
   type LedgerReceipt,
 } from "@health-design/contracts";
 import {
@@ -28,6 +38,14 @@ import {
   type AuditRpc,
 } from "../_shared/audit.ts";
 import { resolveCors, type EdgeEnvironment } from "../_shared/cors.ts";
+import {
+  adminCatalogRevisionListFromRows,
+  adminSupermarketMatchingRuleListFromRows,
+  CatalogAdminInputError,
+  parseCatalogAdminRoute,
+  supermarketMatchCandidateBatchFromRows,
+  type CatalogAdminRoute,
+} from "./supermarket-catalogs.ts";
 
 export type { AdminIntentInput } from "../_shared/audit.ts";
 
@@ -77,6 +95,7 @@ export interface AdminDependencies {
 }
 
 type AdminRoute =
+  | CatalogAdminRoute
   | { kind: "barcode-correction-approve"; correctionId: string }
   | { kind: "barcode-correction-correct"; correctionId: string }
   | { kind: "barcode-correction-detail"; correctionId: string }
@@ -95,6 +114,7 @@ type ErrorCode =
   | "FORBIDDEN"
   | "INTERNAL_ERROR"
   | "INVALID_INPUT"
+  | "IDEMPOTENCY_KEY_REUSED"
   | "NOT_FOUND"
   | "UNAUTHENTICATED";
 
@@ -105,6 +125,7 @@ const MESSAGE_KEYS: Readonly<Record<ErrorCode, string>> = {
   FORBIDDEN: "common.forbidden",
   INTERNAL_ERROR: "common.internal_error",
   INVALID_INPUT: "common.invalid_input",
+  IDEMPOTENCY_KEY_REUSED: "admin.idempotency_key_reused",
   NOT_FOUND: "common.not_found",
   UNAUTHENTICATED: "common.unauthenticated",
 };
@@ -159,6 +180,15 @@ function errorResponse(
 
 function parseRoute(url: URL): AdminRoute | null {
   const path = url.pathname;
+  try {
+    const catalogRoute = parseCatalogAdminRoute(url);
+    if (catalogRoute) return catalogRoute;
+  } catch (error) {
+    if (error instanceof CatalogAdminInputError) {
+      throw new AdminHttpError("INVALID_INPUT", 400);
+    }
+    throw error;
+  }
   if (path.endsWith("/v1/admin/context")) return { kind: "context" };
   if (path.endsWith("/v1/admin/profiles")) return { kind: "profiles-list" };
   if (path.endsWith("/v1/admin/barcode-corrections")) {
@@ -222,7 +252,9 @@ function expectedMethod(route: AdminRoute): "GET" | "POST" {
   return route.kind === "context" ||
     route.kind === "profiles-list" ||
     route.kind === "barcode-corrections-list" ||
-    route.kind === "barcode-correction-detail"
+    route.kind === "barcode-correction-detail" ||
+    route.kind === "catalog-revisions-list" ||
+    route.kind === "supermarket-matching-rules-list"
     ? "GET"
     : "POST";
 }
@@ -303,7 +335,15 @@ function mapRpcError(error: { code?: string; message?: string }): AdminHttpError
   if (error.code === "42501" || error.message === "superadmin_required") {
     return new AdminHttpError("FORBIDDEN", 403);
   }
-  if (error.code === "22023" || error.code === "55000") {
+  if (error.message === "idempotency_conflict") {
+    return new AdminHttpError("IDEMPOTENCY_KEY_REUSED", 409);
+  }
+  if (
+    error.code === "22023" ||
+    error.code === "23505" ||
+    error.code === "40001" ||
+    error.code === "55000"
+  ) {
     return new AdminHttpError("DOMAIN_CONSTRAINT", 409);
   }
   return new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
@@ -599,6 +639,30 @@ async function listBarcodeCorrections(
   return parsed.data;
 }
 
+async function listCatalogRevisions(
+  dependencies: AdminDependencies,
+  auth: AuthContext,
+  route: Extract<AdminRoute, { kind: "catalog-revisions-list" }>,
+): Promise<unknown> {
+  const result = await dependencies.rpc(
+    "internal_admin_list_supermarket_catalog_revisions",
+    {
+      p_auth_session_id: auth.sessionId,
+      p_auth_subject: auth.userId,
+      p_chain: route.chain,
+      p_cursor: route.cursor,
+      p_limit: 51,
+      p_state: route.state,
+    },
+  );
+  if (result.error) throw mapRpcError(result.error);
+  try {
+    return adminCatalogRevisionListFromRows(result.data);
+  } catch {
+    throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  }
+}
+
 async function barcodeCorrectionDetail(
   dependencies: AdminDependencies,
   auth: AuthContext,
@@ -629,12 +693,12 @@ async function barcodeCorrectionDetail(
   return parsed.data;
 }
 
-type ProductAuditContext = Readonly<{
+type AdminMutationContext = Readonly<{
   effectiveProfileId: string;
+  mutationScope?: "product" | "supermarket";
   originalActorId: string;
   targetId: string;
-  targetType:
-    "barcode_correction" | "commercial_product_revision" | "product_matching_rule";
+  targetType: AdminIntentInput["targetType"];
 }>;
 
 async function productAuditContext(
@@ -642,13 +706,25 @@ async function productAuditContext(
   auth: AuthContext,
   action: AdminIntentInput["action"],
   targetId: string,
-): Promise<ProductAuditContext> {
-  const result = await dependencies.rpc("internal_admin_product_audit_context", {
+): Promise<AdminMutationContext> {
+  let result = await dependencies.rpc("internal_admin_product_audit_context", {
     p_action: action,
     p_auth_session_id: auth.sessionId,
     p_auth_subject: auth.userId,
     p_target_id: targetId,
   });
+  if (
+    result.error &&
+    action === "matching_rule_activate" &&
+    result.error.message === "matching_rule_not_found"
+  ) {
+    result = await dependencies.rpc("internal_admin_supermarket_audit_context", {
+      p_action: action,
+      p_auth_session_id: auth.sessionId,
+      p_auth_subject: auth.userId,
+      p_target_id: targetId,
+    });
+  }
   if (result.error) throw mapRpcError(result.error);
   const row = firstRow(result.data);
   if (
@@ -667,32 +743,71 @@ async function productAuditContext(
   }
   return {
     effectiveProfileId: row.effective_profile_id,
+    mutationScope: row.mutation_scope === "supermarket" ? "supermarket" : "product",
     originalActorId: row.original_actor_id,
     targetId: row.audit_target_id,
     targetType: row.audit_target_type,
   };
 }
 
-async function mutateProductAdmin<T>(
+async function supermarketAuditContext(
+  dependencies: AdminDependencies,
+  auth: AuthContext,
+  action: AdminIntentInput["action"],
+  targetId: string,
+): Promise<AdminMutationContext> {
+  const result = await dependencies.rpc("internal_admin_supermarket_audit_context", {
+    p_action: action,
+    p_auth_session_id: auth.sessionId,
+    p_auth_subject: auth.userId,
+    p_target_id: targetId,
+  });
+  if (result.error) throw mapRpcError(result.error);
+  const row = firstRow(result.data);
+  if (
+    !row ||
+    typeof row.original_actor_id !== "string" ||
+    !UUID_PATTERN.test(row.original_actor_id) ||
+    typeof row.effective_profile_id !== "string" ||
+    !UUID_PATTERN.test(row.effective_profile_id) ||
+    typeof row.audit_target_id !== "string" ||
+    !UUID_PATTERN.test(row.audit_target_id) ||
+    (row.audit_target_type !== "catalog_revision" &&
+      row.audit_target_type !== "catalog_publication" &&
+      row.audit_target_type !== "product_matching_rule")
+  ) {
+    throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  }
+  return {
+    effectiveProfileId: row.effective_profile_id,
+    mutationScope: "supermarket",
+    originalActorId: row.original_actor_id,
+    targetId: row.audit_target_id,
+    targetType: row.audit_target_type,
+  };
+}
+
+async function mutateAdmin<T>(
   dependencies: AdminDependencies,
   auth: AuthContext,
   input: Readonly<{
     action: AdminIntentInput["action"];
+    context: (
+      dependencies: AdminDependencies,
+      auth: AuthContext,
+      action: AdminIntentInput["action"],
+      targetId: string,
+    ) => Promise<AdminMutationContext>;
     requestId: string;
     rpcArgs: Record<string, unknown>;
-    rpcName: string;
+    rpcName: string | ((context: AdminMutationContext) => string);
     schema: {
       safeParse(value: unknown): { data: T; success: true } | { success: false };
     };
     targetId: string;
   }>,
 ): Promise<{ auditClosed: boolean; value: T }> {
-  const context = await productAuditContext(
-    dependencies,
-    auth,
-    input.action,
-    input.targetId,
-  );
+  const context = await input.context(dependencies, auth, input.action, input.targetId);
   const intent: AdminIntentInput = {
     action: input.action,
     effectiveProfileId: context.effectiveProfileId,
@@ -704,7 +819,9 @@ async function mutateProductAdmin<T>(
   const receipt = await verifiedIntent(dependencies, intent);
   let result;
   try {
-    result = await dependencies.rpc(input.rpcName, {
+    const rpcName =
+      typeof input.rpcName === "string" ? input.rpcName : input.rpcName(context);
+    result = await dependencies.rpc(rpcName, {
       ...input.rpcArgs,
       p_auth_session_id: auth.sessionId,
       p_auth_subject: auth.userId,
@@ -728,6 +845,25 @@ async function mutateProductAdmin<T>(
     auditClosed: await completeSuccessOutcome(dependencies, intent, receipt),
     value: parsed.data,
   };
+}
+
+async function mutateProductAdmin<T>(
+  dependencies: AdminDependencies,
+  auth: AuthContext,
+  input: Omit<Parameters<typeof mutateAdmin<T>>[2], "context">,
+): Promise<{ auditClosed: boolean; value: T }> {
+  return mutateAdmin(dependencies, auth, { ...input, context: productAuditContext });
+}
+
+async function mutateSupermarketAdmin<T>(
+  dependencies: AdminDependencies,
+  auth: AuthContext,
+  input: Omit<Parameters<typeof mutateAdmin<T>>[2], "context">,
+): Promise<{ auditClosed: boolean; value: T }> {
+  return mutateAdmin(dependencies, auth, {
+    ...input,
+    context: supermarketAuditContext,
+  });
 }
 
 export async function handleAdmin(
@@ -760,7 +896,12 @@ export async function handleAdmin(
     if (url.hash) throw new AdminHttpError("INVALID_INPUT", 400);
     const route = parseRoute(url);
     if (!route) throw new AdminHttpError("NOT_FOUND", 404);
-    if (route.kind !== "barcode-corrections-list" && url.search) {
+    if (
+      route.kind !== "barcode-corrections-list" &&
+      route.kind !== "catalog-revisions-list" &&
+      route.kind !== "supermarket-matching-rules-list" &&
+      url.search
+    ) {
       throw new AdminHttpError("INVALID_INPUT", 400);
     }
     if (request.method !== expectedMethod(route)) {
@@ -796,20 +937,140 @@ export async function handleAdmin(
         cors.headers,
       );
     }
+    if (route.kind === "catalog-revisions-list") {
+      return jsonResponse(
+        await listCatalogRevisions(dependencies, auth, route),
+        200,
+        cors.headers,
+      );
+    }
+    if (route.kind === "supermarket-matching-rules-list") {
+      const result = await dependencies.rpc(
+        "internal_admin_list_supermarket_matching_rules",
+        {
+          p_auth_session_id: auth.sessionId,
+          p_auth_subject: auth.userId,
+          p_catalog_revision_id: route.catalogRevisionId,
+          p_cursor: route.cursor,
+          p_limit: 51,
+        },
+      );
+      if (result.error) throw mapRpcError(result.error);
+      return jsonResponse(
+        adminSupermarketMatchingRuleListFromRows(result.data),
+        200,
+        cors.headers,
+      );
+    }
+
+    if (route.kind === "catalog-match-candidates") {
+      const idempotencyKey = requireUuid(request.headers.get("idempotency-key"));
+      const parsed = AdminCatalogMatchCandidatesRequestSchema.safeParse(
+        await readJson(request),
+      );
+      if (!parsed.success) throw new AdminHttpError("INVALID_INPUT", 400);
+      const inputs = await dependencies.rpc("internal_admin_supermarket_match_inputs", {
+        p_auth_session_id: auth.sessionId,
+        p_auth_subject: auth.userId,
+        p_catalog_revision_id: route.catalogRevisionId,
+        p_expected_version: parsed.data.expectedVersion,
+      });
+      if (inputs.error) throw mapRpcError(inputs.error);
+      let batch: ReturnType<typeof supermarketMatchCandidateBatchFromRows>;
+      try {
+        batch = supermarketMatchCandidateBatchFromRows(inputs.data);
+      } catch {
+        throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+      }
+      const mutation = await mutateSupermarketAdmin(dependencies, auth, {
+        action: "catalog_match_candidates_generate",
+        requestId: idempotencyKey,
+        rpcArgs: {
+          p_basket_seed_revision_id: batch.basketSeedRevisionId,
+          p_candidates: batch.candidates,
+          p_catalog_revision_id: route.catalogRevisionId,
+          p_expected_version: parsed.data.expectedVersion,
+          p_processed_skus: batch.processedSkus,
+        },
+        rpcName: "internal_admin_generate_supermarket_match_candidates",
+        schema: AdminCatalogMatchCandidatesAckSchema,
+        targetId: route.catalogRevisionId,
+      });
+      return jsonResponse(
+        mutation.auditClosed
+          ? mutation.value
+          : { ...mutation.value, auditClosure: "pending" },
+        mutation.auditClosed ? 201 : 202,
+        cors.headers,
+      );
+    }
 
     if (
       route.kind === "barcode-correction-correct" ||
       route.kind === "barcode-correction-approve" ||
       route.kind === "barcode-correction-reject" ||
-      route.kind === "matching-rule-activate"
+      route.kind === "supermarket-matching-rule-review" ||
+      route.kind === "matching-rule-activate" ||
+      route.kind === "catalog-publish" ||
+      route.kind === "catalog-publication-hide"
     ) {
       requireRecentMfa(auth, dependencies.now());
       const idempotencyKey = requireUuid(request.headers.get("idempotency-key"));
       const body = await readJson(request);
       let mutation:
         | { auditClosed: boolean; value: AdminBarcodeCorrectionMutationAck }
-        | { auditClosed: boolean; value: AdminMatchingRuleMutationAck };
-      if (route.kind === "barcode-correction-correct") {
+        | { auditClosed: boolean; value: AdminCatalogMatchCandidatesAck }
+        | { auditClosed: boolean; value: AdminMatchingRuleMutationAck }
+        | { auditClosed: boolean; value: AdminCatalogPublicationMutationAck }
+        | { auditClosed: boolean; value: AdminSupermarketMatchingRuleReviewAck };
+      if (route.kind === "catalog-publish") {
+        const parsed = AdminCatalogPublishRequestSchema.safeParse(body);
+        if (!parsed.success) throw new AdminHttpError("INVALID_INPUT", 400);
+        mutation = await mutateSupermarketAdmin(dependencies, auth, {
+          action: "catalog_revision_publish",
+          requestId: idempotencyKey,
+          rpcArgs: {
+            p_catalog_revision_id: route.catalogRevisionId,
+            p_expected_catalog_hash: bytea(parsed.data.expectedCatalogHash),
+            p_expected_coverage_hash: bytea(parsed.data.expectedCoverageHash),
+            p_expected_seed_hash: bytea(parsed.data.expectedSeedHash),
+            p_expected_version: parsed.data.expectedVersion,
+            p_source_use_decision: parsed.data.sourceUseDecision,
+          },
+          rpcName: "internal_admin_publish_supermarket_catalog",
+          schema: AdminCatalogPublicationMutationAckSchema,
+          targetId: route.catalogRevisionId,
+        });
+      } else if (route.kind === "catalog-publication-hide") {
+        const parsed = AdminCatalogPublicationHideRequestSchema.safeParse(body);
+        if (!parsed.success) throw new AdminHttpError("INVALID_INPUT", 400);
+        mutation = await mutateSupermarketAdmin(dependencies, auth, {
+          action: "catalog_publication_hide",
+          requestId: idempotencyKey,
+          rpcArgs: {
+            p_catalog_publication_id: route.catalogPublicationId,
+            p_expected_version: parsed.data.expectedVersion,
+          },
+          rpcName: "internal_admin_hide_supermarket_catalog_publication",
+          schema: AdminCatalogPublicationMutationAckSchema,
+          targetId: route.catalogPublicationId,
+        });
+      } else if (route.kind === "supermarket-matching-rule-review") {
+        const parsed = AdminSupermarketMatchingRuleReviewRequestSchema.safeParse(body);
+        if (!parsed.success) throw new AdminHttpError("INVALID_INPUT", 400);
+        mutation = await mutateSupermarketAdmin(dependencies, auth, {
+          action: "matching_rule_review",
+          requestId: idempotencyKey,
+          rpcArgs: {
+            p_expected_version: parsed.data.expectedVersion,
+            p_match_state: parsed.data.matchState,
+            p_matching_rule_id: route.matchingRuleId,
+          },
+          rpcName: "internal_admin_review_supermarket_matching_rule",
+          schema: AdminSupermarketMatchingRuleReviewAckSchema,
+          targetId: route.matchingRuleId,
+        });
+      } else if (route.kind === "barcode-correction-correct") {
         const parsed = AdminBarcodeCorrectionRequestSchema.safeParse(body);
         if (!parsed.success) throw new AdminHttpError("INVALID_INPUT", 400);
         const classification = classifyCommercialProductCompleteness(
@@ -871,7 +1132,10 @@ export async function handleAdmin(
             p_expected_version: parsed.data.expectedVersion,
             p_matching_rule_id: route.matchingRuleId,
           },
-          rpcName: "internal_admin_activate_product_matching_rule",
+          rpcName: (context) =>
+            context.mutationScope === "supermarket"
+              ? "internal_admin_activate_supermarket_matching_rule"
+              : "internal_admin_activate_product_matching_rule",
           schema: AdminMatchingRuleMutationAckSchema,
           targetId: route.matchingRuleId,
         });

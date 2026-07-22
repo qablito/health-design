@@ -1338,10 +1338,10 @@ export declare const QuestionnairePublicSchemaResponseSchema: z.ZodObject<{
             boolean: "boolean";
             text: "text";
             date: "date";
-            entities: "entities";
-            multi: "multi";
             single: "single";
             time: "time";
+            entities: "entities";
+            multi: "multi";
         }>;
         label: z.ZodString;
         options: z.ZodOptional<z.ZodArray<z.ZodObject<{

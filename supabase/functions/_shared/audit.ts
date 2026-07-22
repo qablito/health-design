@@ -40,12 +40,18 @@ export type AdminAuditAction =
   | "barcode_correction_approve"
   | "barcode_correction_correct"
   | "barcode_correction_reject"
+  | "catalog_match_candidates_generate"
+  | "catalog_publication_hide"
+  | "catalog_revision_publish"
   | "impersonation_end"
   | "impersonation_start"
-  | "matching_rule_activate";
+  | "matching_rule_activate"
+  | "matching_rule_review";
 export type AdminAuditTargetType =
   | "barcode_correction"
   | "commercial_product_revision"
+  | "catalog_publication"
+  | "catalog_revision"
   | "impersonation_session"
   | "product_matching_rule"
   | "profile";

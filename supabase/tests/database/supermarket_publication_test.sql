@@ -222,7 +222,11 @@ select source.item_number, public.internal_create_supermarket_matching_rule(
   sku.id,
   source.food_key,
   'exact', 'raw', 'fresh', 'whole',
-  jsonb_build_object('fixture', true),
+  jsonb_build_object(
+    'fixture', true,
+    'catalogRevisionId', (select response ->> 'catalogRevisionId' from approved_catalog),
+    'skuContentHash', encode(sku_revision.content_hash, 'hex')
+  ),
   jsonb_build_array('manual-review'),
   '[]'::jsonb,
   '31000000-0000-4000-8000-000000017201'
@@ -231,7 +235,11 @@ from seed_source source
 join private.supermarket_skus sku
   on sku.market = 'ES'
   and sku.chain = 'mercadona'
-  and sku.external_sku = format('sku-%s', lpad(source.item_number::text, 3, '0'));
+  and sku.external_sku = format('sku-%s', lpad(source.item_number::text, 3, '0'))
+join private.supermarket_sku_revisions sku_revision
+  on sku_revision.sku_id = sku.id
+  and sku_revision.catalog_revision_id =
+    (select (response ->> 'catalogRevisionId')::uuid from approved_catalog);
 
 select private.activate_supermarket_matching_rule(
   rule_id, '31000000-0000-4000-8000-000000017201', 1
@@ -321,6 +329,12 @@ select private.supermarket_catalog_publication_context(
   (select seed_id from active_seed)
 ) context;
 
+select is(
+  (select (context #>> '{coverage,totalUsable}')::integer from unknown_coverage),
+  0,
+  'una regla activa de otra revisión o hash no aporta cobertura a la revisión nueva'
+);
+
 select throws_ok(
   $$
     select private.publish_supermarket_catalog(
@@ -392,10 +406,17 @@ where food.food_key = 'food:test-t17b-002';
 create temporary table gtin_conflict as
 select public.internal_create_supermarket_matching_rule(
   sku.id, 'food:test-t17b-001', 'exact', 'raw', 'fresh', 'whole',
-  '{}'::jsonb, '["manual-review"]'::jsonb, '[]'::jsonb,
+  jsonb_build_object(
+    'catalogRevisionId', (select response ->> 'catalogRevisionId' from approved_catalog),
+    'skuContentHash', encode(sku_revision.content_hash, 'hex')
+  ), '["manual-review"]'::jsonb, '[]'::jsonb,
   '31000000-0000-4000-8000-000000017201'
 ) rule_id
 from private.supermarket_skus sku
+join private.supermarket_sku_revisions sku_revision
+  on sku_revision.sku_id = sku.id
+  and sku_revision.catalog_revision_id =
+    (select (response ->> 'catalogRevisionId')::uuid from approved_catalog)
 where sku.market = 'ES' and sku.chain = 'mercadona' and sku.external_sku = 'sku-001';
 
 select ok(

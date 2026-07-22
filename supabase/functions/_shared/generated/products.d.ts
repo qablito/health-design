@@ -340,8 +340,8 @@ export declare const CommercialProductSnapshotSchema: z.ZodObject<{
         unit: z.ZodOptional<z.ZodEnum<{
             g: "g";
             unit: "unit";
-            kg: "kg";
             ml: "ml";
+            kg: "kg";
             l: "l";
         }>>;
     }, z.core.$strict>>;
@@ -372,10 +372,10 @@ export declare const ProductMatchingSummarySchema: z.ZodObject<{
     messageKey: z.ZodString;
     state: z.ZodEnum<{
         exact: "exact";
-        insufficient: "insufficient";
         allowed: "allowed";
         review: "review";
         excluded: "excluded";
+        insufficient: "insufficient";
     }>;
 }, z.core.$strict>;
 export declare const ProductResolutionResponseSchema: z.ZodObject<{
@@ -402,10 +402,10 @@ export declare const ProductResolutionResponseSchema: z.ZodObject<{
         messageKey: z.ZodString;
         state: z.ZodEnum<{
             exact: "exact";
-            insufficient: "insufficient";
             allowed: "allowed";
             review: "review";
             excluded: "excluded";
+            insufficient: "insufficient";
         }>;
     }, z.core.$strict>>;
     revisionId: z.ZodNullable<z.ZodUUID>;
@@ -695,8 +695,8 @@ export declare const ProductResolutionResponseSchema: z.ZodObject<{
             unit: z.ZodOptional<z.ZodEnum<{
                 g: "g";
                 unit: "unit";
-                kg: "kg";
                 ml: "ml";
+                kg: "kg";
                 l: "l";
             }>>;
         }, z.core.$strict>>;
@@ -1025,8 +1025,8 @@ export declare const ProductConfirmationRequestSchema: z.ZodObject<{
             unit: z.ZodOptional<z.ZodEnum<{
                 g: "g";
                 unit: "unit";
-                kg: "kg";
                 ml: "ml";
+                kg: "kg";
                 l: "l";
             }>>;
         }, z.core.$strict>>;
@@ -1082,10 +1082,10 @@ export declare const ConfirmedProductApplicationSchema: z.ZodObject<{
         messageKey: z.ZodString;
         state: z.ZodEnum<{
             exact: "exact";
-            insufficient: "insufficient";
             allowed: "allowed";
             review: "review";
             excluded: "excluded";
+            insufficient: "insufficient";
         }>;
     }, z.core.$strict>;
     productId: z.ZodUUID;
@@ -1376,8 +1376,8 @@ export declare const ConfirmedProductApplicationSchema: z.ZodObject<{
             unit: z.ZodOptional<z.ZodEnum<{
                 g: "g";
                 unit: "unit";
-                kg: "kg";
                 ml: "ml";
+                kg: "kg";
                 l: "l";
             }>>;
         }, z.core.$strict>>;
@@ -1423,8 +1423,8 @@ export declare const AdminBarcodeCorrectionListSchema: z.ZodObject<{
         status: z.ZodEnum<{
             approved: "approved";
             pending: "pending";
-            rejected: "rejected";
             superseded: "superseded";
+            rejected: "rejected";
         }>;
         version: z.ZodNumber;
     }, z.core.$strict>>;
@@ -1717,8 +1717,8 @@ export declare const AdminBarcodeCorrectionDetailSchema: z.ZodObject<{
             unit: z.ZodOptional<z.ZodEnum<{
                 g: "g";
                 unit: "unit";
-                kg: "kg";
                 ml: "ml";
+                kg: "kg";
                 l: "l";
             }>>;
         }, z.core.$strict>>;
@@ -2031,8 +2031,8 @@ export declare const AdminBarcodeCorrectionDetailSchema: z.ZodObject<{
             unit: z.ZodOptional<z.ZodEnum<{
                 g: "g";
                 unit: "unit";
-                kg: "kg";
                 ml: "ml";
+                kg: "kg";
                 l: "l";
             }>>;
         }, z.core.$strict>>;
@@ -2345,8 +2345,8 @@ export declare const AdminBarcodeCorrectionDetailSchema: z.ZodObject<{
             unit: z.ZodOptional<z.ZodEnum<{
                 g: "g";
                 unit: "unit";
-                kg: "kg";
                 ml: "ml";
+                kg: "kg";
                 l: "l";
             }>>;
         }, z.core.$strict>>;
@@ -2377,8 +2377,8 @@ export declare const AdminBarcodeCorrectionDetailSchema: z.ZodObject<{
     status: z.ZodEnum<{
         approved: "approved";
         pending: "pending";
-        rejected: "rejected";
         superseded: "superseded";
+        rejected: "rejected";
     }>;
     version: z.ZodNumber;
 }, z.core.$strict>;
@@ -2670,8 +2670,8 @@ export declare const AdminBarcodeCorrectionRequestSchema: z.ZodObject<{
             unit: z.ZodOptional<z.ZodEnum<{
                 g: "g";
                 unit: "unit";
-                kg: "kg";
                 ml: "ml";
+                kg: "kg";
                 l: "l";
             }>>;
         }, z.core.$strict>>;
@@ -2705,10 +2705,10 @@ export declare const AdminBarcodeCorrectionApproveRequestSchema: z.ZodObject<{
     evidence: z.ZodArray<z.ZodString>;
     matchState: z.ZodEnum<{
         exact: "exact";
-        insufficient: "insufficient";
         allowed: "allowed";
         review: "review";
         excluded: "excluded";
+        insufficient: "insufficient";
     }>;
 }, z.core.$strict>;
 export declare const AdminBarcodeCorrectionRejectRequestSchema: z.ZodObject<{
@@ -2734,8 +2734,8 @@ export declare const AdminBarcodeCorrectionMutationAckSchema: z.ZodObject<{
     status: z.ZodEnum<{
         approved: "approved";
         pending: "pending";
-        rejected: "rejected";
         superseded: "superseded";
+        rejected: "rejected";
     }>;
     version: z.ZodNumber;
 }, z.core.$strict>;

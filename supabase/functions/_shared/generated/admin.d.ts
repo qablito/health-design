@@ -27,6 +27,301 @@ export declare const AdminImpersonationContextSchema: z.ZodDiscriminatedUnion<[z
         closed: "closed";
     }>>;
 }, z.core.$strict>], "active">;
+export declare const AdminCatalogRevisionSummarySchema: z.ZodObject<{
+    activePublicationId: z.ZodNullable<z.ZodUUID>;
+    basketSeedHash: z.ZodNullable<z.ZodString>;
+    basketSeedRevisionId: z.ZodNullable<z.ZodUUID>;
+    catalogHash: z.ZodString;
+    catalogRevisionId: z.ZodUUID;
+    chain: z.ZodEnum<{
+        mercadona: "mercadona";
+        dia: "dia";
+        aldi: "aldi";
+    }>;
+    coverage: z.ZodNullable<z.ZodObject<{
+        dynamicRequired: z.ZodLiteral<20>;
+        dynamicUsable: z.ZodNumber;
+        fixedRequired: z.ZodLiteral<60>;
+        fixedUsable: z.ZodNumber;
+        groups: z.ZodArray<z.ZodObject<{
+            groupKey: z.ZodString;
+            required: z.ZodNumber;
+            usable: z.ZodNumber;
+        }, z.core.$strict>>;
+        publishable: z.ZodBoolean;
+        totalRequired: z.ZodLiteral<80>;
+        totalUsable: z.ZodNumber;
+    }, z.core.$strict>>;
+    coverageHash: z.ZodNullable<z.ZodString>;
+    manifest: z.ZodObject<{
+        errorCount: z.ZodNumber;
+        licenseStatus: z.ZodEnum<{
+            unknown: "unknown";
+            approved: "approved";
+            restricted: "restricted";
+        }>;
+        recordCount: z.ZodNumber;
+        sourceTermsStatus: z.ZodEnum<{
+            unknown: "unknown";
+            approved: "approved";
+            restricted: "restricted";
+        }>;
+    }, z.core.$strict>;
+    publicationVersion: z.ZodNullable<z.ZodNumber>;
+    qualityStatus: z.ZodEnum<{
+        current: "current";
+        review_due: "review_due";
+        degraded: "degraded";
+    }>;
+    revisionNumber: z.ZodNumber;
+    schemaVersion: z.ZodLiteral<1>;
+    sourceDecisionReady: z.ZodBoolean;
+    state: z.ZodEnum<{
+        published: "published";
+        review: "review";
+        publishable: "publishable";
+        quarantine: "quarantine";
+        hidden: "hidden";
+    }>;
+    usableCount: z.ZodNumber;
+}, z.core.$strict>;
+export declare const AdminCatalogRevisionListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        activePublicationId: z.ZodNullable<z.ZodUUID>;
+        basketSeedHash: z.ZodNullable<z.ZodString>;
+        basketSeedRevisionId: z.ZodNullable<z.ZodUUID>;
+        catalogHash: z.ZodString;
+        catalogRevisionId: z.ZodUUID;
+        chain: z.ZodEnum<{
+            mercadona: "mercadona";
+            dia: "dia";
+            aldi: "aldi";
+        }>;
+        coverage: z.ZodNullable<z.ZodObject<{
+            dynamicRequired: z.ZodLiteral<20>;
+            dynamicUsable: z.ZodNumber;
+            fixedRequired: z.ZodLiteral<60>;
+            fixedUsable: z.ZodNumber;
+            groups: z.ZodArray<z.ZodObject<{
+                groupKey: z.ZodString;
+                required: z.ZodNumber;
+                usable: z.ZodNumber;
+            }, z.core.$strict>>;
+            publishable: z.ZodBoolean;
+            totalRequired: z.ZodLiteral<80>;
+            totalUsable: z.ZodNumber;
+        }, z.core.$strict>>;
+        coverageHash: z.ZodNullable<z.ZodString>;
+        manifest: z.ZodObject<{
+            errorCount: z.ZodNumber;
+            licenseStatus: z.ZodEnum<{
+                unknown: "unknown";
+                approved: "approved";
+                restricted: "restricted";
+            }>;
+            recordCount: z.ZodNumber;
+            sourceTermsStatus: z.ZodEnum<{
+                unknown: "unknown";
+                approved: "approved";
+                restricted: "restricted";
+            }>;
+        }, z.core.$strict>;
+        publicationVersion: z.ZodNullable<z.ZodNumber>;
+        qualityStatus: z.ZodEnum<{
+            current: "current";
+            review_due: "review_due";
+            degraded: "degraded";
+        }>;
+        revisionNumber: z.ZodNumber;
+        schemaVersion: z.ZodLiteral<1>;
+        sourceDecisionReady: z.ZodBoolean;
+        state: z.ZodEnum<{
+            published: "published";
+            review: "review";
+            publishable: "publishable";
+            quarantine: "quarantine";
+            hidden: "hidden";
+        }>;
+        usableCount: z.ZodNumber;
+    }, z.core.$strict>>;
+    nextCursor: z.ZodNullable<z.ZodUUID>;
+    schemaVersion: z.ZodLiteral<1>;
+}, z.core.$strict>;
+export declare const AdminCatalogMatchCandidatesRequestSchema: z.ZodObject<{
+    expectedVersion: z.ZodNumber;
+    schemaVersion: z.ZodLiteral<1>;
+}, z.core.$strict>;
+export declare const AdminCatalogMatchCandidatesAckSchema: z.ZodObject<{
+    auditClosure: z.ZodOptional<z.ZodEnum<{
+        pending: "pending";
+        closed: "closed";
+    }>>;
+    candidatesCreated: z.ZodNumber;
+    catalogRevisionId: z.ZodUUID;
+    hasMore: z.ZodBoolean;
+    schemaVersion: z.ZodLiteral<1>;
+    skusProcessed: z.ZodNumber;
+    version: z.ZodNumber;
+}, z.core.$strict>;
+export declare const AdminSupermarketMatchingRuleSummarySchema: z.ZodObject<{
+    canonicalFoodKey: z.ZodString;
+    canonicalFoodName: z.ZodString;
+    chain: z.ZodEnum<{
+        mercadona: "mercadona";
+        dia: "dia";
+        aldi: "aldi";
+    }>;
+    criticalIssueOpen: z.ZodBoolean;
+    externalSku: z.ZodString;
+    foodState: z.ZodEnum<{
+        cooked: "cooked";
+        raw: "raw";
+        unspecified: "unspecified";
+    }>;
+    gtinConsistency: z.ZodEnum<{
+        consistent: "consistent";
+        conflict: "conflict";
+        not_available: "not_available";
+    }>;
+    matchState: z.ZodEnum<{
+        exact: "exact";
+        allowed: "allowed";
+        review: "review";
+        excluded: "excluded";
+        insufficient: "insufficient";
+    }>;
+    matchingRuleId: z.ZodUUID;
+    purchaseForm: z.ZodEnum<{
+        dry: "dry";
+        fresh: "fresh";
+        drained: "drained";
+        canned: "canned";
+        natural: "natural";
+        prepared: "prepared";
+        marinated: "marinated";
+    }>;
+    reasons: z.ZodArray<z.ZodString>;
+    reviewed: z.ZodBoolean;
+    schemaVersion: z.ZodLiteral<1>;
+    skuName: z.ZodString;
+    status: z.ZodEnum<{
+        active: "active";
+        draft: "draft";
+        superseded: "superseded";
+        withdrawn: "withdrawn";
+    }>;
+    version: z.ZodNumber;
+}, z.core.$strict>;
+export declare const AdminSupermarketMatchingRuleListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        canonicalFoodKey: z.ZodString;
+        canonicalFoodName: z.ZodString;
+        chain: z.ZodEnum<{
+            mercadona: "mercadona";
+            dia: "dia";
+            aldi: "aldi";
+        }>;
+        criticalIssueOpen: z.ZodBoolean;
+        externalSku: z.ZodString;
+        foodState: z.ZodEnum<{
+            cooked: "cooked";
+            raw: "raw";
+            unspecified: "unspecified";
+        }>;
+        gtinConsistency: z.ZodEnum<{
+            consistent: "consistent";
+            conflict: "conflict";
+            not_available: "not_available";
+        }>;
+        matchState: z.ZodEnum<{
+            exact: "exact";
+            allowed: "allowed";
+            review: "review";
+            excluded: "excluded";
+            insufficient: "insufficient";
+        }>;
+        matchingRuleId: z.ZodUUID;
+        purchaseForm: z.ZodEnum<{
+            dry: "dry";
+            fresh: "fresh";
+            drained: "drained";
+            canned: "canned";
+            natural: "natural";
+            prepared: "prepared";
+            marinated: "marinated";
+        }>;
+        reasons: z.ZodArray<z.ZodString>;
+        reviewed: z.ZodBoolean;
+        schemaVersion: z.ZodLiteral<1>;
+        skuName: z.ZodString;
+        status: z.ZodEnum<{
+            active: "active";
+            draft: "draft";
+            superseded: "superseded";
+            withdrawn: "withdrawn";
+        }>;
+        version: z.ZodNumber;
+    }, z.core.$strict>>;
+    nextCursor: z.ZodNullable<z.ZodUUID>;
+    schemaVersion: z.ZodLiteral<1>;
+}, z.core.$strict>;
+export declare const AdminSupermarketMatchingRuleReviewRequestSchema: z.ZodObject<{
+    expectedVersion: z.ZodNumber;
+    matchState: z.ZodEnum<{
+        exact: "exact";
+        allowed: "allowed";
+        excluded: "excluded";
+    }>;
+    schemaVersion: z.ZodLiteral<1>;
+}, z.core.$strict>;
+export declare const AdminSupermarketMatchingRuleReviewAckSchema: z.ZodObject<{
+    auditClosure: z.ZodOptional<z.ZodEnum<{
+        pending: "pending";
+        closed: "closed";
+    }>>;
+    matchState: z.ZodEnum<{
+        exact: "exact";
+        allowed: "allowed";
+        excluded: "excluded";
+    }>;
+    matchingRuleId: z.ZodUUID;
+    schemaVersion: z.ZodLiteral<1>;
+    status: z.ZodLiteral<"draft">;
+    version: z.ZodNumber;
+}, z.core.$strict>;
+export declare const AdminCatalogPublishRequestSchema: z.ZodObject<{
+    expectedCatalogHash: z.ZodString;
+    expectedCoverageHash: z.ZodString;
+    expectedSeedHash: z.ZodString;
+    expectedVersion: z.ZodNumber;
+    schemaVersion: z.ZodLiteral<1>;
+    sourceUseDecision: z.ZodEnum<{
+        development_approved: "development_approved";
+        development_restricted_approved: "development_restricted_approved";
+    }>;
+}, z.core.$strict>;
+export declare const AdminCatalogPublicationHideRequestSchema: z.ZodObject<{
+    expectedVersion: z.ZodNumber;
+    schemaVersion: z.ZodLiteral<1>;
+}, z.core.$strict>;
+export declare const AdminCatalogPublicationMutationAckSchema: z.ZodObject<{
+    auditClosure: z.ZodOptional<z.ZodEnum<{
+        pending: "pending";
+        closed: "closed";
+    }>>;
+    catalogPublicationId: z.ZodUUID;
+    chain: z.ZodEnum<{
+        mercadona: "mercadona";
+        dia: "dia";
+        aldi: "aldi";
+    }>;
+    schemaVersion: z.ZodLiteral<1>;
+    status: z.ZodEnum<{
+        active: "active";
+        hidden: "hidden";
+    }>;
+    version: z.ZodNumber;
+}, z.core.$strict>;
 export declare const LedgerReceiptSchema: z.ZodObject<{
     environment: z.ZodEnum<{
         local: "local";
@@ -42,6 +337,12 @@ export declare const LedgerReceiptSchema: z.ZodObject<{
     timestamp: z.ZodISODateTime;
 }, z.core.$strict>;
 export type AdminMutationRequest = z.infer<typeof AdminMutationRequestSchema>;
+export type AdminCatalogRevisionSummary = z.infer<typeof AdminCatalogRevisionSummarySchema>;
+export type AdminCatalogRevisionList = z.infer<typeof AdminCatalogRevisionListSchema>;
+export type AdminCatalogMatchCandidatesAck = z.infer<typeof AdminCatalogMatchCandidatesAckSchema>;
+export type AdminSupermarketMatchingRuleList = z.infer<typeof AdminSupermarketMatchingRuleListSchema>;
+export type AdminSupermarketMatchingRuleReviewAck = z.infer<typeof AdminSupermarketMatchingRuleReviewAckSchema>;
+export type AdminCatalogPublicationMutationAck = z.infer<typeof AdminCatalogPublicationMutationAckSchema>;
 export type AdminProfileSummary = z.infer<typeof AdminProfileSummarySchema>;
 export type AdminImpersonationContext = z.infer<typeof AdminImpersonationContextSchema>;
 export type LedgerReceipt = z.infer<typeof LedgerReceiptSchema>;

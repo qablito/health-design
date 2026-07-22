@@ -150,7 +150,11 @@ describe("Worker de continuidad", () => {
       barcode_correction_approve: "commercial_product_revision",
       barcode_correction_correct: "barcode_correction",
       barcode_correction_reject: "barcode_correction",
+      catalog_match_candidates_generate: "catalog_revision",
+      catalog_publication_hide: "catalog_publication",
+      catalog_revision_publish: "catalog_revision",
       matching_rule_activate: "product_matching_rule",
+      matching_rule_review: "product_matching_rule",
     } as const;
 
     for (const [action, targetType] of Object.entries(expectedTargets)) {

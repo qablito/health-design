@@ -475,6 +475,12 @@ git commit -m "feat(catalog): add quarantined supermarket import pipeline"
 
 # T17B — Persistencia, matching y publicación
 
+> **Estado 2026-07-21:** `T17B_LOCAL_PASS`. B.1–B.3 están implementadas y
+> verificadas localmente: revisiones inmutables, matching determinista con revisión y
+> activación manual separadas, gate 60 + 20, administración AAL2, idempotencia,
+> auditoría y panel de publicación. No se han aplicado migraciones, desplegado funciones
+> ni publicado catálogos en remoto.
+
 ## Tarea B.1: Crear esquema inmutable de catálogos
 
 **Archivos:**

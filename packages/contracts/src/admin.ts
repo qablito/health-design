@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { PROFILE_STATUSES } from "@health-design/domain";
+import { CatalogCoverageSchema, SUPERMARKET_CHAINS } from "./shopping.ts";
 
 const UuidSchema = z.uuid();
 const Sha256HexSchema = z.string().regex(/^[a-f0-9]{64}$/);
@@ -43,6 +44,173 @@ export const AdminImpersonationContextSchema = z.discriminatedUnion("active", [
   InactiveAdminImpersonationContextSchema,
 ]);
 
+const AdminCatalogStateSchema = z.enum([
+  "quarantine",
+  "review",
+  "publishable",
+  "published",
+  "hidden",
+]);
+
+const AdminCatalogManifestStateSchema = z
+  .object({
+    errorCount: z.number().int().min(0).max(100_000),
+    licenseStatus: z.enum(["approved", "restricted", "unknown"]),
+    recordCount: z.number().int().min(0).max(100_000),
+    sourceTermsStatus: z.enum(["approved", "restricted", "unknown"]),
+  })
+  .strict();
+
+export const AdminCatalogRevisionSummarySchema = z
+  .object({
+    activePublicationId: UuidSchema.nullable(),
+    basketSeedHash: Sha256HexSchema.nullable(),
+    basketSeedRevisionId: UuidSchema.nullable(),
+    catalogHash: Sha256HexSchema,
+    catalogRevisionId: UuidSchema,
+    chain: z.enum(SUPERMARKET_CHAINS),
+    coverage: CatalogCoverageSchema.nullable(),
+    coverageHash: Sha256HexSchema.nullable(),
+    manifest: AdminCatalogManifestStateSchema,
+    publicationVersion: z.number().int().min(1).nullable(),
+    qualityStatus: z.enum(["current", "review_due", "degraded"]),
+    revisionNumber: z.number().int().min(1),
+    schemaVersion: z.literal(1),
+    sourceDecisionReady: z.boolean(),
+    state: AdminCatalogStateSchema,
+    usableCount: z.number().int().min(0).max(100_000),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.usableCount > value.manifest.recordCount) {
+      context.addIssue({ code: "custom", message: "usable_exceeds_records" });
+    }
+    if ((value.coverage === null) !== (value.coverageHash === null)) {
+      context.addIssue({ code: "custom", message: "coverage_hash_pair_required" });
+    }
+    if ((value.activePublicationId === null) !== (value.publicationVersion === null)) {
+      context.addIssue({
+        code: "custom",
+        message: "publication_version_pair_required",
+      });
+    }
+  });
+
+export const AdminCatalogRevisionListSchema = z
+  .object({
+    items: z.array(AdminCatalogRevisionSummarySchema).max(50),
+    nextCursor: UuidSchema.nullable(),
+    schemaVersion: z.literal(1),
+  })
+  .strict();
+
+export const AdminCatalogMatchCandidatesRequestSchema = z
+  .object({
+    expectedVersion: z.number().int().min(1),
+    schemaVersion: z.literal(1),
+  })
+  .strict();
+
+export const AdminCatalogMatchCandidatesAckSchema = z
+  .object({
+    auditClosure: z.enum(["closed", "pending"]).optional(),
+    candidatesCreated: z.number().int().min(0).max(100_000),
+    catalogRevisionId: UuidSchema,
+    hasMore: z.boolean(),
+    schemaVersion: z.literal(1),
+    skusProcessed: z.number().int().min(0).max(250),
+    version: z.number().int().min(1),
+  })
+  .strict();
+
+export const AdminSupermarketMatchingRuleSummarySchema = z
+  .object({
+    canonicalFoodKey: z.string().min(1).max(160),
+    canonicalFoodName: z.string().min(1).max(500),
+    chain: z.enum(SUPERMARKET_CHAINS),
+    criticalIssueOpen: z.boolean(),
+    externalSku: z.string().min(1).max(240),
+    foodState: z.enum(["raw", "cooked", "unspecified"]),
+    gtinConsistency: z.enum(["consistent", "conflict", "not_available"]),
+    matchState: z.enum(["exact", "allowed", "review", "excluded", "insufficient"]),
+    matchingRuleId: UuidSchema,
+    purchaseForm: z.enum([
+      "dry",
+      "fresh",
+      "drained",
+      "canned",
+      "natural",
+      "prepared",
+      "marinated",
+    ]),
+    reasons: z.array(z.string().min(1).max(120)).max(10),
+    reviewed: z.boolean(),
+    schemaVersion: z.literal(1),
+    skuName: z.string().min(1).max(500),
+    status: z.enum(["draft", "active", "superseded", "withdrawn"]),
+    version: z.number().int().min(1),
+  })
+  .strict();
+
+export const AdminSupermarketMatchingRuleListSchema = z
+  .object({
+    items: z.array(AdminSupermarketMatchingRuleSummarySchema).max(50),
+    nextCursor: UuidSchema.nullable(),
+    schemaVersion: z.literal(1),
+  })
+  .strict();
+
+export const AdminSupermarketMatchingRuleReviewRequestSchema = z
+  .object({
+    expectedVersion: z.number().int().min(1),
+    matchState: z.enum(["exact", "allowed", "excluded"]),
+    schemaVersion: z.literal(1),
+  })
+  .strict();
+
+export const AdminSupermarketMatchingRuleReviewAckSchema = z
+  .object({
+    auditClosure: z.enum(["closed", "pending"]).optional(),
+    matchState: z.enum(["exact", "allowed", "excluded"]),
+    matchingRuleId: UuidSchema,
+    schemaVersion: z.literal(1),
+    status: z.literal("draft"),
+    version: z.number().int().min(1),
+  })
+  .strict();
+
+export const AdminCatalogPublishRequestSchema = z
+  .object({
+    expectedCatalogHash: Sha256HexSchema,
+    expectedCoverageHash: Sha256HexSchema,
+    expectedSeedHash: Sha256HexSchema,
+    expectedVersion: z.number().int().min(1),
+    schemaVersion: z.literal(1),
+    sourceUseDecision: z.enum([
+      "development_approved",
+      "development_restricted_approved",
+    ]),
+  })
+  .strict();
+
+export const AdminCatalogPublicationHideRequestSchema = z
+  .object({
+    expectedVersion: z.number().int().min(1),
+    schemaVersion: z.literal(1),
+  })
+  .strict();
+
+export const AdminCatalogPublicationMutationAckSchema = z
+  .object({
+    auditClosure: z.enum(["closed", "pending"]).optional(),
+    catalogPublicationId: UuidSchema,
+    chain: z.enum(SUPERMARKET_CHAINS),
+    schemaVersion: z.literal(1),
+    status: z.enum(["active", "hidden"]),
+    version: z.number().int().min(1),
+  })
+  .strict();
+
 export const LedgerReceiptSchema = z
   .object({
     environment: z.enum(["development", "local", "production"]),
@@ -57,6 +225,22 @@ export const LedgerReceiptSchema = z
   .strict();
 
 export type AdminMutationRequest = z.infer<typeof AdminMutationRequestSchema>;
+export type AdminCatalogRevisionSummary = z.infer<
+  typeof AdminCatalogRevisionSummarySchema
+>;
+export type AdminCatalogRevisionList = z.infer<typeof AdminCatalogRevisionListSchema>;
+export type AdminCatalogMatchCandidatesAck = z.infer<
+  typeof AdminCatalogMatchCandidatesAckSchema
+>;
+export type AdminSupermarketMatchingRuleList = z.infer<
+  typeof AdminSupermarketMatchingRuleListSchema
+>;
+export type AdminSupermarketMatchingRuleReviewAck = z.infer<
+  typeof AdminSupermarketMatchingRuleReviewAckSchema
+>;
+export type AdminCatalogPublicationMutationAck = z.infer<
+  typeof AdminCatalogPublicationMutationAckSchema
+>;
 export type AdminProfileSummary = z.infer<typeof AdminProfileSummarySchema>;
 export type AdminImpersonationContext = z.infer<typeof AdminImpersonationContextSchema>;
 export type LedgerReceipt = z.infer<typeof LedgerReceiptSchema>;

@@ -251,9 +251,13 @@ function parseAction(value: unknown): AdminAuditAction {
     value !== "barcode_correction_approve" &&
     value !== "barcode_correction_correct" &&
     value !== "barcode_correction_reject" &&
+    value !== "catalog_match_candidates_generate" &&
+    value !== "catalog_publication_hide" &&
+    value !== "catalog_revision_publish" &&
     value !== "impersonation_start" &&
     value !== "impersonation_end" &&
-    value !== "matching_rule_activate"
+    value !== "matching_rule_activate" &&
+    value !== "matching_rule_review"
   ) {
     throw new Error("invalid_action");
   }
@@ -264,6 +268,8 @@ function parseTargetType(value: unknown): AdminAuditTargetType {
   if (
     value !== "barcode_correction" &&
     value !== "commercial_product_revision" &&
+    value !== "catalog_publication" &&
+    value !== "catalog_revision" &&
     value !== "impersonation_session" &&
     value !== "product_matching_rule" &&
     value !== "profile"

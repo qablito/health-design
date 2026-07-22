@@ -1,6 +1,7 @@
 {
   "imports": {
     "@health-design/catalog/products": "../../../packages/catalog/src/products/index.ts",
+    "@health-design/catalog/supermarkets": "../../../packages/catalog/src/supermarkets/index.ts",
     "@health-design/contracts": "../_shared/generated/contracts.js",
     "@health-design/domain": "../../../packages/domain/src/index.ts",
     "@health-design/engine": "../../../packages/engine/src/index.ts",

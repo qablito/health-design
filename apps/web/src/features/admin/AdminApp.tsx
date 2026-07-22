@@ -7,6 +7,7 @@ import {
   type AdminProfileSummary,
 } from "./admin-client";
 import { ProductReviewPanel } from "./ProductReviewPanel";
+import { CatalogPublicationPanel } from "./CatalogPublicationPanel";
 import { supabaseAuth } from "../../services/supabase";
 import { clearPublicAssetCaches } from "../../services/client-cache";
 import { requestTurnstileToken } from "../../services/turnstile";
@@ -302,6 +303,7 @@ export function AdminApp() {
 
       {stage === "ready" ? (
         <>
+          <CatalogPublicationPanel execute={executeOperation} />
           <ProductReviewPanel execute={executeOperation} />
           <section aria-labelledby="admin-profiles-title" className="admin-card">
             <h2 id="admin-profiles-title">Perfiles</h2>
