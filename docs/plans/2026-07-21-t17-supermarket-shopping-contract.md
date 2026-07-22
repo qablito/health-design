@@ -293,7 +293,7 @@ grasas/frutos secos/semillas. El mínimo de grupo es siempre
 T17 se implementará como un módulo de dominio profundo, puro y determinista:
 
 ```ts
-resolveShopping(input: ShoppingResolutionInput): ShoppingSnapshot
+resolveShopping(input: ShoppingResolutionInput): Promise<ShoppingSnapshot>
 ```
 
 ### 6.1 Responsabilidades

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ShoppingResolutionInputSchema,
+  ShoppingSnapshotResponseSchema,
   type CatalogSkuProjection,
   type ShoppingResolutionInput,
 } from "@health-design/contracts";
@@ -155,7 +156,6 @@ function input({
       ],
       resolverVersion: SHOPPING_RESOLVER_VERSION,
       revision: 1,
-      status: "active",
       supersedesId: null,
     },
     schemaVersion: 1,
@@ -163,16 +163,61 @@ function input({
       {
         amountG,
         canonicalFoodKey: "food:chicken-breast-raw",
-        ediblePart: "meat_without_skin",
-        foodState: "raw",
         name: "Pechuga de pollo",
-        purchaseForm: "fresh",
+        purchaseContext: {
+          ediblePart: "meat_without_skin",
+          foodState: "raw",
+          purchaseForm: "fresh",
+        },
       },
     ],
   });
 }
 
 describe("resolver puro de compra T17C.1", () => {
+  it("expone la versión reconciliada y no mezcla lifecycle en el snapshot", async () => {
+    const snapshot = await resolveShopping(input());
+    expect(SHOPPING_RESOLVER_VERSION).toBe("shopping-resolver-v2");
+    expect(snapshot).not.toHaveProperty("status");
+    expect(
+      ShoppingSnapshotResponseSchema.parse({
+        lifecycle: { archivedAt: null, status: "active" },
+        schemaVersion: 1,
+        snapshot,
+      }),
+    ).toMatchObject({ lifecycle: { archivedAt: null, status: "active" } });
+    expect(
+      ShoppingSnapshotResponseSchema.safeParse({
+        lifecycle: {
+          archivedAt: "2026-07-22T12:00:00.000Z",
+          status: "active",
+        },
+        schemaVersion: 1,
+        snapshot,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("conserva una línea sin contexto de compra como pendiente explícita", async () => {
+    const candidate = input();
+    const snapshot = await resolveShopping(
+      ShoppingResolutionInputSchema.parse({
+        ...candidate,
+        shoppingList: candidate.shoppingList.map((line) => ({
+          ...line,
+          purchaseContext: null,
+        })),
+      }),
+    );
+    expect(snapshot.items[0]).toMatchObject({
+      amountG: "1000",
+      name: "Pechuga de pollo",
+      selected: null,
+      state: "no_confirmed_product",
+      uncertainties: ["shopping_purchase_context_missing"],
+    });
+  });
+
   it("calcula envases completos, coste y remanente con decimal exacto", async () => {
     const snapshot = await resolveShopping(input());
     expect(snapshot.items[0]?.selected).toMatchObject({

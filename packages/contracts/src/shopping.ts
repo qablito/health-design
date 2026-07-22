@@ -354,10 +354,15 @@ const ShoppingListLineSchema = z
   .object({
     amountG: CanonicalPositiveDecimalSchema,
     canonicalFoodKey: FoodKeySchema,
-    ediblePart: TokenSchema,
-    foodState: FoodStateSchema,
     name: LimitedTextSchema(240),
-    purchaseForm: PurchaseFormSchema,
+    purchaseContext: z
+      .object({
+        ediblePart: TokenSchema,
+        foodState: FoodStateSchema,
+        purchaseForm: PurchaseFormSchema,
+      })
+      .strict()
+      .nullable(),
   })
   .strict();
 
@@ -405,7 +410,6 @@ const ShoppingResolutionMetadataSchema = z
       .max(SHOPPING_MAX_LINES),
     resolverVersion: TokenSchema,
     revision: z.number().int().min(1),
-    status: z.enum(["active", "archived"]),
     supersedesId: NullableUuidSchema,
   })
   .strict();
@@ -579,6 +583,7 @@ const ShoppingTotalsSchema = z.discriminatedUnion("kind", [
 
 const ShoppingComparisonSchema = z
   .object({
+    basis: z.literal("automatic_equivalent"),
     baselineChains: z.array(SupermarketChainSchema).min(1).max(1),
     baselineSubtotalEur: CanonicalUnsignedDecimalSchema,
     candidateChains: z
@@ -633,7 +638,6 @@ export const ShoppingSnapshotSchema = z
     resolverVersion: TokenSchema,
     revision: z.number().int().min(1),
     schemaVersion: z.literal(1),
-    status: z.enum(["active", "archived"]),
     supersedesId: NullableUuidSchema,
     totals: ShoppingTotalsSchema,
   })
@@ -673,26 +677,44 @@ export const ShoppingCreateRequestSchema = z
   })
   .strict();
 
-export const ShoppingLeftoverRequestSchema = z
+const ShoppingLeftoverSetRequestSchema = z
   .object({
+    action: z.literal("set"),
     canonicalFoodKey: FoodKeySchema,
     declaredMeasure: SaleMeasureSchema,
     expectedVersion: z.number().int().min(1),
     schemaVersion: z.literal(1),
-    skuRevisionId: z.uuid().optional(),
+    skuId: z.uuid().optional(),
   })
   .strict()
   .superRefine((value, context) => {
-    if (
-      value.declaredMeasure.dimension !== "mass" &&
-      value.skuRevisionId === undefined
-    ) {
+    if (value.declaredMeasure.dimension !== "mass" && value.skuId === undefined) {
       context.addIssue({
         code: "custom",
-        message: "leftover_sku_revision_required_for_equivalence",
+        message: "leftover_sku_required_for_equivalence",
+      });
+    }
+    if (value.declaredMeasure.dimension === "mass" && value.skuId !== undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "leftover_mass_sku_forbidden",
       });
     }
   });
+
+const ShoppingLeftoverClearRequestSchema = z
+  .object({
+    action: z.literal("clear"),
+    canonicalFoodKey: FoodKeySchema,
+    expectedVersion: z.number().int().min(1),
+    schemaVersion: z.literal(1),
+  })
+  .strict();
+
+export const ShoppingLeftoverRequestSchema = z.discriminatedUnion("action", [
+  ShoppingLeftoverSetRequestSchema,
+  ShoppingLeftoverClearRequestSchema,
+]);
 
 export const ShoppingProductSelectionRequestSchema = z
   .object({
@@ -720,6 +742,54 @@ export const ShoppingMutationAckSchema = z
   })
   .strict();
 
+export const ShoppingLegacyPreferenceHintSchema = z
+  .object({
+    compatible: z.boolean(),
+    value: LimitedTextSchema(240),
+  })
+  .strict();
+
+export const ShoppingPreferenceReadResponseSchema = z
+  .object({
+    legacyHint: ShoppingLegacyPreferenceHintSchema.nullable(),
+    preference: ShoppingPreferenceRevisionSchema.nullable(),
+    schemaVersion: z.literal(1),
+  })
+  .strict();
+
+export const ShoppingCatalogPageSchema = z
+  .object({
+    chain: SupermarketChainSchema,
+    items: z.array(CatalogSkuProjectionSchema).max(100),
+    nextCursor: LimitedTextSchema(2_048).nullable(),
+    publicationId: z.uuid(),
+    schemaVersion: z.literal(1),
+  })
+  .strict();
+
+const ShoppingSnapshotLifecycleSchema = z
+  .object({
+    archivedAt: z.iso.datetime({ offset: true }).nullable(),
+    status: z.enum(["active", "archived"]),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.status === "archived") !== (value.archivedAt !== null)) {
+      context.addIssue({
+        code: "custom",
+        message: "shopping_snapshot_lifecycle_mismatch",
+      });
+    }
+  });
+
+export const ShoppingSnapshotResponseSchema = z
+  .object({
+    lifecycle: ShoppingSnapshotLifecycleSchema,
+    schemaVersion: z.literal(1),
+    snapshot: ShoppingSnapshotSchema,
+  })
+  .strict();
+
 export type SupermarketChain = (typeof SUPERMARKET_CHAINS)[number];
 export type ShoppingMarket = (typeof SHOPPING_MARKETS)[number];
 export type MatchState = (typeof SHOPPING_MATCH_STATES)[number];
@@ -744,3 +814,13 @@ export type ShoppingProductSelectionRequest = z.infer<
 >;
 export type ShoppingPreferenceAck = z.infer<typeof ShoppingPreferenceAckSchema>;
 export type ShoppingMutationAck = z.infer<typeof ShoppingMutationAckSchema>;
+export type ShoppingLegacyPreferenceHint = z.infer<
+  typeof ShoppingLegacyPreferenceHintSchema
+>;
+export type ShoppingPreferenceReadResponse = z.infer<
+  typeof ShoppingPreferenceReadResponseSchema
+>;
+export type ShoppingCatalogPage = z.infer<typeof ShoppingCatalogPageSchema>;
+export type ShoppingSnapshotResponse = z.infer<
+  typeof ShoppingSnapshotResponseSchema
+>;

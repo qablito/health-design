@@ -4,7 +4,7 @@
 
 **Objetivo:** Convertir la lista nutricional semanal de una versión inmutable del plan en una cesta orientativa, reproducible y opcional para Mercadona, DIA y ALDI, con envases, precio base, remanente, comparación multiestablecimiento y equivalencia en pantalla/PDF/XLSX/impresión, sin alterar nunca la nutrición.
 
-**Arquitectura:** T17-P0 amplía por el pipeline oficial únicamente el catálogo canónico necesario para la cesta 60 + 20. T17A importa catálogos externos a cuarentena con evidencia privada e inmutable. T17B persiste y publica revisiones y matching manuales. T17C añade un único módulo puro y profundo `resolveShopping(input): ShoppingSnapshot`. T17D conecta ese módulo a Supabase y a una UI fina. T17E proyecta el mismo snapshot en todos los formatos y valida desarrollo remoto. PostgreSQL y los adaptadores autorizan y persisten; el motor no realiza I/O.
+**Arquitectura:** T17-P0 amplía por el pipeline oficial únicamente el catálogo canónico necesario para la cesta 60 + 20. T17A importa catálogos externos a cuarentena con evidencia privada e inmutable. T17B persiste y publica revisiones y matching manuales. T17C añade un único módulo puro y profundo `resolveShopping(input): Promise<ShoppingSnapshot>`. T17D conecta ese módulo a Supabase y a una UI fina. T17E proyecta el mismo snapshot en todos los formatos y valida desarrollo remoto. PostgreSQL y los adaptadores autorizan y persisten; el motor no realiza I/O.
 
 **Stack técnico:** TypeScript 6, Zod 4, React 19/Vite, Vitest 4, Playwright 1.58, PostgreSQL 17/Supabase, Deno 2 Edge Functions, Cloudflare R2 mediante Wrangler, `pdf-lib@1.17.1` y SheetJS CE `0.20.3` ya fijados. No se añade ninguna dependencia.
 
@@ -704,7 +704,7 @@ git commit -m "feat(admin): review and publish supermarket catalogs"
 **Paso 1: escribir pruebas RED de la función pública única**
 
 ```ts
-resolveShopping(input: ShoppingResolutionInput): ShoppingSnapshot
+resolveShopping(input: ShoppingResolutionInput): Promise<ShoppingSnapshot>
 ```
 
 Comprobar:

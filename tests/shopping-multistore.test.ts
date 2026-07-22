@@ -22,10 +22,12 @@ function line(key: string, name: string, amountG = "1000"): ShoppingLine {
   return {
     amountG,
     canonicalFoodKey: `food:${key}`,
-    ediblePart: "whole_edible_product",
-    foodState: "raw",
     name,
-    purchaseForm: "fresh",
+    purchaseContext: {
+      ediblePart: "whole_edible_product",
+      foodState: "raw",
+      purchaseForm: "fresh",
+    },
   };
 }
 
@@ -43,9 +45,9 @@ function catalogItem(
   return {
     canonicalFoodKey: food.canonicalFoodKey,
     matchState: "exact",
-    matchedEdiblePart: food.ediblePart,
-    matchedFoodState: food.foodState,
-    matchedPurchaseForm: food.purchaseForm,
+    matchedEdiblePart: food.purchaseContext!.ediblePart,
+    matchedFoodState: food.purchaseContext!.foodState,
+    matchedPurchaseForm: food.purchaseContext!.purchaseForm,
     projection: {
       basePriceEur,
       categoryPath: ["Fixture"],
@@ -69,7 +71,7 @@ function catalogItem(
         equivalentEdibleMassG: null,
         saleMeasure: { dimension: "mass", quantity: packageG, unit: "g" },
       },
-      purchaseForm: food.purchaseForm,
+      purchaseForm: food.purchaseContext!.purchaseForm,
       schemaVersion: 1,
       skuId: uuid(sku),
       usability: "calculable",
@@ -81,6 +83,7 @@ function input({
   catalogItems,
   comparedChains = [],
   lines,
+  manualSelections = [],
   mode = "single",
   preferredChain = "mercadona",
   sorting = "name_asc",
@@ -88,6 +91,7 @@ function input({
   catalogItems: CatalogItem[];
   comparedChains?: SupermarketChain[];
   lines: ShoppingLine[];
+  manualSelections?: ShoppingResolutionInput["manualSelections"];
   mode?: "single" | "multistore";
   preferredChain?: SupermarketChain;
   sorting?: ShoppingSort;
@@ -97,7 +101,7 @@ function input({
     catalogItems,
     catalogPublicationIds: [uuid(3), uuid(4), uuid(5)],
     leftovers: [],
-    manualSelections: [],
+    manualSelections,
     planVersionId: uuid(6),
     preferenceRevision: {
       comparedChains,
@@ -127,7 +131,6 @@ function input({
         })),
       resolverVersion: SHOPPING_RESOLVER_VERSION,
       revision: 1,
-      status: "active",
       supersedesId: null,
     },
     schemaVersion: 1,
@@ -136,6 +139,32 @@ function input({
 }
 
 describe("tienda única y comparación T17C.2", () => {
+  it("compara universos automáticos equivalentes sin sustituir la selección manual", async () => {
+    const apple = line("apple", "Manzana");
+    const automatic = catalogItem(apple, "mercadona", "2", 15);
+    const manual = catalogItem(apple, "mercadona", "4", 16);
+    const dia = catalogItem(apple, "dia", "1.5", 17);
+    const snapshot = await resolveShopping(
+      input({
+        catalogItems: [manual, dia, automatic],
+        lines: [apple],
+        manualSelections: [
+          { canonicalFoodKey: apple.canonicalFoodKey, skuId: manual.projection.skuId },
+        ],
+      }),
+    );
+
+    expect(snapshot.items[0]?.selected?.projection.skuId).toBe(
+      manual.projection.skuId,
+    );
+    expect(snapshot.comparison).toMatchObject({
+      basis: "automatic_equivalent",
+      baselineSubtotalEur: "4",
+      candidateSubtotalEur: "3",
+      savingsEur: "1",
+    });
+  });
+
   it("conserva la tienda habitual y avisa de un ahorro completo de 0,01 EUR", async () => {
     const apple = line("apple", "Manzana");
     const snapshot = await resolveShopping(
@@ -155,6 +184,7 @@ describe("tienda única y comparación T17C.2", () => {
     expect(snapshot.items[0]?.selected?.projection.chain).toBe("mercadona");
     expect(snapshot.totals).toMatchObject({ estimatedTotalEur: "6.52" });
     expect(snapshot.comparison).toEqual({
+      basis: "automatic_equivalent",
       baselineChains: ["mercadona"],
       baselineSubtotalEur: "6.52",
       candidateChains: ["dia"],
@@ -187,6 +217,7 @@ describe("tienda única y comparación T17C.2", () => {
     ]);
     expect(snapshot.items[0]?.selected?.projection.chain).toBe("mercadona");
     expect(snapshot.comparison).toEqual({
+      basis: "automatic_equivalent",
       baselineChains: ["mercadona"],
       baselineSubtotalEur: "8",
       candidateChains: ["dia"],
@@ -248,6 +279,7 @@ describe("multiestablecimiento T17C.2", () => {
     ).toBe(true);
     expect(snapshot.totals).toMatchObject({ estimatedTotalEur: "16" });
     expect(snapshot.comparison).toEqual({
+      basis: "automatic_equivalent",
       baselineChains: ["mercadona"],
       baselineSubtotalEur: "18",
       candidateChains: ["dia", "mercadona"],

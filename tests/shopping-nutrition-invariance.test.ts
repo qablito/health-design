@@ -167,7 +167,6 @@ describe("invariancia nutricional T17C", () => {
         ],
         resolverVersion: SHOPPING_RESOLVER_VERSION,
         revision: 1,
-        status: "active",
         supersedesId: null,
       },
       schemaVersion: 1,
@@ -175,10 +174,12 @@ describe("invariancia nutricional T17C", () => {
         {
           amountG: food.amountG,
           canonicalFoodKey: food.canonicalFoodKey,
-          ediblePart: "whole_edible_product",
-          foodState: "raw",
           name: food.name,
-          purchaseForm: "fresh",
+          purchaseContext: {
+            ediblePart: "whole_edible_product",
+            foodState: "raw",
+            purchaseForm: "fresh",
+          },
         },
       ],
     } satisfies ShoppingResolutionInput;
