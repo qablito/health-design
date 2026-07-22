@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./nutrition": "./src/modules/nutrition/index.ts"
+    "./nutrition": "./src/modules/nutrition/index.ts",
+    "./shopping": "./src/shopping/index.ts"
   },
   "dependencies": {
     "@health-design/contracts": "workspace:*",

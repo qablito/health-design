@@ -60,6 +60,7 @@ const ShoppingMarketSchema = z.enum(SHOPPING_MARKETS);
 const MatchStateSchema = z.enum(SHOPPING_MATCH_STATES);
 const ShoppingSortSchema = z.enum(SHOPPING_SORTS);
 const PurchaseFormSchema = z.enum(SHOPPING_PURCHASE_FORMS);
+const FoodStateSchema = z.enum(["raw", "cooked", "unspecified"]);
 
 const MassMeasureSchema = z
   .object({
@@ -353,7 +354,8 @@ const ShoppingListLineSchema = z
   .object({
     amountG: CanonicalPositiveDecimalSchema,
     canonicalFoodKey: FoodKeySchema,
-    foodState: z.enum(["raw", "cooked", "unspecified"]),
+    ediblePart: TokenSchema,
+    foodState: FoodStateSchema,
     name: LimitedTextSchema(240),
     purchaseForm: PurchaseFormSchema,
   })
@@ -363,6 +365,9 @@ const ShoppingCatalogItemSchema = z
   .object({
     canonicalFoodKey: FoodKeySchema,
     matchState: MatchStateSchema,
+    matchedEdiblePart: TokenSchema,
+    matchedFoodState: FoodStateSchema,
+    matchedPurchaseForm: PurchaseFormSchema,
     projection: CatalogSkuProjectionSchema,
   })
   .strict();
@@ -382,6 +387,29 @@ const ManualShoppingSelectionSchema = z
   })
   .strict();
 
+const ShoppingResolutionMetadataSchema = z
+  .object({
+    createdAt: z.iso.datetime({ offset: true }),
+    createdBy: z.uuid(),
+    id: z.uuid(),
+    itemIds: z
+      .array(
+        z
+          .object({
+            canonicalFoodKey: FoodKeySchema,
+            shoppingItemId: z.uuid(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(SHOPPING_MAX_LINES),
+    resolverVersion: TokenSchema,
+    revision: z.number().int().min(1),
+    status: z.enum(["active", "archived"]),
+    supersedesId: NullableUuidSchema,
+  })
+  .strict();
+
 export const ShoppingResolutionInputSchema = z
   .object({
     basketSeedRevisionId: z.uuid(),
@@ -392,6 +420,7 @@ export const ShoppingResolutionInputSchema = z
     planVersionId: z.uuid(),
     preferenceRevision: ShoppingPreferenceRevisionSchema,
     profileId: z.uuid(),
+    resolutionMetadata: ShoppingResolutionMetadataSchema,
     schemaVersion: z.literal(1),
     shoppingList: z.array(ShoppingListLineSchema).min(1).max(SHOPPING_MAX_LINES),
   })
@@ -415,6 +444,16 @@ export const ShoppingResolutionInputSchema = z
         value.catalogItems.map(({ projection }) => projection.skuId),
         "shopping_catalog_skus_not_unique",
       ],
+      [
+        value.resolutionMetadata.itemIds.map(
+          ({ canonicalFoodKey }) => canonicalFoodKey,
+        ),
+        "shopping_item_metadata_keys_not_unique",
+      ],
+      [
+        value.resolutionMetadata.itemIds.map(({ shoppingItemId }) => shoppingItemId),
+        "shopping_item_metadata_ids_not_unique",
+      ],
     ];
     for (const [values, message] of uniquenessChecks) {
       if (new Set(values).size !== values.length) {
@@ -423,6 +462,17 @@ export const ShoppingResolutionInputSchema = z
     }
     if (value.preferenceRevision.profileId !== value.profileId) {
       context.addIssue({ code: "custom", message: "shopping_profile_mismatch" });
+    }
+    const lineKeys = new Set(
+      value.shoppingList.map(({ canonicalFoodKey }) => canonicalFoodKey),
+    );
+    if (
+      value.resolutionMetadata.itemIds.length !== lineKeys.size ||
+      value.resolutionMetadata.itemIds.some(
+        ({ canonicalFoodKey }) => !lineKeys.has(canonicalFoodKey),
+      )
+    ) {
+      context.addIssue({ code: "custom", message: "shopping_item_metadata_mismatch" });
     }
     const itemCounts = new Map<string, number>();
     for (const item of value.catalogItems) {
@@ -438,7 +488,7 @@ export const ShoppingResolutionInputSchema = z
 const ShoppingSelectionSchema = z
   .object({
     estimatedRemainderG: CanonicalUnsignedDecimalSchema,
-    packageCount: CanonicalPositiveDecimalSchema.refine(
+    packageCount: CanonicalUnsignedDecimalSchema.refine(
       (value) => !value.includes("."),
       "package_count_must_be_integer",
     ),
@@ -453,9 +503,26 @@ const ShoppingSelectionSchema = z
     }
   });
 
+const ShoppingAlternativeSchema = z.union([
+  z
+    .object({
+      selection: ShoppingSelectionSchema,
+      state: z.literal("resolved"),
+      uncertainties: z.array(TokenSchema).max(20),
+    })
+    .strict(),
+  z
+    .object({
+      projection: CatalogSkuProjectionSchema,
+      state: z.enum(["price_unavailable", "package_unconfirmed"]),
+      uncertainties: z.array(TokenSchema).max(20),
+    })
+    .strict(),
+]);
+
 const ShoppingSnapshotItemSchema = z
   .object({
-    alternatives: z.array(CatalogSkuProjectionSchema).max(SHOPPING_MAX_ALTERNATIVES),
+    alternatives: z.array(ShoppingAlternativeSchema).max(SHOPPING_MAX_ALTERNATIVES),
     amountG: CanonicalPositiveDecimalSchema,
     canonicalFoodKey: FoodKeySchema,
     name: LimitedTextSchema(240),
@@ -476,10 +543,83 @@ const ShoppingSnapshotItemSchema = z
     }
   });
 
+const ShoppingSnapshotPreferenceSchema = z
+  .object(ShoppingPreferenceShape)
+  .strict()
+  .superRefine(validatePreference);
+
+const ShoppingCoverageSchema = z
+  .object({
+    resolvedItems: z.number().int().min(0).max(SHOPPING_MAX_LINES),
+    totalItems: z.number().int().min(1).max(SHOPPING_MAX_LINES),
+  })
+  .strict()
+  .refine((value) => value.resolvedItems <= value.totalItems, "coverage_invalid");
+
+const ShoppingTotalsSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      coverage: ShoppingCoverageSchema,
+      estimatedTotalEur: CanonicalUnsignedDecimalSchema,
+      kind: z.literal("complete"),
+      resolvedItems: z.number().int().min(1).max(SHOPPING_MAX_LINES),
+      unresolvedItems: z.literal(0),
+    })
+    .strict(),
+  z
+    .object({
+      coverage: ShoppingCoverageSchema,
+      kind: z.literal("partial"),
+      partialSubtotalEur: CanonicalUnsignedDecimalSchema,
+      resolvedItems: z.number().int().min(0).max(SHOPPING_MAX_LINES),
+      unresolvedItems: z.number().int().min(1).max(SHOPPING_MAX_LINES),
+    })
+    .strict(),
+]);
+
+const ShoppingComparisonSchema = z
+  .object({
+    baselineChains: z.array(SupermarketChainSchema).min(1).max(1),
+    baselineSubtotalEur: CanonicalUnsignedDecimalSchema,
+    candidateChains: z
+      .array(SupermarketChainSchema)
+      .min(1)
+      .max(SUPERMARKET_CHAINS.length),
+    candidateKind: z.enum(["chain", "multistore"]),
+    candidateSubtotalEur: CanonicalUnsignedDecimalSchema,
+    comparableItems: z.number().int().min(1).max(SHOPPING_MAX_LINES),
+    savingsEur: CanonicalPositiveDecimalSchema.nullable(),
+    scope: z.enum(["complete", "partial"]),
+    totalItems: z.number().int().min(1).max(SHOPPING_MAX_LINES),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.candidateChains).size !== value.candidateChains.length) {
+      context.addIssue({ code: "custom", message: "comparison_chains_not_unique" });
+    }
+    if (
+      (value.candidateKind === "chain" && value.candidateChains.length !== 1) ||
+      (value.candidateKind === "multistore" && value.candidateChains.length < 2)
+    ) {
+      context.addIssue({ code: "custom", message: "comparison_candidate_invalid" });
+    }
+    if (
+      value.comparableItems > value.totalItems ||
+      (value.scope === "complete" && value.comparableItems !== value.totalItems) ||
+      (value.scope === "partial" && value.comparableItems >= value.totalItems)
+    ) {
+      context.addIssue({ code: "custom", message: "comparison_scope_invalid" });
+    }
+    if ((value.scope === "complete") !== (value.savingsEur !== null)) {
+      context.addIssue({ code: "custom", message: "comparison_savings_invalid" });
+    }
+  });
+
 export const ShoppingSnapshotSchema = z
   .object({
     basketSeedRevisionId: z.uuid(),
     catalogPublicationIds: z.array(z.uuid()).min(1).max(3),
+    comparison: ShoppingComparisonSchema.nullable(),
     completeness: z.enum(["complete", "partial"]),
     createdAt: z.iso.datetime({ offset: true }),
     createdBy: z.uuid(),
@@ -487,6 +627,7 @@ export const ShoppingSnapshotSchema = z
     inputDigest: Sha256Schema,
     items: z.array(ShoppingSnapshotItemSchema).min(1).max(SHOPPING_MAX_LINES),
     planVersionId: z.uuid(),
+    preference: ShoppingSnapshotPreferenceSchema,
     preferenceRevisionId: z.uuid(),
     profileId: z.uuid(),
     resolverVersion: TokenSchema,
@@ -494,13 +635,7 @@ export const ShoppingSnapshotSchema = z
     schemaVersion: z.literal(1),
     status: z.enum(["active", "archived"]),
     supersedesId: NullableUuidSchema,
-    totals: z
-      .object({
-        resolvedItems: z.number().int().min(0).max(SHOPPING_MAX_LINES),
-        subtotalEur: CanonicalUnsignedDecimalSchema,
-        unresolvedItems: z.number().int().min(0).max(SHOPPING_MAX_LINES),
-      })
-      .strict(),
+    totals: ShoppingTotalsSchema,
   })
   .strict()
   .superRefine((value, context) => {
@@ -518,6 +653,16 @@ export const ShoppingSnapshotSchema = z
     }
     if ((value.completeness === "complete") !== (unresolved === 0)) {
       context.addIssue({ code: "custom", message: "shopping_completeness_mismatch" });
+    }
+    if (
+      value.totals.coverage.resolvedItems !== resolved ||
+      value.totals.coverage.totalItems !== value.items.length ||
+      (value.completeness === "complete") !== (value.totals.kind === "complete")
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "shopping_totals_coverage_mismatch",
+      });
     }
   });
 

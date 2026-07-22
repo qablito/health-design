@@ -678,6 +678,20 @@ git commit -m "feat(admin): review and publish supermarket catalogs"
 
 # T17C — Resolver puro de compra
 
+> **Estado 2026-07-22:** `T17C_LOCAL_PASS` en la rama
+> `codex/task-17c-shopping-resolver`. Los commits locales `f08b9f0`, `8efefca`,
+> `854eedb`, `5045182`, `5572ed6` y `c70531d` alinean los contratos e implementan
+> `resolveShopping` como resolver puro, asíncrono, decimal, determinista e inmutable,
+> con modos mono/multiestablecimiento, cestas parciales, elección manual y orden estable.
+> Los archivos principales son `packages/contracts/src/shopping.ts`,
+> `packages/engine/src/shopping/index.ts`, el subpath del paquete y las cuatro suites
+> T17C. `edge:generate`, `edge:check`, contratos y suites T17C pasaron 45 pruebas;
+> `CI=true pnpm verify` pasó 689 pruebas unitarias, 4 de navegador, formato, lint,
+> tipos y build; `git diff --check` pasó. La revisión independiente terminó sin
+> hallazgos críticos, altos ni medios en el delta T17C. No se iniciaron T17D, T17E,
+> cambios remotos ni producción; no se ejecutaron pruebas de base de datos porque T17C
+> no modifica SQL.
+
 ## Tarea C.1: Implementar opciones, envases y desempates
 
 **Archivos:**
