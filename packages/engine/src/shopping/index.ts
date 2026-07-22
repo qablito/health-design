@@ -156,12 +156,26 @@ function chooseBest(options: readonly CalculatedOption[]): CalculatedOption {
 }
 
 function rankCalculated(options: readonly CalculatedOption[]): CalculatedOption[] {
-  const remaining = [...options];
+  const dimensionCounts = new Map<string, number>();
+  for (const { selection } of options) {
+    const dimension = selection.projection.normalizedPrice?.dimension;
+    if (dimension !== undefined) {
+      dimensionCounts.set(dimension, (dimensionCounts.get(dimension) ?? 0) + 1);
+    }
+  }
+  const comparable = options.filter(({ selection }) => {
+    const dimension = selection.projection.normalizedPrice?.dimension;
+    return dimension !== undefined && (dimensionCounts.get(dimension) ?? 0) > 1;
+  });
+  const incomparable = options.filter((option) => !comparable.includes(option));
   const ranked: CalculatedOption[] = [];
-  while (remaining.length > 0) {
-    const best = chooseBest(remaining);
-    ranked.push(best);
-    remaining.splice(remaining.indexOf(best), 1);
+  for (const group of [comparable, incomparable]) {
+    const remaining = [...group];
+    while (remaining.length > 0) {
+      const best = chooseBest(remaining);
+      ranked.push(best);
+      remaining.splice(remaining.indexOf(best), 1);
+    }
   }
   return ranked;
 }
@@ -206,8 +220,8 @@ function alternativesFor(
       const rightProjection =
         right.state === "resolved" ? right.selection.projection : right.projection;
       return compareText(
-        `${leftProjection.market}\u0000${leftProjection.chain}\u0000${leftProjection.externalSku}`,
-        `${rightProjection.market}\u0000${rightProjection.chain}\u0000${rightProjection.externalSku}`,
+        `${leftProjection.market}\u0000${leftProjection.chain}\u0000${leftProjection.externalSku}\u0000${leftProjection.skuId}`,
+        `${rightProjection.market}\u0000${rightProjection.chain}\u0000${rightProjection.externalSku}\u0000${rightProjection.skuId}`,
       );
     });
   return [...resolved, ...pending].slice(0, SHOPPING_MAX_ALTERNATIVES);

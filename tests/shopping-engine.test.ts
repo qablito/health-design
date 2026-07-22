@@ -400,6 +400,81 @@ describe("resolver puro de compra T17C.1", () => {
     expect(snapshot.items[0]?.selected?.projection.externalSku).toBe("sku-a-mass");
   });
 
+  it("ordena alternativas normalizadas comparables antes de las incomparables", async () => {
+    const selected = catalogItem({
+      basePriceEur: "2",
+      externalSku: "selected",
+      normalizedPrice: "4",
+      sku: 44,
+    });
+    const massA = catalogItem({
+      basePriceEur: "5",
+      externalSku: "z-mass",
+      normalizedPrice: "5",
+      package: massPackage("1000"),
+      sku: 45,
+    });
+    const massB = catalogItem({
+      basePriceEur: "5",
+      externalSku: "y-mass",
+      normalizedPrice: "6",
+      package: massPackage("1000"),
+      sku: 46,
+    });
+    const volume = catalogItem({
+      basePriceEur: "5",
+      externalSku: "a-volume",
+      normalizedPrice: "1",
+      package: {
+        equivalenceEvidenceRef: "Equivalencia confirmada",
+        equivalentEdibleMassG: "1000",
+        saleMeasure: { dimension: "volume", quantity: "1000", unit: "ml" },
+      },
+      sku: 47,
+    });
+    const withoutNormalized = catalogItem({
+      basePriceEur: "5",
+      externalSku: "b-without-normalized",
+      normalizedPrice: null,
+      package: massPackage("1000"),
+      sku: 48,
+    });
+
+    const snapshot = await resolveShopping(
+      input({ catalogItems: [volume, massB, withoutNormalized, selected, massA] }),
+    );
+    expect(
+      snapshot.items[0]?.alternatives.map((alternative) =>
+        alternative.state === "resolved"
+          ? alternative.selection.projection.externalSku
+          : alternative.projection.externalSku,
+      ),
+    ).toEqual(["z-mass", "y-mass", "a-volume", "b-without-normalized"]);
+  });
+
+  it("desempata SKU pendientes equivalentes mediante skuId", async () => {
+    const higher = catalogItem({
+      externalSku: "same-external-sku",
+      normalizedPrice: null,
+      package: null,
+      sku: 71,
+    });
+    const lower = catalogItem({
+      externalSku: "same-external-sku",
+      normalizedPrice: null,
+      package: null,
+      sku: 70,
+    });
+    const snapshot = await resolveShopping(input({ catalogItems: [higher, lower] }));
+    expect(
+      snapshot.items[0]?.alternatives.map((alternative) =>
+        alternative.state === "resolved"
+          ? alternative.selection.projection.skuId
+          : alternative.projection.skuId,
+      ),
+    ).toEqual([uuid(70), uuid(71)]);
+  });
+
   it("mantiene una selección manual válida aunque sea más cara", async () => {
     const cheap = catalogItem({
       basePriceEur: "2",
