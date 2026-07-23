@@ -14,7 +14,8 @@
 4. Los planes históricos quedan congelados con su manifiesto de fuentes.
 5. La ficha nutricional comercial por GTIN y el SKU de compra son capas
    distintas. Solo una ficha confirmada puede proponerse para una línea del
-   plan; cadena, precio y disponibilidad nunca son autoridad nutricional.
+   plan; cadena y precio nunca son autoridad nutricional, y la presencia en
+   catálogo no acredita stock.
 
 ## 2. Fuentes y precedencia
 
@@ -145,6 +146,8 @@ El origen real del lote puede ser Sevilla para V1, pero esa referencia es
 interna: nunca se expone al usuario como explicación geográfica del precio.
 Los precios son orientativos para España y solo precio base: sin ofertas,
 cupones, fidelización, transporte, bolsas ni pedido mínimo.
+La publicación no tiene caducidad automática ni fecha visible: permanece
+activa hasta que una revisión posterior se publique u oculte manualmente.
 
 ## 6. Reglas de discrepancia y revisión
 

@@ -4,7 +4,10 @@ import {
   EXPORT_MAX_ARTIFACT_BYTES,
   EXPORT_RENDERER_VERSION,
 } from "@health-design/contracts";
-import { exportNutrition } from "@health-design/test-fixtures/exports";
+import {
+  exportNutrition,
+  exportShoppingSnapshots,
+} from "@health-design/test-fixtures/exports";
 import {
   handlePlanExports,
   type ExportEdgeDependencies,
@@ -35,6 +38,15 @@ const source = {
   outputHash: "ab".repeat(32),
   planId: "25000000-0000-4000-8000-000000015201",
   planVersionId,
+  profileId: "51000000-0000-4000-8000-000000015201",
+};
+const shoppingSnapshot = {
+  ...exportShoppingSnapshots.complete,
+  snapshot: {
+    ...exportShoppingSnapshots.complete.snapshot,
+    planVersionId,
+    profileId: source.profileId,
+  },
 };
 
 const reservation = {
@@ -74,6 +86,7 @@ type SetupOptions = Readonly<{
   renderedBytes?: Uint8Array;
   rpcError?: Readonly<{ code?: string; message?: string }>;
   uploadError?: boolean;
+  shoppingSnapshot?: unknown;
 }>;
 
 function setup(options: SetupOptions = {}) {
@@ -126,6 +139,7 @@ function setup(options: SetupOptions = {}) {
         internal_fail_plan_export: [null],
         internal_get_plan_export: [{ ...ready, outcome: undefined }],
         internal_get_plan_export_source: [source],
+        internal_get_shopping_snapshot: [options.shoppingSnapshot ?? shoppingSnapshot],
         internal_list_profile_export_purge_paths: [
           [
             { artifactId, storagePath },
@@ -271,6 +285,135 @@ describe("Edge de exportaciones privadas", () => {
     });
     expect(current.events).toContain("upload");
     expect(response.headers.get("cache-control")).toBe("no-store, private");
+  });
+
+  it("carga el snapshot autorizado antes de reservar y lo incorpora al modelo", async () => {
+    const current = setup();
+    const response = await handlePlanExports(
+      request(`/v1/plans/${planVersionId}/exports`, {
+        body: {
+          ...config,
+          shoppingSnapshotId: exportShoppingSnapshots.complete.snapshot.id,
+        },
+      }),
+      current.dependencies,
+    );
+
+    expect(response.status).toBe(200);
+    expect(current.calls.map(({ name }) => name)).toEqual([
+      "internal_get_plan_export_source",
+      "internal_get_shopping_snapshot",
+      "internal_reserve_plan_export",
+      "internal_complete_plan_export",
+    ]);
+    expect(current.calls[1]?.args).toMatchObject({
+      p_snapshot_id: exportShoppingSnapshots.complete.snapshot.id,
+    });
+    expect(current.renderedModels[0]).toMatchObject({
+      shopping: { kind: "snapshot" },
+    });
+  });
+
+  it("rechaza otro plan antes de reserva, cuota o Storage", async () => {
+    const current = setup({
+      shoppingSnapshot: {
+        ...exportShoppingSnapshots.complete,
+        snapshot: {
+          ...exportShoppingSnapshots.complete.snapshot,
+          planVersionId: "22000000-0000-4000-8000-000000015299",
+        },
+      },
+    });
+    const response = await handlePlanExports(
+      request(`/v1/plans/${planVersionId}/exports`, {
+        body: {
+          ...config,
+          shoppingSnapshotId: exportShoppingSnapshots.complete.snapshot.id,
+        },
+      }),
+      current.dependencies,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "SHOPPING_SNAPSHOT_MISMATCH" },
+    });
+    expect(current.calls.map(({ name }) => name)).toEqual([
+      "internal_get_plan_export_source",
+      "internal_get_shopping_snapshot",
+    ]);
+    expect(current.events).not.toContain("upload");
+  });
+
+  it("rechaza otro perfil antes de reserva, cuota o Storage", async () => {
+    const current = setup({
+      shoppingSnapshot: {
+        ...exportShoppingSnapshots.complete,
+        snapshot: {
+          ...exportShoppingSnapshots.complete.snapshot,
+          planVersionId,
+          profileId: "51000000-0000-4000-8000-000000015299",
+        },
+      },
+    });
+    const response = await handlePlanExports(
+      request(`/v1/plans/${planVersionId}/exports`, {
+        body: {
+          ...config,
+          shoppingSnapshotId: exportShoppingSnapshots.complete.snapshot.id,
+        },
+      }),
+      current.dependencies,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "SHOPPING_SNAPSHOT_MISMATCH" },
+    });
+    expect(current.calls.map(({ name }) => name)).toEqual([
+      "internal_get_plan_export_source",
+      "internal_get_shopping_snapshot",
+    ]);
+    expect(current.events).not.toContain("upload");
+  });
+
+  it("acepta archivados y excluye lifecycle del digest de reutilización", async () => {
+    const active = setup();
+    const archived = setup({
+      shoppingSnapshot: {
+        ...exportShoppingSnapshots.archived,
+        snapshot: {
+          ...exportShoppingSnapshots.archived.snapshot,
+          planVersionId,
+          profileId: source.profileId,
+        },
+      },
+    });
+    const body = {
+      ...config,
+      shoppingSnapshotId: exportShoppingSnapshots.complete.snapshot.id,
+    };
+    await handlePlanExports(
+      request(`/v1/plans/${planVersionId}/exports`, { body }),
+      active.dependencies,
+    );
+    await handlePlanExports(
+      request(`/v1/plans/${planVersionId}/exports`, { body }),
+      archived.dependencies,
+    );
+
+    const activeReservation = active.calls.find(
+      ({ name }) => name === "internal_reserve_plan_export",
+    )!;
+    const archivedReservation = archived.calls.find(
+      ({ name }) => name === "internal_reserve_plan_export",
+    )!;
+    expect(activeReservation.args.p_config_digest).toBe(
+      archivedReservation.args.p_config_digest,
+    );
+    expect(activeReservation.args.p_request_digest).toBe(
+      archivedReservation.args.p_request_digest,
+    );
   });
 
   it("devuelve conflicto para un duplicado pendiente", async () => {

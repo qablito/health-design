@@ -162,6 +162,7 @@ Proyectar la cesta canónica sobre supermercados sin alterar la dieta.
 - Optimización de envases, precio base y sobrante.
 - Modo una cadena y comparación multitienda.
 - Orden común entre pantalla, PDF e impresión.
+- Snapshot semanal congelado compartido por pantalla, impresión, PDF y XLSX.
 
 ### Salida
 
@@ -169,6 +170,8 @@ Proyectar la cesta canónica sobre supermercados sin alterar la dieta.
 - Las cestas parciales se etiquetan correctamente.
 - La selección habitual nunca cambia en silencio.
 - Una actualización de precio no cambia identidad nutricional.
+- Una cesta parcial conserva pendientes y muestra subtotal, nunca un total
+  completo inferido.
 
 ## Fase 7 — Validación integral y piloto privado
 

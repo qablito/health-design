@@ -5,6 +5,7 @@ import {
   type ExportChoice,
   type ExportCreateRequestContract,
   type NutritionWeekV2Contract,
+  type ShoppingSnapshotResponse,
 } from "@health-design/contracts";
 import { createExportModel } from "@health-design/export/model";
 
@@ -19,7 +20,16 @@ type Props = Readonly<{
   nutrition: NutritionWeekV2Contract;
   planOutputHash: string;
   planVersionId: string;
+  shoppingSnapshot?: ShoppingSnapshotResponse;
 }>;
+
+const chainLabels = { aldi: "ALDI", dia: "DIA", mercadona: "Mercadona" } as const;
+const stateLabels = {
+  no_confirmed_product: "Sin producto confirmado",
+  package_unconfirmed: "Envase pendiente de confirmar",
+  price_unavailable: "Precio no disponible",
+  resolved: "Producto confirmado",
+} as const;
 
 function statusMessage(error: unknown): string {
   if (error instanceof Error && error.message === "export_redirect_rejected") {
@@ -33,6 +43,7 @@ export function ExportPanel({
   nutrition,
   planOutputHash,
   planVersionId,
+  shoppingSnapshot,
 }: Props) {
   const [busy, setBusy] = useState<ExportFormat>();
   const [day, setDay] = useState(1);
@@ -44,17 +55,24 @@ export function ExportPanel({
     "ingredients",
   );
   const [rangeKind, setRangeKind] = useState<"day" | "week">("week");
+  const [shoppingSource, setShoppingSource] = useState<"canonical" | "snapshot">(
+    shoppingSnapshot ? "snapshot" : "canonical",
+  );
 
   function config(format: ExportFormat): ExportCreateRequestContract {
+    const useSnapshot = shoppingSource === "snapshot" && shoppingSnapshot;
     return {
-      choices: [...choices],
+      choices: useSnapshot ? [] : [...choices],
       detail,
       format,
-      includeShopping,
-      includeWeeklyPreparation: rangeKind === "week" && includeWeeklyPreparation,
+      includeShopping: useSnapshot ? true : includeShopping,
+      includeWeeklyPreparation:
+        (useSnapshot || rangeKind === "week") && includeWeeklyPreparation,
       presentation,
-      range: rangeKind === "week" ? { kind: "week" } : { day, kind: "day" },
+      range:
+        useSnapshot || rangeKind === "week" ? { kind: "week" } : { day, kind: "day" },
       schemaVersion: 1,
+      ...(useSnapshot ? { shoppingSnapshotId: useSnapshot.snapshot.id } : {}),
     };
   }
 
@@ -66,6 +84,9 @@ export function ExportPanel({
         planOutputHash,
         planVersionId,
         rendererVersion: EXPORT_RENDERER_VERSION,
+        ...(shoppingSource === "snapshot" && shoppingSnapshot
+          ? { shoppingSnapshot: shoppingSnapshot.snapshot }
+          : {}),
       }),
     [
       choices,
@@ -78,6 +99,8 @@ export function ExportPanel({
       planVersionId,
       presentation,
       rangeKind,
+      shoppingSnapshot,
+      shoppingSource,
     ],
   );
 
@@ -99,13 +122,49 @@ export function ExportPanel({
     <section aria-labelledby="export-panel-title" className="export-panel">
       <header>
         <div>
-          <p className="export-kicker">SALIDA PRIVADA · T15</p>
+          <p className="export-kicker">
+            SALIDA PRIVADA · {shoppingSnapshot ? "T17" : "T15"}
+          </p>
           <h2 id="export-panel-title">Exportar el plan</h2>
         </div>
         <p>Imprime al momento o crea un archivo privado con las elecciones que ves.</p>
       </header>
 
       <div className="export-grid">
+        {shoppingSnapshot ? (
+          <fieldset>
+            <legend>Fuente de compra</legend>
+            <label>
+              <input
+                checked={shoppingSource === "snapshot"}
+                name="export-shopping-source"
+                onChange={() => {
+                  setShoppingSource("snapshot");
+                  setRangeKind("week");
+                  setIncludeShopping(true);
+                }}
+                type="radio"
+              />
+              <span>
+                <strong>Cesta orientativa actual</strong>
+                Conserva productos, envases, precios y orden
+              </span>
+            </label>
+            <label>
+              <input
+                checked={shoppingSource === "canonical"}
+                name="export-shopping-source"
+                onChange={() => setShoppingSource("canonical")}
+                type="radio"
+              />
+              <span>
+                <strong>Lista canónica de ingredientes</strong>
+                Mantiene las cantidades nutricionales
+              </span>
+            </label>
+          </fieldset>
+        ) : null}
+
         <fieldset>
           <legend>Detalle</legend>
           <label>
@@ -179,6 +238,7 @@ export function ExportPanel({
           <label>
             <input
               checked={rangeKind === "day"}
+              disabled={shoppingSource === "snapshot"}
               name="export-range"
               onChange={() => {
                 setRangeKind("day");
@@ -194,7 +254,7 @@ export function ExportPanel({
           <label className="export-day-select">
             <span>Día que quieres exportar</span>
             <select
-              disabled={rangeKind !== "day"}
+              disabled={rangeKind !== "day" || shoppingSource === "snapshot"}
               onChange={(event) => setDay(Number(event.target.value))}
               value={day}
             >
@@ -212,6 +272,7 @@ export function ExportPanel({
           <label className="export-check">
             <input
               checked={includeShopping}
+              disabled={shoppingSource === "snapshot"}
               onChange={(event) => setIncludeShopping(event.target.checked)}
               type="checkbox"
             />
@@ -318,16 +379,84 @@ export function ExportPanel({
             ))}
           </tbody>
         </table>
-        {printModel.shoppingList ? (
+        {printModel.shopping?.kind === "canonical" ? (
           <section>
             <h2>Lista de la compra</h2>
             <ul>
-              {printModel.shoppingList.map((item) => (
+              {printModel.shopping.items.map((item) => (
                 <li key={item.canonicalFoodKey}>
                   {item.name}: {item.amountG} g
                 </li>
               ))}
             </ul>
+          </section>
+        ) : null}
+        {printModel.shopping?.kind === "snapshot" ? (
+          <section className="export-print-shopping">
+            <h2>Compra semanal</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Alimento</th>
+                  <th>Estado</th>
+                  <th>Producto</th>
+                  <th>Precio base</th>
+                  <th>Envases</th>
+                  <th>Coste</th>
+                  <th>Remanente</th>
+                  <th>Precio normalizado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {printModel.shopping.items.map((item) => (
+                  <tr key={item.canonicalFoodKey}>
+                    <td>
+                      {item.name} · {item.amountG} g
+                    </td>
+                    <td>{stateLabels[item.state]}</td>
+                    <td>
+                      {item.selected
+                        ? `${chainLabels[item.selected.chain]} · ${item.selected.productName} · ${item.selected.formatText}${item.selectionOrigin === "manual" ? " · Elección manual" : ""}`
+                        : "Pendiente"}
+                    </td>
+                    <td>{item.selected ? `${item.selected.basePriceEur} EUR` : "—"}</td>
+                    <td>{item.selected?.packageCount ?? "—"}</td>
+                    <td>{item.selected ? `${item.selected.totalCostEur} EUR` : "—"}</td>
+                    <td>
+                      {item.selected ? `${item.selected.estimatedRemainderG} g` : "—"}
+                    </td>
+                    <td>
+                      {item.selected?.normalizedPrice
+                        ? `${item.selected.normalizedPrice.value} ${item.selected.normalizedPrice.unit}`
+                        : "No comparable"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p>
+              <strong>
+                {printModel.shopping.totals.kind === "complete"
+                  ? `Total orientativo: ${printModel.shopping.totals.estimatedTotalEur} EUR`
+                  : `Subtotal de productos confirmados: ${printModel.shopping.totals.partialSubtotalEur} EUR`}
+              </strong>
+              {" · "}
+              {printModel.shopping.totals.coverage.resolvedItems}/
+              {printModel.shopping.totals.coverage.totalItems} productos
+            </p>
+            {printModel.shopping.comparison?.scope === "complete" ? (
+              <p>
+                Ahorro orientativo: {printModel.shopping.comparison.savingsEur} EUR. La
+                tienda habitual sigue siendo{" "}
+                {chainLabels[printModel.shopping.preference.preferredChain]}.
+              </p>
+            ) : printModel.shopping.comparison?.scope === "partial" ? (
+              <p>
+                Comparación parcial: {printModel.shopping.comparison.comparableItems}/
+                {printModel.shopping.comparison.totalItems} líneas comparables. No se
+                declara un ahorro global.
+              </p>
+            ) : null}
           </section>
         ) : null}
         {printModel.weeklyPreparation ? (

@@ -31,7 +31,8 @@
 - Catálogo nutricional pequeño pero con procedencia, estado crudo/cocinado, parte comestible, unidad y revisión.
 - Fichas comerciales T16 por GTIN con estados conocidos/estimados/desconocidos,
   densidad, ingredientes, alérgenos y contaminación cruzada. Los SKU con cadena,
-  precio, formato comercial y disponibilidad pertenecen a T17.
+  precio y formato comercial pertenecen a T17; la presencia en catálogo no
+  representa stock.
 - Medicación/farmacología representada por identidades ficticias y reglas de prueba; CIMA/AEMPS real se usa solo en ingestión controlada.
 - Laboratorios con valor, unidad, fecha, rango y ausencia; incluir valores antiguos, fuera de rango y sin intervalo.
 - Semillas de aleatoriedad fijadas para fixtures; el plan activo debe producir el mismo hash ante el mismo contexto y revisión.
@@ -85,8 +86,8 @@ comportamiento normal, bordes, fallo, concurrencia y autorización según
 | Entrenamiento/movilidad/sueño | progresión y estados | plan integrado y seguimiento | G4 |
 | Hidratación/suplementos | bandas, precedencia y evidencia | conflictos clínicos/farmacológicos | G3,G4 |
 | Productos comerciales T16 | GTIN, snapshots, coherencia, matching y recálculo | dos perfiles, confirmación, AAL2, candidato, exportación y borrado | G3,G5,G6,G7,G8 |
-| Catálogos de compra T17 | SKU, parsing, cobertura y optimizador | publicación de cadena y cesta | G6 |
-| Exportación y accesibilidad | serialización y sanitización | UI/PDF/XLSX/impresión equivalentes | G6,G8 |
+| Catálogos de compra T17 | SKU, parsing, cobertura, snapshots y optimizador | publicación, aislamiento, sobrantes, selección manual y cesta completa/parcial | G6,G7 |
+| Exportación y accesibilidad | serialización y sanitización | UI/PDF/XLSX/impresión equivalentes desde la misma proyección; total/subtotal y fórmulas hostiles | G6,G8 |
 | Backups/borrado/operación | manifests y tombstones | restore de cuatro copias | G7 |
 
 ## 6. Pruebas de seguridad

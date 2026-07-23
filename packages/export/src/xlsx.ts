@@ -2,6 +2,14 @@ import * as XLSX from "xlsx";
 
 import type { ExportModel } from "./model.ts";
 
+const chainLabels = { aldi: "ALDI", dia: "DIA", mercadona: "Mercadona" } as const;
+const stateLabels = {
+  no_confirmed_product: "Sin producto confirmado",
+  package_unconfirmed: "Envase pendiente de confirmar",
+  price_unavailable: "Precio no disponible",
+  resolved: "Producto confirmado",
+} as const;
+
 function text(value: string): string {
   return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
 }
@@ -59,36 +67,94 @@ export function renderXlsx(model: ExportModel): Uint8Array {
     "Plan",
   );
 
-  XLSX.utils.book_append_sheet(
-    workbook,
-    sheet(
+  const metadata: (string | number)[][] = [
+    ["Campo", "Valor"],
+    ["Renderizador", model.rendererVersion],
+    ["Detalle", model.detail],
+    ["Presentación", model.presentation],
+    ["Energía total", `${model.totals.energyKcal} kcal`],
+    ["Proteína total", `${model.totals.proteinG} g`],
+    ["Carbohidratos totales", `${model.totals.carbohydratesG} g`],
+    ["Grasa total", `${model.totals.fatG} g`],
+    ["Fibra total", `${model.totals.fiberG} g`],
+  ];
+  if (model.shopping?.kind === "snapshot") {
+    const totals = model.shopping.totals;
+    metadata.push(
       [
-        ["Campo", "Valor"],
-        ["Versión del plan", model.planVersionId],
-        ["Hash del plan", model.planOutputHash],
-        ["Renderizador", model.rendererVersion],
-        ["Detalle", model.detail],
-        ["Presentación", model.presentation],
-        ["Energía total", `${model.totals.energyKcal} kcal`],
-        ["Proteína total", `${model.totals.proteinG} g`],
-        ["Carbohidratos totales", `${model.totals.carbohydratesG} g`],
-        ["Grasa total", `${model.totals.fatG} g`],
-        ["Fibra total", `${model.totals.fiberG} g`],
+        totals.kind === "complete"
+          ? "Total orientativo"
+          : "Subtotal de productos confirmados",
+        `${totals.kind === "complete" ? totals.estimatedTotalEur : totals.partialSubtotalEur} EUR`,
       ],
-      [24, 72],
-    ),
-    "Metadatos",
-  );
+      [
+        "Cobertura de compra",
+        `${totals.coverage.resolvedItems}/${totals.coverage.totalItems}`,
+      ],
+    );
+    if (model.shopping.comparison?.scope === "complete") {
+      metadata.push([
+        "Ahorro orientativo",
+        `${model.shopping.comparison.savingsEur} EUR`,
+      ]);
+    } else if (model.shopping.comparison?.scope === "partial") {
+      metadata.push([
+        "Comparación parcial",
+        `${model.shopping.comparison.comparableItems}/${model.shopping.comparison.totalItems} líneas comparables`,
+      ]);
+    }
+  }
 
-  if (model.shoppingList) {
+  XLSX.utils.book_append_sheet(workbook, sheet(metadata, [36, 72]), "Metadatos");
+
+  if (model.shopping?.kind === "canonical") {
     XLSX.utils.book_append_sheet(
       workbook,
       sheet(
         [
           ["Alimento", "Cantidad"],
-          ...model.shoppingList.map((item) => [item.name, `${item.amountG} g`]),
+          ...model.shopping.items.map((item) => [item.name, `${item.amountG} g`]),
         ],
         [32, 16],
+      ),
+      "Compra",
+    );
+  }
+  if (model.shopping?.kind === "snapshot") {
+    XLSX.utils.book_append_sheet(
+      workbook,
+      sheet(
+        [
+          [
+            "Alimento",
+            "Cantidad semanal",
+            "Estado",
+            "Cadena",
+            "Producto",
+            "Formato/envase",
+            "Precio base orientativo",
+            "Envases",
+            "Coste orientativo",
+            "Remanente estimado",
+            "Precio normalizado",
+          ],
+          ...model.shopping.items.map((item) => [
+            item.name,
+            `${item.amountG} g`,
+            stateLabels[item.state],
+            item.selected ? chainLabels[item.selected.chain] : "",
+            item.selected?.productName ?? "",
+            item.selected?.formatText ?? "",
+            item.selected ? `${item.selected.basePriceEur} EUR` : "",
+            item.selected?.packageCount ?? "",
+            item.selected ? `${item.selected.totalCostEur} EUR` : "",
+            item.selected ? `${item.selected.estimatedRemainderG} g` : "",
+            item.selected?.normalizedPrice
+              ? `${item.selected.normalizedPrice.value} ${item.selected.normalizedPrice.unit}`
+              : "",
+          ]),
+        ],
+        [30, 18, 28, 14, 36, 20, 24, 12, 20, 22, 22],
       ),
       "Compra",
     );

@@ -46,9 +46,11 @@ guías, revisiones sistemáticas, metaanálisis, ensayos y apoyo observacional.
 
 ### F-006 — Refresco diario de supermercados
 
-Actualizar precio, disponibilidad y formatos diariamente cuando exista una vía
-permitida y estable para cada cadena. El catálogo V1 es orientativo, versionado
-y con precios base; no se convierte en checkout.
+Actualizar precios y formatos diariamente cuando exista una vía permitida y
+estable para cada cadena, y entonces poder mostrar la fecha de actualización
+del catálogo. La presencia en catálogo seguirá sin representar stock. El
+catálogo V1 es orientativo, versionado y con precios base; no se convierte en
+checkout.
 
 ### F-007 — Más cobertura de cadenas y regiones
 

@@ -375,6 +375,23 @@ select public.internal_put_shopping_preference(
   decode(repeat('17', 32), 'hex'), decode(repeat('18', 32), 'hex')
 ) response;
 
+select throws_ok(
+  $$select public.internal_prepare_shopping_resolution(
+    '00000000-0000-4000-8000-000000017401',
+    '21000000-0000-4000-8000-000000017401',
+    '82000000-0000-4000-8000-000000017401', null,
+    'shopping-snapshot-create',
+    jsonb_build_object(
+      'preferenceRevisionId',
+      (select response ->> 'preferenceRevisionId' from shopping_preference_three)
+    ),
+    decode(repeat('19', 32), 'hex'), decode(repeat('20', 32), 'hex'),
+    decode(repeat('23', 32), 'hex')
+  )$$,
+  '22023', 'invalid_shopping_create',
+  'crear una cesta exige schemaVersion 1 en la frontera RPC'
+);
+
 create temporary table shopping_source_one as
 select public.internal_prepare_shopping_resolution(
   '00000000-0000-4000-8000-000000017401',
@@ -382,6 +399,7 @@ select public.internal_prepare_shopping_resolution(
   '82000000-0000-4000-8000-000000017401', null,
   'shopping-snapshot-create',
   jsonb_build_object(
+    'schemaVersion', 1,
     'preferenceRevisionId',
     (select response ->> 'preferenceRevisionId' from shopping_preference_three)
   ),
@@ -490,8 +508,11 @@ select is(
     '21000000-0000-4000-8000-000000017401',
     '82000000-0000-4000-8000-000000017401', null,
     'shopping-snapshot-create',
-    jsonb_build_object('preferenceRevisionId',
-      (select response ->> 'preferenceRevisionId' from shopping_preference_three)),
+    jsonb_build_object(
+      'schemaVersion', 1,
+      'preferenceRevisionId',
+      (select response ->> 'preferenceRevisionId' from shopping_preference_three)
+    ),
     decode(repeat('21', 32), 'hex'), decode(repeat('22', 32), 'hex'),
     decode(repeat('23', 32), 'hex')
   ) #>> '{response,snapshotId}',
@@ -510,7 +531,7 @@ select throws_ok(
     '21000000-0000-4000-8000-000000017401',
     '82000000-0000-4000-8000-000000017401', null,
     'shopping-snapshot-create',
-    '{"preferenceRevisionId":"91000000-0000-4000-8000-000000017499"}'::jsonb,
+    '{"schemaVersion":1,"preferenceRevisionId":"91000000-0000-4000-8000-000000017499"}'::jsonb,
     decode(repeat('21', 32), 'hex'), decode(repeat('26', 32), 'hex'),
     decode(repeat('23', 32), 'hex')
   )$$,
@@ -585,6 +606,7 @@ select is(
     '82000000-0000-4000-8000-000000017401', null,
     'shopping-snapshot-create',
     jsonb_build_object(
+      'schemaVersion', 1,
       'preferenceRevisionId',
       (select response ->> 'preferenceRevisionId' from shopping_preference_three)
     ),

@@ -1111,6 +1111,11 @@ pnpm test:t16:remote # solo después de autorización explícita y copia precrí
 
 ## Tarea 17 — Catálogos de supermercado y optimizador de compra
 
+> **Estado 2026-07-23:** T17A–D fusionados; T17E.1–E.3 en
+> `T17_COMPLETE_REMOTE_PASS` exclusivamente en Development.
+> Mercadona está publicada en Development; DIA y ALDI continúan sin publicar.
+> Production no fue modificada.
+
 **Resultado:** cesta orientativa por cadena o multitienda sin checkout y sin
 alterar kcal/macros.
 
@@ -1141,7 +1146,8 @@ alterar kcal/macros.
 
 - Convertir los scrapers existentes en importadores de cuarentena versionados.
 - Mantener origen Sevilla solo como metadato interno.
-- Modelar formato, cantidad, precio base, disponibilidad y fecha.
+- Modelar formato, cantidad y precio base sin presentar presencia en catálogo
+  como stock ni mostrar fecha de catálogo en V1.
 - Implementar cesta 60+20 y puerta de publicación de cadena.
 - Añadir modo una cadena, avisos de ahorro y comparación multitienda opcional.
 - Exigir idempotency key y los límites por perfil/actor/IP del contrato.

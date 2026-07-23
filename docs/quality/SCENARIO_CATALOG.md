@@ -148,6 +148,7 @@ completan cada fila mediante
 | F64 | SKU equivalente no encontrado | “Sin producto confirmado”; no se inventa equivalencia | G6 / INV-01 |
 | F65 | Un supermercado elegido | Se mantiene como habitual aunque otro sea más barato; solo aviso | G6 / INV-04 |
 | F66 | Límites, procedencia y comparativa parcial | Fixtures en 90 %/75 %, una unidad por debajo, SKU alergénico `unknown` y archivo/fila/celda justo sobre límite; import sin manifest/licencia/hashes o reimport alterado no publica/reutiliza revisión y una cesta parcial nunca se llama ahorro completo | G3,G6,G7 / INV-03, INV-10, INV-26 |
+| F71 | Snapshot semanal de compra exportado | La UI envía solo su UUID; día o elecciones locales se rechazan; pantalla, impresión, PDF y XLSX conservan orden, total/subtotal y no muestran IDs, GTIN, hashes, R2, stock o fecha | G6,G7,G8 / INV-09, INV-22 |
 
 ### Versiones, LLM, exportación y operación (`F67–F70`)
 

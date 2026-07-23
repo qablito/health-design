@@ -1,12 +1,16 @@
 # Modelo de amenazas de V1
 
-**Estado:** planificado; no es una declaración de controles ya implementados.  
-**Fecha:** 2026-07-16  
+**Estado:** contrato vivo; cada control exige su recibo de verificación.
+**Fecha:** 2026-07-23
 **Alcance:** producto web privado de planificación de salud, nutrición y entrenamiento para adultos en España.
 
 ## Executive summary
 
-Los riesgos principales son la exposición o modificación indebida de datos de salud, la suplantación mediante alias/códigos/QR, el abuso de privilegios del superadministrador, y la activación de planes clínicamente inseguros por una regla o revisión defectuosa. La V1 todavía no implementa la aplicación: los controles descritos como “planificados” deben convertirse en pruebas de aceptación antes de invitar a usuarios. El catálogo actual contiene scripts y datos de supermercado, pero no constituye autenticación, autorización ni protección de datos.
+Los riesgos principales son la exposición o modificación indebida de datos de
+salud, la suplantación mediante alias/códigos/QR, el abuso de privilegios del
+superadministrador y la activación de planes clínicamente inseguros. Los
+controles implementados siguen necesitando evidencia local o remota explícita;
+ningún estado de desarrollo acredita una publicación en producción.
 
 ## Scope and assumptions
 
@@ -33,8 +37,8 @@ Los riesgos principales son la exposición o modificación indebida de datos de 
 | `supermercados/catalogo.py` | existente, no revisado para producción | entrada de datos de catálogo; no es control de seguridad |
 | `supermercados/mercadona_chrome.mjs` | existente, automatización local | superficie de scraping; no debe recibir secretos de producción |
 | `datos/*` | existente, datos locales | datos potencialmente públicos; no mezclar con perfiles de salud |
-| Aplicación web, API, RLS, sesiones | planificado | controles requeridos, todavía no implementados |
-| Este paquete documental | planificado | contrato para implementación y verificación |
+| Aplicación web, API, RLS, sesiones | implementación incremental hasta T17; Development y pruebas locales | cada tarea conserva su frontera de evidencia |
+| Este paquete documental | activo | contrato para implementación y verificación |
 
 ### Supuestos abiertos que cambian el riesgo
 
@@ -132,7 +136,7 @@ flowchart TD
 | Carga de código de barras/etiqueta | PWA/API | PWA → ingestión | payload falsificado, campos incompletos, cross-contact | planificado |
 | Fuentes nutricionales y farmacológicas | ingestión programada/manual | externo → ingestión | parser, procedencia y discrepancias | `datos/README.md`, `supermercados/catalogo.py` |
 | Generación y edición de plan | API | API → motor | manipulación de restricciones o versiones | planificado |
-| Exportación PDF/Excel | PWA/API | API → archivo | filtrado de compuestos, XSS/fórmulas, cache | planificado |
+| Exportación PDF/Excel | PWA/API | API → archivo | filtrado de compuestos, XSS/fórmulas, cache | artefactos privados T15 y proyección de snapshot T17E; validación remota T17 pendiente |
 | Funciones superadmin | panel/endpoint autenticado | usuario → privilegio | impersonación, borrado, publicación | AAL2, Edge y ledger remoto probados con SU real solo en desarrollo |
 | Backups/restauración | operador/proveedor | operación → datos | reaparición de perfiles borrados | planificado |
 | Dependencias y despliegue | CI/Cloudflare | build → producción | artefactos alterados | `.gitignore` y scripts actuales no son pipeline de producción |
@@ -166,11 +170,11 @@ flowchart TD
 | TM-011 | invitado | datos de error/log | provoca excepción | filtra contexto clínico | logs, secretos | planificado: log técnico privado | redacción pendiente | allowlist antes de proxy/Edge/error/job; no body/query/headers; canarios de token/QR/medicación | escaneo de todos los sinks y patrones de excepción | media | alta | high |
 | TM-012 | operador/bug | restore sin exclusiones/continuidad | reanima perfil, trunca auditoría o acepta hueco falso | violación de borrado/trazabilidad | backups, salud, auditoría | contrato: streams R2 independientes + copia local cifrada | restauración no implementada | tombstone antes de purga, intent/outcome con reconciliación, AEAD/Ed25519, manifiesto de rangos borrados y prueba de cuatro copias | divergencia, hueco no cubierto, intent pendiente y comparación borrado/auditoría/restore | baja | crítica | high |
 | TM-013 | supply chain | dependencia/build comprometido | altera cliente o pipeline | bypass de controles | artefactos, secretos | contrato: lockfile, SCA, SBOM y procedencia/firma | CI y release no implementados | revisión, escaneo, artefactos firmados, secretos fuera del build y bloqueo por severidad | hashes, provenance y alertas de dependencia | baja | crítica | high |
-| TM-014 | usuario | nombre/SKU malicioso | inserta fórmula en Excel | ejecución al abrir | exportación | planificado: sanitización de hojas | no implementado | neutralizar prefijos de fórmula, límites de longitud, descarga no cacheada | pruebas con payloads de fórmula | media | media | medium |
+| TM-014 | usuario | nombre/SKU malicioso | inserta fórmula en Excel | ejecución al abrir | exportación | neutralización de prefijos, texto externo sanitizado y descarga privada implementados | smoke remoto T17 pendiente | conservar límites, pruebas hostiles y descarga no cacheada | pruebas con payloads de fórmula | baja | media | medium |
 | TM-015 | fuente externa | URL redirigida | provoca SSRF durante ingestión | acceso a red interna | ingestión, secretos | no se ha implementado ingestión remota | no implementar fetch arbitrario | allowlist de dominios, egress restringido, sin seguir redirecciones internas | logs de DNS/HTTP y bloqueos | baja | alta | medium |
 | TM-016 | usuario | archivo inesperado | intenta alcanzar parser/storage no previsto | caída o coste | API, Storage | V1 no acepta informes/OCR/PDF de entrada | endpoint no debe existir | rechazar uploads clínicos, límites de bytes en activos permitidos | intentos de multipart y tamaño | baja | media | medium |
 | TM-017 | superadmin/bug | publicar candidato | activa regla sin revisión | riesgo sistemático | reglas, planes | activación manual requerida | guardas de rol pendientes | AAL2, diff, confirmación y bloqueo si falla validación normativa | historial de publicación y rollback | baja | crítica | high |
-| TM-018 | usuario | preferencia o ficha comercial | confunde SKU, etiqueta y alimento canónico | calorías/macros incorrectos | catálogo, listas, planes | T16 separa ficha/GTIN del canónico y T17 del SKU; aplicación exige confirmación, matching, posición y candidato manual | comparador de compra T17 pendiente | conservar tres autoridades, exclusiones primero y no cambiar nutrición por precio/SKU | candidatos comerciales, conflictos de línea y overrides | baja | alta | high |
+| TM-018 | usuario | preferencia o ficha comercial | confunde SKU, etiqueta y alimento canónico | calorías/macros incorrectos | catálogo, listas, planes | T16 separa ficha/GTIN del canónico; T17 mantiene snapshots inmutables y prueba invariancia nutricional | activación remota T17D/E pendiente | conservar tres autoridades, exclusiones primero y no cambiar nutrición por precio/SKU | candidatos comerciales, conflictos de línea y overrides | baja | alta | high |
 | TM-019 | usuario autenticado | IDs de producto/corrección/perfil | intenta leer o aplicar revisión privada ajena | fuga de etiqueta o plan manipulado | perfiles, catálogo, planes | tablas sin grants, wrappers mínimos, actor+sesión+membresía, confirmación ligada al perfil y pruebas pgTAP cruzadas | smoke remoto pendiente | mantener aislamiento servidor y no devolver owner/profile en respuestas públicas | denegaciones, source resuelta y RLS cruzada | baja | alta | high |
 | TM-020 | fuente externa o cámara | respuesta OFF/fotograma hostil | agota parser, conserva imagen o introduce valores falsos | caída, privacidad o candidato inseguro | navegador, catálogo, planes | cámara efímera local, fallback manual, respuesta OFF limitada/allowlisted, esquema cerrado, unknown explícito y confirmación humana | matriz remota multinavegador pendiente | timeout, tamaño máximo, no Storage, no OCR/LLM, coherencia y revisión antes de aplicar | fallos de cámara/OFF, payload sobrelímite y confirmaciones editadas | media | alta | high |
 

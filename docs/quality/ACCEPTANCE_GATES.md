@@ -23,8 +23,11 @@ conserva en [`TASK_16_VERIFICATION.md`](TASK_16_VERIFICATION.md), con estado
 `T16_COMPLETE_REMOTE_PASS`. Cubre los fragmentos T16 de G3/G5–G8 —incluidos
 copia precrítica, migraciones y funciones de desarrollo, perfiles sintéticos,
 AAL2 y exportaciones— sin acreditar producción. G6 mantiene pendientes los
-SKU, precios y cobertura de T17, cuyo contrato está aprobado pero aún no
-constituye evidencia de implementación.
+SKU, precios y cobertura de cadenas que no superaron su puerta. La evidencia
+local y remota de Development de T17 se conserva en
+[`TASK_17_VERIFICATION.md`](TASK_17_VERIFICATION.md), con estado
+`T17_COMPLETE_REMOTE_PASS`; no acredita Production ni las cadenas que
+permanecen `not_published`.
 
 ## Criterio de evaluación por puerta
 
@@ -102,6 +105,9 @@ constituye evidencia de implementación.
 - PDF/XLSX se generan en servidor dentro de un bucket privado; impresión es una
   vista nativa A4. La descarga autenticada no redirige ni entrega una URL de
   Storage y aplica idempotencia, límites y cabeceras privadas.
+- Un snapshot de compra solo se exporta como semana, sin sustituciones locales,
+  después de que el servidor lo autorice contra la misma versión del plan.
+  Pantalla, impresión, PDF y XLSX consumen la misma proyección congelada.
 - Compuestos sensibles quedan fuera de PDF y de archivos de usuario.
 - Una cadena usa exactamente la cesta 60+20: cobertura ≥90 %, cada grupo
   esencial ≥75 %, precio/formato válido y activación manual. Cero falsos
