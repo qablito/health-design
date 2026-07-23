@@ -24,6 +24,33 @@ const INTENT_KEYS = new Set([
   "targetType",
 ]);
 const OUTCOME_KEYS = new Set([...INTENT_KEYS, "errorCode", "intentRecordHash"]);
+const PROFILE_DELETION_KEYS = new Set([
+  "markerKeyVersion",
+  "operationId",
+  "profileMarker",
+  "recordType",
+  "schemaVersion",
+  "stream",
+]);
+const PROFILE_MARKER_REKEY_KEYS = new Set([
+  ...PROFILE_DELETION_KEYS,
+  "previousMarkerKeyVersion",
+  "previousProfileMarker",
+]);
+const AUDIT_RANGE_INTENT_KEYS = new Set([
+  "auditDeletionJobId",
+  "fromSequence",
+  "operationId",
+  "rangeHash",
+  "recordType",
+  "schemaVersion",
+  "stream",
+  "toSequence",
+]);
+const AUDIT_RANGE_COMPLETE_KEYS = new Set([
+  ...AUDIT_RANGE_INTENT_KEYS,
+  "intentRecordHash",
+]);
 const ACTION_TARGETS = {
   barcode_correction_approve: "commercial_product_revision",
   barcode_correction_correct: "barcode_correction",
@@ -31,10 +58,18 @@ const ACTION_TARGETS = {
   catalog_match_candidates_generate: "catalog_revision",
   catalog_publication_hide: "catalog_publication",
   catalog_revision_publish: "catalog_revision",
+  anonymous_auth_cleanup: "auth_user",
+  audit_range_delete_execute: "audit_deletion_job",
+  audit_range_delete_prepare: "audit_deletion_job",
+  backup_create: "backup_job",
   impersonation_end: "impersonation_session",
   impersonation_start: "profile",
   matching_rule_activate: "product_matching_rule",
   matching_rule_review: "product_matching_rule",
+  profile_deletion_permanent: "deletion_job",
+  profile_deletion_resume: "deletion_job",
+  restore_create: "restore_job",
+  restore_promote: "restore_job",
 };
 
 function json(body, status) {
@@ -192,6 +227,119 @@ export function validateAdminAuditPayload(candidate) {
   return Object.freeze({ ...candidate });
 }
 
+function hasExactKeys(candidate, expected) {
+  const keys = Object.keys(candidate);
+  return keys.length === expected.size && keys.every((key) => expected.has(key));
+}
+
+export function validateDeletionLedgerPayload(candidate) {
+  let serialized;
+  try {
+    serialized = JSON.stringify(candidate);
+  } catch {
+    fail("invalid_payload");
+  }
+  if (new TextEncoder().encode(serialized).byteLength > MAX_EVENT_BYTES) {
+    fail("payload_too_large");
+  }
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    fail("invalid_payload");
+  }
+  if (
+    candidate.schemaVersion !== 1 ||
+    candidate.stream !== "deletions" ||
+    !UUID_PATTERN.test(candidate.operationId)
+  ) {
+    fail("invalid_payload");
+  }
+
+  if (candidate.recordType === "profile_deletion") {
+    if (
+      !hasExactKeys(candidate, PROFILE_DELETION_KEYS) ||
+      !HEX_64_PATTERN.test(candidate.profileMarker) ||
+      !Number.isInteger(candidate.markerKeyVersion) ||
+      candidate.markerKeyVersion < 1
+    ) {
+      fail("invalid_payload");
+    }
+  } else if (candidate.recordType === "profile_marker_rekey") {
+    if (
+      !hasExactKeys(candidate, PROFILE_MARKER_REKEY_KEYS) ||
+      !HEX_64_PATTERN.test(candidate.profileMarker) ||
+      !HEX_64_PATTERN.test(candidate.previousProfileMarker) ||
+      !Number.isInteger(candidate.markerKeyVersion) ||
+      !Number.isInteger(candidate.previousMarkerKeyVersion) ||
+      candidate.markerKeyVersion <= candidate.previousMarkerKeyVersion ||
+      candidate.previousMarkerKeyVersion < 1
+    ) {
+      fail("invalid_payload");
+    }
+  } else if (
+    candidate.recordType === "audit_range_delete_intent" ||
+    candidate.recordType === "audit_range_delete_complete"
+  ) {
+    const expected =
+      candidate.recordType === "audit_range_delete_complete"
+        ? AUDIT_RANGE_COMPLETE_KEYS
+        : AUDIT_RANGE_INTENT_KEYS;
+    if (
+      !hasExactKeys(candidate, expected) ||
+      !UUID_PATTERN.test(candidate.auditDeletionJobId) ||
+      !Number.isSafeInteger(candidate.fromSequence) ||
+      !Number.isSafeInteger(candidate.toSequence) ||
+      candidate.fromSequence < 1 ||
+      candidate.toSequence < candidate.fromSequence ||
+      !HEX_64_PATTERN.test(candidate.rangeHash) ||
+      (candidate.recordType === "audit_range_delete_complete" &&
+        !HEX_64_PATTERN.test(candidate.intentRecordHash))
+    ) {
+      fail("invalid_payload");
+    }
+  } else {
+    fail("invalid_payload");
+  }
+
+  return Object.freeze({ ...candidate });
+}
+
+export function verifyProfileMarkerRekeyCoverage(
+  existingMarkers,
+  replacementMarkers,
+  targetVersion,
+) {
+  if (!Number.isInteger(targetVersion) || targetVersion < 1) return false;
+  const replacements = new Map();
+  for (const replacement of replacementMarkers) {
+    if (
+      !replacement ||
+      typeof replacement.operationId !== "string" ||
+      !HEX_64_PATTERN.test(replacement.profileMarker) ||
+      !HEX_64_PATTERN.test(replacement.previousProfileMarker) ||
+      replacement.markerKeyVersion !== targetVersion ||
+      !Number.isInteger(replacement.previousMarkerKeyVersion)
+    ) {
+      return false;
+    }
+    const key = `${replacement.operationId}:${replacement.previousMarkerKeyVersion}:${replacement.previousProfileMarker}`;
+    if (replacements.has(key)) return false;
+    replacements.set(key, replacement);
+  }
+  return existingMarkers.every((existing) => {
+    if (
+      !existing ||
+      typeof existing.operationId !== "string" ||
+      !HEX_64_PATTERN.test(existing.profileMarker) ||
+      !Number.isInteger(existing.markerKeyVersion) ||
+      existing.markerKeyVersion >= targetVersion
+    ) {
+      return false;
+    }
+    return replacements.has(
+      `${existing.operationId}:${existing.markerKeyVersion}:${existing.profileMarker}`,
+    );
+  });
+}
+
 function auditAad(metadata) {
   return new TextEncoder().encode(
     `${metadata.environment}|admin-audit|${metadata.sequence}|${metadata.schemaVersion}|${metadata.previousHash}|${metadata.timestamp}`,
@@ -300,6 +448,21 @@ async function eventIdempotencyHash(environment, event) {
   return sha256Hex(JSON.stringify(base));
 }
 
+async function deletionIdempotencyHash(environment, event) {
+  return sha256Hex(
+    canonicalJson({
+      environment,
+      ...event,
+    }),
+  );
+}
+
+function deletionIdempotencyKey(event) {
+  return `${event.operationId}:${event.recordType}:${
+    event.markerKeyVersion === undefined ? "" : event.markerKeyVersion
+  }`;
+}
+
 function receiptSigningPayload(receipt) {
   return new TextEncoder().encode(
     JSON.stringify({
@@ -384,8 +547,11 @@ export class ContinuityLedger {
     if (!this.env || this.env.MUTATIONS_ENABLED !== "true") {
       return json({ error: "ledger_mutations_not_enabled" }, 503);
     }
-    const isAppend =
+    const isAdminAppend =
       request.method === "POST" && url.pathname === "/v1/admin-audit/append";
+    const isDeletionAppend =
+      request.method === "POST" && url.pathname === "/v1/deletions/append";
+    const isAppend = isAdminAppend || isDeletionAppend;
     const isPendingList =
       request.method === "GET" && url.pathname === "/v1/admin-audit/pending";
     if (url.search || (!isAppend && !isPendingList)) {
@@ -430,7 +596,9 @@ export class ContinuityLedger {
 
     let event;
     try {
-      event = validateAdminAuditPayload(JSON.parse(rawBody));
+      event = isDeletionAppend
+        ? validateDeletionLedgerPayload(JSON.parse(rawBody))
+        : validateAdminAuditPayload(JSON.parse(rawBody));
     } catch (error) {
       const errorCode =
         error instanceof Error &&
@@ -439,15 +607,26 @@ export class ContinuityLedger {
           : "invalid_payload";
       return json({ error: errorCode }, errorCode === "payload_too_large" ? 413 : 422);
     }
-    if (request.headers.get("idempotency-key") !== event.requestId) {
+    const expectedIdempotencyKey = isDeletionAppend
+      ? deletionIdempotencyKey(event)
+      : event.requestId;
+    if (request.headers.get("idempotency-key") !== expectedIdempotencyKey) {
       return json({ error: "invalid_idempotency_key" }, 422);
     }
-    if (Math.abs(Date.now() - Date.parse(event.createdAt)) > PENDING_ALERT_MS) {
+    if (
+      isAdminAppend &&
+      Math.abs(Date.now() - Date.parse(event.createdAt)) > PENDING_ALERT_MS
+    ) {
       return json({ error: "stale_event" }, 422);
     }
 
-    const idempotencyHash = await eventIdempotencyHash(this.env.ENVIRONMENT, event);
-    const requestKey = `request:${event.requestId}:${event.phase}`;
+    const stream = isDeletionAppend ? "deletions" : "admin-audit";
+    const idempotencyHash = isDeletionAppend
+      ? await deletionIdempotencyHash(this.env.ENVIRONMENT, event)
+      : await eventIdempotencyHash(this.env.ENVIRONMENT, event);
+    const requestKey = `request:${stream}:${expectedIdempotencyKey}:${
+      event.phase ?? event.recordType
+    }`;
     const previousRequestHash = await this.state.storage.get(requestKey);
     if (previousRequestHash && previousRequestHash !== idempotencyHash) {
       return json({ error: "idempotency_conflict" }, 409);
@@ -455,44 +634,70 @@ export class ContinuityLedger {
     const existingReceipt = await this.state.storage.get(`receipt:${idempotencyHash}`);
     if (existingReceipt) return json(existingReceipt, 200);
 
-    if (event.phase === "outcome") {
+    if (isAdminAppend && event.phase === "outcome") {
       const intent = await this.state.storage.get(`pending:${event.requestId}`);
       if (!intent || intent.recordHash !== event.intentRecordHash) {
         return json({ error: "intent_not_found" }, 409);
       }
     }
 
-    const head = (await this.state.storage.get("head:admin-audit")) ?? {
+    const head = (await this.state.storage.get(`head:${stream}`)) ?? {
       recordHash: "0".repeat(64),
       sequence: 0,
     };
-    const sequence = head.sequence + 1;
-    const timestamp = new Date().toISOString();
-    const encryptionKeyVersion = Number(this.env.ADMIN_AUDIT_KEK_VERSION);
-    const metadata = {
-      environment: this.env.ENVIRONMENT,
-      previousHash: head.recordHash,
-      schemaVersion: 1,
-      sequence,
-      stream: "admin-audit",
-      timestamp,
-    };
-    const encrypted = await encryptAdminAuditPayload(
-      event,
-      metadata,
-      versionedSecret(this.env, "ADMIN_AUDIT_KEK", encryptionKeyVersion),
-    );
-    const recordWithoutHash = {
-      ...metadata,
-      ...encrypted,
-      encryptionKeyVersion,
-      idempotencyHash,
-    };
-    const recordHash = await sha256Hex(canonicalJson(recordWithoutHash));
-    const record = { ...recordWithoutHash, recordHash };
-    const objectBody = canonicalJson(record);
-    const objectKey = `admin-audit/${String(sequence).padStart(20, "0")}.json`;
-    const stored = await this.env.ADMIN_AUDIT_BUCKET.put(objectKey, objectBody, {
+    const draftKey = `draft:${idempotencyHash}`;
+    let draft = await this.state.storage.get(draftKey);
+    if (draft) {
+      if (
+        draft.stream !== stream ||
+        draft.sequence !== head.sequence + 1 ||
+        draft.previousHash !== head.recordHash
+      ) {
+        return json({ error: "sequence_conflict" }, 409);
+      }
+    } else {
+      const sequence = head.sequence + 1;
+      const timestamp = new Date().toISOString();
+      const encryptionKeyVersion = Number(this.env.ADMIN_AUDIT_KEK_VERSION);
+      const metadata = {
+        environment: this.env.ENVIRONMENT,
+        previousHash: head.recordHash,
+        schemaVersion: 1,
+        sequence,
+        stream,
+        timestamp,
+      };
+      const encrypted = isAdminAppend
+        ? await encryptAdminAuditPayload(
+            event,
+            metadata,
+            versionedSecret(this.env, "ADMIN_AUDIT_KEK", encryptionKeyVersion),
+          )
+        : { payload: event };
+      const recordWithoutHash = {
+        ...metadata,
+        ...encrypted,
+        ...(isAdminAppend ? { encryptionKeyVersion } : {}),
+        idempotencyHash,
+      };
+      const recordHash = await sha256Hex(canonicalJson(recordWithoutHash));
+      const objectBody = canonicalJson({ ...recordWithoutHash, recordHash });
+      draft = {
+        objectBody,
+        objectKey: `${stream}/${String(sequence).padStart(20, "0")}.json`,
+        previousHash: head.recordHash,
+        recordHash,
+        sequence,
+        stream,
+        timestamp,
+      };
+      await this.state.storage.put(draftKey, draft);
+    }
+    const { objectBody, objectKey, recordHash, sequence, timestamp } = draft;
+    const bucket = isDeletionAppend
+      ? this.env.DELETIONS_BUCKET
+      : this.env.ADMIN_AUDIT_BUCKET;
+    const stored = await bucket.put(objectKey, objectBody, {
       customMetadata: {
         recordHash,
         sequence: String(sequence),
@@ -500,7 +705,16 @@ export class ContinuityLedger {
       onlyIf: { etagDoesNotMatch: "*" },
       sha256: await sha256Hex(objectBody),
     });
-    if (!stored) return json({ error: "sequence_conflict" }, 409);
+    if (!stored) {
+      const existing = await bucket.get(objectKey);
+      if (!existing || (await existing.text()) !== objectBody) {
+        return json({ error: "sequence_conflict" }, 409);
+      }
+    }
+    const readback = await bucket.get(objectKey);
+    if (!readback || (await readback.text()) !== objectBody) {
+      return json({ error: "storage_verification_failed" }, 503);
+    }
 
     const signingKeyVersion = Number(this.env.LEDGER_SIGNING_KEY_VERSION);
     const unsignedReceipt = {
@@ -509,7 +723,7 @@ export class ContinuityLedger {
       keyVersion: signingKeyVersion,
       recordHash,
       sequence,
-      stream: "admin-audit",
+      stream,
       timestamp,
     };
     const receipt = {
@@ -525,11 +739,11 @@ export class ContinuityLedger {
     };
 
     const updates = {
-      "head:admin-audit": { recordHash, sequence },
+      [`head:${stream}`]: { recordHash, sequence },
       [`receipt:${idempotencyHash}`]: receipt,
       [requestKey]: idempotencyHash,
     };
-    if (event.phase === "intent") {
+    if (isAdminAppend && event.phase === "intent") {
       updates[`pending:${event.requestId}`] = {
         createdAt: timestamp,
         objectKey,
@@ -537,11 +751,12 @@ export class ContinuityLedger {
       };
     }
     await this.state.storage.put(updates);
-    if (event.phase === "outcome") {
+    if (isAdminAppend && event.phase === "outcome") {
       await this.state.storage.delete(`pending:${event.requestId}`);
-    } else {
+    } else if (isAdminAppend) {
       await this.state.storage.setAlarm(Date.now() + PENDING_ALERT_MS);
     }
+    await this.state.storage.delete(draftKey);
     return json(receipt, 200);
   }
 
@@ -615,7 +830,7 @@ export default {
     }
     if (
       request.method === "POST" &&
-      url.pathname === "/v1/admin-audit/append" &&
+      ["/v1/admin-audit/append", "/v1/deletions/append"].includes(url.pathname) &&
       !url.search
     ) {
       if (env?.MUTATIONS_ENABLED !== "true") {

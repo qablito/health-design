@@ -32,6 +32,16 @@ export declare function validateAdminAuditPayload(
   candidate: unknown,
 ): Readonly<Record<string, unknown>>;
 
+export declare function validateDeletionLedgerPayload(
+  candidate: unknown,
+): Readonly<Record<string, unknown>>;
+
+export declare function verifyProfileMarkerRekeyCoverage(
+  existingMarkers: ReadonlyArray<Record<string, unknown>>,
+  replacementMarkers: ReadonlyArray<Record<string, unknown>>,
+  targetVersion: number,
+): boolean;
+
 declare const worker: {
   fetch(request: Request, env: unknown): Response | Promise<Response>;
   scheduled(controller: unknown, env: unknown, context: unknown): void;

@@ -7,6 +7,8 @@ import {
   signServiceRequest,
   triggerAdminReconciliation,
   validateAdminAuditPayload,
+  validateDeletionLedgerPayload,
+  verifyProfileMarkerRekeyCoverage,
 } from "../../workers/continuity-ledger/src/index.js";
 import continuityWorker from "../../workers/continuity-ledger/src/index.js";
 
@@ -50,6 +52,7 @@ class MemoryStorage {
 
 class MemoryBucket {
   readonly objects = new Map<string, string>();
+  corruptReads = 0;
 
   put(key: string, value: string) {
     if (this.objects.has(key)) return Promise.resolve(null);
@@ -60,7 +63,17 @@ class MemoryBucket {
   get(key: string) {
     const value = this.objects.get(key);
     return Promise.resolve(
-      value === undefined ? null : { text: () => Promise.resolve(value) },
+      value === undefined
+        ? null
+        : {
+            text: () => {
+              if (this.corruptReads > 0) {
+                this.corruptReads -= 1;
+                return Promise.resolve(`${value}corrupt`);
+              }
+              return Promise.resolve(value);
+            },
+          },
     );
   }
 }
@@ -83,6 +96,7 @@ async function fixture() {
     ADMIN_AUDIT_KEK_V1: base64Url(crypto.getRandomValues(new Uint8Array(32))),
     ADMIN_AUDIT_KEK_VERSION: "1",
     CONTINUITY_LEDGER_HMAC_KEY: "ledger-hmac-key-with-at-least-256-bits",
+    DELETIONS_BUCKET: bucket,
     ENVIRONMENT: "development",
     LEDGER_SIGNING_KEY_VERSION: "1",
     LEDGER_SIGNING_PRIVATE_KEY_PKCS8_V1: base64Url(
@@ -95,6 +109,19 @@ async function fixture() {
     await crypto.subtle.exportKey("raw", signingKeys.publicKey),
   );
   return { bucket, env, ledger, publicKey, storage };
+}
+
+function deletionPayload(
+  operationId = "61000000-0000-4000-8000-000000005201",
+) {
+  return {
+    markerKeyVersion: 1,
+    operationId,
+    profileMarker: "a".repeat(64),
+    recordType: "profile_deletion",
+    schemaVersion: 1,
+    stream: "deletions",
+  };
 }
 
 function payload(requestId: string) {
@@ -135,7 +162,18 @@ async function signedRequest(
     ...(method === "POST" ? { body: rawBody } : {}),
     headers: {
       "content-type": "application/json",
-      ...(method === "POST" ? { "idempotency-key": String(body.requestId) } : {}),
+      ...(method === "POST"
+        ? {
+            "idempotency-key":
+              typeof body.requestId === "string"
+                ? body.requestId
+                : `${String(body.operationId)}:${String(body.recordType)}:${
+                    typeof body.markerKeyVersion === "number"
+                      ? String(body.markerKeyVersion)
+                      : ""
+                  }`,
+          }
+        : {}),
       "x-ledger-nonce": nonce,
       "x-ledger-signature": signature,
       "x-ledger-timestamp": timestamp,
@@ -145,6 +183,120 @@ async function signedRequest(
 }
 
 describe("Worker de continuidad", () => {
+  it("valida tombstones y recibos de rango mediante allowlists cerradas", () => {
+    expect(validateDeletionLedgerPayload(deletionPayload())).toEqual(
+      deletionPayload(),
+    );
+    expect(() =>
+      validateDeletionLedgerPayload({
+        ...deletionPayload(),
+        alias: "dato-prohibido",
+      }),
+    ).toThrow("invalid_payload");
+    expect(() =>
+      validateDeletionLedgerPayload({
+        auditDeletionJobId: "61000000-0000-4000-8000-000000005202",
+        fromSequence: 10,
+        operationId: "61000000-0000-4000-8000-000000005202",
+        rangeHash: "b".repeat(64),
+        recordType: "audit_range_delete_intent",
+        schemaVersion: 1,
+        stream: "deletions",
+        toSequence: 20,
+      }),
+    ).not.toThrow();
+  });
+
+  it("serializa el stream deletions, verifica readback y hace replay idempotente", async () => {
+    const state = await fixture();
+    const body = deletionPayload();
+    const first = await state.ledger.fetch(
+      await signedRequest(body, state.env.CONTINUITY_LEDGER_HMAC_KEY, crypto.randomUUID(), {
+        path: "/v1/deletions/append",
+      }),
+    );
+    const receipt = (await first.json()) as {
+      recordHash: string;
+      sequence: number;
+      stream: string;
+    };
+    expect(first.status).toBe(200);
+    expect(receipt).toMatchObject({ sequence: 1, stream: "deletions" });
+    expect(state.bucket.objects.has("deletions/00000000000000000001.json")).toBe(true);
+
+    const retry = await state.ledger.fetch(
+      await signedRequest(body, state.env.CONTINUITY_LEDGER_HMAC_KEY, crypto.randomUUID(), {
+        path: "/v1/deletions/append",
+      }),
+    );
+    await expect(retry.json()).resolves.toEqual(receipt);
+
+    const conflict = await state.ledger.fetch(
+      await signedRequest(
+        { ...body, profileMarker: "c".repeat(64) },
+        state.env.CONTINUITY_LEDGER_HMAC_KEY,
+        crypto.randomUUID(),
+        { path: "/v1/deletions/append" },
+      ),
+    );
+    expect(conflict.status).toBe(409);
+  });
+
+  it("verifica cobertura completa antes de retirar una clave HMAC antigua", () => {
+    expect(
+      verifyProfileMarkerRekeyCoverage(
+        [
+          { markerKeyVersion: 1, operationId: "job-a", profileMarker: "a".repeat(64) },
+          { markerKeyVersion: 1, operationId: "job-b", profileMarker: "b".repeat(64) },
+        ],
+        [
+          {
+            markerKeyVersion: 2,
+            operationId: "job-a",
+            previousMarkerKeyVersion: 1,
+            previousProfileMarker: "a".repeat(64),
+            profileMarker: "c".repeat(64),
+          },
+          {
+            markerKeyVersion: 2,
+            operationId: "job-b",
+            previousMarkerKeyVersion: 1,
+            previousProfileMarker: "b".repeat(64),
+            profileMarker: "d".repeat(64),
+          },
+        ],
+        2,
+      ),
+    ).toBe(true);
+    expect(
+      verifyProfileMarkerRekeyCoverage(
+        [{ markerKeyVersion: 1, operationId: "job-a", profileMarker: "a".repeat(64) }],
+        [],
+        2,
+      ),
+    ).toBe(false);
+  });
+
+  it("no entrega recibo si falla el readback y reanuda sin duplicar el tombstone", async () => {
+    const state = await fixture();
+    const body = deletionPayload("61000000-0000-4000-8000-000000005203");
+    state.bucket.corruptReads = 1;
+    const failed = await state.ledger.fetch(
+      await signedRequest(body, state.env.CONTINUITY_LEDGER_HMAC_KEY, crypto.randomUUID(), {
+        path: "/v1/deletions/append",
+      }),
+    );
+    expect(failed.status).toBe(503);
+
+    const resumed = await state.ledger.fetch(
+      await signedRequest(body, state.env.CONTINUITY_LEDGER_HMAC_KEY, crypto.randomUUID(), {
+        path: "/v1/deletions/append",
+      }),
+    );
+    expect(resumed.status).toBe(200);
+    expect(state.bucket.objects.size).toBe(1);
+  });
+
   it("acepta las acciones administrativas cerradas de productos T16", () => {
     const expectedTargets = {
       barcode_correction_approve: "commercial_product_revision",
@@ -166,6 +318,34 @@ describe("Worker de continuidad", () => {
         }),
       ).not.toThrow();
     }
+  });
+
+  it("acepta únicamente las nuevas acciones administrativas cerradas de T18", () => {
+    const expectedTargets = {
+      anonymous_auth_cleanup: "auth_user",
+      audit_range_delete_execute: "audit_deletion_job",
+      audit_range_delete_prepare: "audit_deletion_job",
+      backup_create: "backup_job",
+      profile_deletion_permanent: "deletion_job",
+      profile_deletion_resume: "deletion_job",
+      restore_create: "restore_job",
+      restore_promote: "restore_job",
+    } as const;
+    for (const [action, targetType] of Object.entries(expectedTargets)) {
+      expect(() =>
+        validateAdminAuditPayload({
+          ...payload(crypto.randomUUID()),
+          action,
+          targetType,
+        }),
+      ).not.toThrow();
+    }
+    expect(() =>
+      validateAdminAuditPayload({
+        ...payload(crypto.randomUUID()),
+        action: "delete_everything",
+      }),
+    ).toThrow("invalid_payload");
   });
 
   it("rechaza payload libre, canarios, cuerpos grandes y HMAC débil", async () => {

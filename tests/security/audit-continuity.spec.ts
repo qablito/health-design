@@ -55,6 +55,33 @@ describe("continuidad criptográfica de auditoría", () => {
     );
   });
 
+  it("firma recibos equivalentes del stream deletions sin relajar sus campos", async () => {
+    const keyPair = await crypto.subtle.generateKey("Ed25519", true, [
+      "sign",
+      "verify",
+    ]);
+    const publicKey = base64Url(
+      await crypto.subtle.exportKey("raw", keyPair.publicKey),
+    );
+    const unsigned = {
+      environment: "development",
+      idempotencyHash: "a".repeat(64),
+      keyVersion: 1,
+      recordHash: "b".repeat(64),
+      sequence: 1,
+      stream: "deletions",
+      timestamp: "2026-07-23T16:00:00.000Z",
+    } as const;
+    const signature = await crypto.subtle.sign(
+      "Ed25519",
+      keyPair.privateKey,
+      receiptSigningPayload(unsigned),
+    );
+    const receipt: LedgerReceipt = { ...unsigned, signature: base64Url(signature) };
+
+    expect(await verifyLedgerReceipt(receipt, publicKey)).toBe(true);
+  });
+
   it("rechaza firma, campos firmados y clave Ed25519 alterados", async () => {
     const keyPair = await crypto.subtle.generateKey("Ed25519", true, [
       "sign",

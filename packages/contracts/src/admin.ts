@@ -331,7 +331,7 @@ export const LedgerReceiptSchema = z
     recordHash: Sha256HexSchema,
     sequence: z.number().int().positive(),
     signature: Ed25519SignatureSchema,
-    stream: z.literal("admin-audit"),
+    stream: z.enum(["admin-audit", "deletions"]),
     timestamp: z.iso.datetime({ offset: true }),
   })
   .strict();

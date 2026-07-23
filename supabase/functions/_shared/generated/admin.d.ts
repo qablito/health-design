@@ -431,7 +431,10 @@ export declare const LedgerReceiptSchema: z.ZodObject<{
     recordHash: z.ZodString;
     sequence: z.ZodNumber;
     signature: z.ZodString;
-    stream: z.ZodLiteral<"admin-audit">;
+    stream: z.ZodEnum<{
+        "admin-audit": "admin-audit";
+        deletions: "deletions";
+    }>;
     timestamp: z.ZodISODateTime;
 }, z.core.$strict>;
 export type AdminMutationRequest = z.infer<typeof AdminMutationRequestSchema>;
