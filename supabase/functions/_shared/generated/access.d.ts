@@ -22,6 +22,33 @@ export declare const ProfileAccessSummarySchema: z.ZodObject<{
     }>;
 }, z.core.$strict>;
 export type ProfileAccessSummary = z.infer<typeof ProfileAccessSummarySchema>;
+export declare const DELETION_PUBLIC_ERROR_CODES: readonly ["authorization_failed", "ledger_unavailable", "storage_unavailable", "purge_incomplete", "auth_cleanup_pending"];
+export declare const DeletionRequestCreateSchema: z.ZodObject<{
+    alias: z.ZodString;
+    confirmationPhrase: z.ZodLiteral<"BORRAR MI PERFIL PERMANENTEMENTE">;
+    irreversible: z.ZodLiteral<true>;
+    schemaVersion: z.ZodLiteral<1>;
+}, z.core.$strict>;
+export declare const DeletionRequestStatusSchema: z.ZodObject<{
+    completedAt: z.ZodNullable<z.ZodISODateTime>;
+    errorCode: z.ZodNullable<z.ZodEnum<{
+        authorization_failed: "authorization_failed";
+        ledger_unavailable: "ledger_unavailable";
+        storage_unavailable: "storage_unavailable";
+        purge_incomplete: "purge_incomplete";
+        auth_cleanup_pending: "auth_cleanup_pending";
+    }>>;
+    handle: z.ZodString;
+    requestedAt: z.ZodISODateTime;
+    schemaVersion: z.ZodLiteral<1>;
+    status: z.ZodEnum<{
+        queued: "queued";
+        ledger_recorded: "ledger_recorded";
+        purging: "purging";
+        purged: "purged";
+        failed: "failed";
+    }>;
+}, z.core.$strict>;
 export declare const InvitationRedeemRequestSchema: z.ZodObject<{
     adultAttested: z.ZodLiteral<true>;
     alias: z.ZodString;
@@ -109,3 +136,5 @@ export type PrivateCodeRotationResponse = z.infer<typeof PrivateCodeRotationResp
 export type DeviceSessionSummary = z.infer<typeof DeviceSessionSummarySchema>;
 export type SessionTouchResponse = z.infer<typeof SessionTouchResponseSchema>;
 export type SessionRevokeResponse = z.infer<typeof SessionRevokeResponseSchema>;
+export type DeletionRequestCreate = z.infer<typeof DeletionRequestCreateSchema>;
+export type DeletionRequestStatus = z.infer<typeof DeletionRequestStatusSchema>;

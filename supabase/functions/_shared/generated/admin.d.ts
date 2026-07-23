@@ -1,4 +1,102 @@
 import type { z } from "zod";
+export declare const DELETION_JOB_STATES: readonly ["queued", "ledger_recorded", "purging", "purged", "failed"];
+export declare const DELETION_JOB_STEPS: readonly ["ledger", "access", "exports", "storage", "profile_data", "auth", "verification"];
+export declare const DELETION_ADMIN_ERROR_CODES: readonly ["ledger_unavailable", "ledger_verification_failed", "access_revocation_failed", "export_purge_failed", "storage_unavailable", "storage_verification_failed", "profile_purge_failed", "auth_cleanup_pending", "verification_failed"];
+export declare const AdminPermanentDeletionRequestSchema: z.ZodObject<{
+    confirmationPhrase: z.ZodLiteral<"PURGAR PERFIL PERMANENTEMENTE">;
+    confirmed: z.ZodLiteral<true>;
+    expectedVersion: z.ZodNumber;
+    schemaVersion: z.ZodLiteral<1>;
+}, z.core.$strict>;
+export declare const AdminDeletionJobSchema: z.ZodObject<{
+    attempts: z.ZodNumber;
+    completedAt: z.ZodNullable<z.ZodISODateTime>;
+    errorCode: z.ZodNullable<z.ZodEnum<{
+        ledger_unavailable: "ledger_unavailable";
+        storage_unavailable: "storage_unavailable";
+        auth_cleanup_pending: "auth_cleanup_pending";
+        ledger_verification_failed: "ledger_verification_failed";
+        access_revocation_failed: "access_revocation_failed";
+        export_purge_failed: "export_purge_failed";
+        storage_verification_failed: "storage_verification_failed";
+        profile_purge_failed: "profile_purge_failed";
+        verification_failed: "verification_failed";
+    }>>;
+    jobId: z.ZodUUID;
+    profileId: z.ZodNullable<z.ZodUUID>;
+    requestedAt: z.ZodISODateTime;
+    schemaVersion: z.ZodLiteral<1>;
+    status: z.ZodEnum<{
+        queued: "queued";
+        ledger_recorded: "ledger_recorded";
+        purging: "purging";
+        purged: "purged";
+        failed: "failed";
+    }>;
+    steps: z.ZodArray<z.ZodObject<{
+        completed: z.ZodBoolean;
+        name: z.ZodEnum<{
+            ledger: "ledger";
+            access: "access";
+            exports: "exports";
+            storage: "storage";
+            profile_data: "profile_data";
+            auth: "auth";
+            verification: "verification";
+        }>;
+    }, z.core.$strict>>;
+    version: z.ZodNumber;
+}, z.core.$strict>;
+export declare const AdminBackupCreateRequestSchema: z.ZodObject<{
+    kind: z.ZodEnum<{
+        weekly: "weekly";
+        precritical: "precritical";
+    }>;
+    schemaVersion: z.ZodLiteral<1>;
+}, z.core.$strict>;
+export declare const AdminBackupJobSchema: z.ZodObject<{
+    backupId: z.ZodUUID;
+    createdAt: z.ZodISODateTime;
+    kind: z.ZodEnum<{
+        weekly: "weekly";
+        precritical: "precritical";
+    }>;
+    schemaVersion: z.ZodLiteral<1>;
+    status: z.ZodEnum<{
+        queued: "queued";
+        failed: "failed";
+        capturing: "capturing";
+        verifying: "verifying";
+        ready: "ready";
+        pruned: "pruned";
+    }>;
+    verifiedAt: z.ZodNullable<z.ZodISODateTime>;
+    version: z.ZodNumber;
+}, z.core.$strict>;
+export declare const AdminRestoreJobSchema: z.ZodObject<{
+    backupId: z.ZodUUID;
+    createdAt: z.ZodISODateTime;
+    restoreId: z.ZodUUID;
+    schemaVersion: z.ZodLiteral<1>;
+    status: z.ZodEnum<{
+        queued: "queued";
+        failed: "failed";
+        verifying: "verifying";
+        restoring: "restoring";
+        validating: "validating";
+        ready_for_promotion: "ready_for_promotion";
+        promoted: "promoted";
+        blocked: "blocked";
+    }>;
+    verifiedAt: z.ZodNullable<z.ZodISODateTime>;
+    version: z.ZodNumber;
+}, z.core.$strict>;
+export declare const AdminRestorePromoteRequestSchema: z.ZodObject<{
+    confirmationPhrase: z.ZodLiteral<"PROMOVER RESTAURACIÓN VERIFICADA">;
+    confirmed: z.ZodLiteral<true>;
+    expectedVersion: z.ZodNumber;
+    schemaVersion: z.ZodLiteral<1>;
+}, z.core.$strict>;
 export declare const AdminMutationRequestSchema: z.ZodObject<{
     schemaVersion: z.ZodLiteral<1>;
 }, z.core.$strict>;
@@ -346,3 +444,6 @@ export type AdminCatalogPublicationMutationAck = z.infer<typeof AdminCatalogPubl
 export type AdminProfileSummary = z.infer<typeof AdminProfileSummarySchema>;
 export type AdminImpersonationContext = z.infer<typeof AdminImpersonationContextSchema>;
 export type LedgerReceipt = z.infer<typeof LedgerReceiptSchema>;
+export type AdminDeletionJob = z.infer<typeof AdminDeletionJobSchema>;
+export type AdminBackupJob = z.infer<typeof AdminBackupJobSchema>;
+export type AdminRestoreJob = z.infer<typeof AdminRestoreJobSchema>;

@@ -6,6 +6,118 @@ import { CatalogCoverageSchema, SUPERMARKET_CHAINS } from "./shopping.ts";
 const UuidSchema = z.uuid();
 const Sha256HexSchema = z.string().regex(/^[a-f0-9]{64}$/);
 const Ed25519SignatureSchema = z.string().regex(/^[A-Za-z0-9_-]{86}$/);
+const OperationsVersionSchema = z.number().int().positive();
+const OperationsTimestampSchema = z.iso.datetime({ offset: true });
+
+export const DELETION_JOB_STATES = [
+  "queued",
+  "ledger_recorded",
+  "purging",
+  "purged",
+  "failed",
+] as const;
+export const DELETION_JOB_STEPS = [
+  "ledger",
+  "access",
+  "exports",
+  "storage",
+  "profile_data",
+  "auth",
+  "verification",
+] as const;
+export const DELETION_ADMIN_ERROR_CODES = [
+  "ledger_unavailable",
+  "ledger_verification_failed",
+  "access_revocation_failed",
+  "export_purge_failed",
+  "storage_unavailable",
+  "storage_verification_failed",
+  "profile_purge_failed",
+  "auth_cleanup_pending",
+  "verification_failed",
+] as const;
+
+export const AdminPermanentDeletionRequestSchema = z
+  .object({
+    confirmationPhrase: z.literal("PURGAR PERFIL PERMANENTEMENTE"),
+    confirmed: z.literal(true),
+    expectedVersion: OperationsVersionSchema,
+    schemaVersion: z.literal(1),
+  })
+  .strict();
+
+export const AdminDeletionJobSchema = z
+  .object({
+    attempts: z.number().int().min(0),
+    completedAt: OperationsTimestampSchema.nullable(),
+    errorCode: z.enum(DELETION_ADMIN_ERROR_CODES).nullable(),
+    jobId: UuidSchema,
+    profileId: UuidSchema.nullable(),
+    requestedAt: OperationsTimestampSchema,
+    schemaVersion: z.literal(1),
+    status: z.enum(DELETION_JOB_STATES),
+    steps: z
+      .array(
+        z
+          .object({
+            completed: z.boolean(),
+            name: z.enum(DELETION_JOB_STEPS),
+          })
+          .strict(),
+      )
+      .length(DELETION_JOB_STEPS.length),
+    version: OperationsVersionSchema,
+  })
+  .strict();
+
+export const AdminBackupCreateRequestSchema = z
+  .object({
+    kind: z.enum(["weekly", "precritical"]),
+    schemaVersion: z.literal(1),
+  })
+  .strict();
+
+export const AdminBackupJobSchema = z
+  .object({
+    backupId: UuidSchema,
+    createdAt: OperationsTimestampSchema,
+    kind: z.enum(["weekly", "precritical"]),
+    schemaVersion: z.literal(1),
+    status: z.enum(["queued", "capturing", "verifying", "ready", "failed", "pruned"]),
+    verifiedAt: OperationsTimestampSchema.nullable(),
+    version: OperationsVersionSchema,
+  })
+  .strict();
+
+export const AdminRestoreJobSchema = z
+  .object({
+    backupId: UuidSchema,
+    createdAt: OperationsTimestampSchema,
+    restoreId: UuidSchema,
+    schemaVersion: z.literal(1),
+    status: z.enum([
+      "queued",
+      "verifying",
+      "restoring",
+      "validating",
+      "ready_for_promotion",
+      "promoted",
+      "blocked",
+      "failed",
+    ]),
+    verifiedAt: OperationsTimestampSchema.nullable(),
+    version: OperationsVersionSchema,
+  })
+  .strict();
+
+export const AdminRestorePromoteRequestSchema = z
+  .object({
+    confirmationPhrase: z.literal("PROMOVER RESTAURACIÓN VERIFICADA"),
+    confirmed: z.literal(true),
+    expectedVersion: OperationsVersionSchema,
+    schemaVersion: z.literal(1),
+  })
+  .strict();
 
 export const AdminMutationRequestSchema = z
   .object({
@@ -244,3 +356,6 @@ export type AdminCatalogPublicationMutationAck = z.infer<
 export type AdminProfileSummary = z.infer<typeof AdminProfileSummarySchema>;
 export type AdminImpersonationContext = z.infer<typeof AdminImpersonationContextSchema>;
 export type LedgerReceipt = z.infer<typeof LedgerReceiptSchema>;
+export type AdminDeletionJob = z.infer<typeof AdminDeletionJobSchema>;
+export type AdminBackupJob = z.infer<typeof AdminBackupJobSchema>;
+export type AdminRestoreJob = z.infer<typeof AdminRestoreJobSchema>;

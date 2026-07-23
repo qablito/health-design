@@ -30,6 +30,35 @@ const PrivateCodeSchema = z
   .trim()
   .regex(/^(?:[A-Fa-f0-9]{4}-){7}[A-Fa-f0-9]{4}$/);
 const QrPayloadSchema = z.string().regex(/^healthdesign-link-v1\.[A-Za-z0-9_-]{22}$/);
+const DeletionHandleSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
+
+export const DELETION_PUBLIC_ERROR_CODES = [
+  "authorization_failed",
+  "ledger_unavailable",
+  "storage_unavailable",
+  "purge_incomplete",
+  "auth_cleanup_pending",
+] as const;
+
+export const DeletionRequestCreateSchema = z
+  .object({
+    alias: AliasSchema,
+    confirmationPhrase: z.literal("BORRAR MI PERFIL PERMANENTEMENTE"),
+    irreversible: z.literal(true),
+    schemaVersion: z.literal(1),
+  })
+  .strict();
+
+export const DeletionRequestStatusSchema = z
+  .object({
+    completedAt: z.iso.datetime({ offset: true }).nullable(),
+    errorCode: z.enum(DELETION_PUBLIC_ERROR_CODES).nullable(),
+    handle: DeletionHandleSchema,
+    requestedAt: z.iso.datetime({ offset: true }),
+    schemaVersion: z.literal(1),
+    status: z.enum(["queued", "ledger_recorded", "purging", "purged", "failed"]),
+  })
+  .strict();
 
 export const InvitationRedeemRequestSchema = z
   .object({
@@ -152,3 +181,5 @@ export type PrivateCodeRotationResponse = z.infer<
 export type DeviceSessionSummary = z.infer<typeof DeviceSessionSummarySchema>;
 export type SessionTouchResponse = z.infer<typeof SessionTouchResponseSchema>;
 export type SessionRevokeResponse = z.infer<typeof SessionRevokeResponseSchema>;
+export type DeletionRequestCreate = z.infer<typeof DeletionRequestCreateSchema>;
+export type DeletionRequestStatus = z.infer<typeof DeletionRequestStatusSchema>;
