@@ -531,6 +531,7 @@ const ShoppingSnapshotItemSchema = z
     canonicalFoodKey: FoodKeySchema,
     name: LimitedTextSchema(240),
     selected: ShoppingSelectionSchema.nullable(),
+    selectionOrigin: z.enum(["automatic", "manual"]),
     shoppingItemId: z.uuid(),
     state: z.enum([
       "resolved",

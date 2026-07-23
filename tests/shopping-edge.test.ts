@@ -119,6 +119,7 @@ const envelope = {
           requiredAfterLeftoverG: "1000",
           totalCostEur: "6.5",
         },
+        selectionOrigin: "automatic",
         shoppingItemId: ITEM_ID,
         state: "resolved",
         uncertainties: [],

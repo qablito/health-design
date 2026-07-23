@@ -633,15 +633,22 @@ describe("resolver puro de compra T17C.1", () => {
       totalCostEur: "8",
     });
     expect(snapshot.items[0]?.selected?.projection.externalSku).toBe("sku-manual");
+    expect(snapshot.items[0]?.selectionOrigin).toBe("manual");
   });
 
   it("deja pendiente una selección manual obsoleta sin sustituirla", async () => {
     const snapshot = await resolveShopping(input({ manualSkuId: uuid(99) }));
     expect(snapshot.items[0]).toMatchObject({
+      selectionOrigin: "manual",
       selected: null,
       state: "no_confirmed_product",
       uncertainties: ["shopping_manual_selection_stale"],
     });
+  });
+
+  it("marca una selección automática sin obligar a la UI a inferirla", async () => {
+    const snapshot = await resolveShopping(input({}));
+    expect(snapshot.items[0]?.selectionOrigin).toBe("automatic");
   });
 
   it("mantiene exactitud con cantidades decimales grandes", async () => {

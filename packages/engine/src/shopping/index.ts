@@ -286,6 +286,8 @@ function resolveLine(
     amountG: line.amountG,
     canonicalFoodKey: line.canonicalFoodKey,
     name: line.name.normalize("NFC"),
+    selectionOrigin: (manualSelection === undefined ? "automatic" : "manual") as
+      SnapshotItem["selectionOrigin"],
     shoppingItemId: itemId,
   };
 
