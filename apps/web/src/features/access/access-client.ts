@@ -2,6 +2,8 @@ import {
   CodeLinkRequestSchema,
   DeviceLinkHandleSchema,
   DeviceSessionSummarySchema,
+  DeletionRequestCreateSchema,
+  DeletionRequestStatusSchema,
   InvitationRedeemRequestSchema,
   InvitationRedeemResponseSchema,
   PrivateCodeRotationResponseSchema,
@@ -13,6 +15,8 @@ import {
   type CodeLinkRequest,
   type DeviceLinkHandle,
   type DeviceSessionSummary,
+  type DeletionRequestCreate,
+  type DeletionRequestStatus,
   type InvitationRedeemRequest,
   type InvitationRedeemResponse,
   type PrivateCodeRotationResponse,
@@ -133,6 +137,29 @@ export function createAccessClient(dependencies: AccessClientDependencies) {
         "POST",
         { schemaVersion: 1 },
         options,
+      );
+    },
+    createDeletionRequest(
+      profileId: string,
+      input: DeletionRequestCreate,
+      options?: MutationOptions,
+    ) {
+      return request<DeletionRequestStatus>(
+        `/v1/profiles/${profileId}/deletion-requests`,
+        DeletionRequestStatusSchema,
+        "POST",
+        DeletionRequestCreateSchema.parse(input),
+        options,
+      );
+    },
+    getDeletionRequest(handle: string) {
+      if (!/^[A-Za-z0-9_-]{43}$/.test(handle)) {
+        throw new Error("invalid_deletion_handle");
+      }
+      return request<DeletionRequestStatus>(
+        `/v1/deletion-requests/${handle}`,
+        DeletionRequestStatusSchema,
+        "GET",
       );
     },
     linkWithPrivateCode(input: CodeLinkRequest, options?: MutationOptions) {
@@ -262,6 +289,7 @@ export const accessClient = createAccessClient({
 
 export type {
   DeviceLinkHandle,
+  DeletionRequestStatus,
   DeviceSessionSummary,
   InvitationRedeemResponse,
   PrivateCodeRotationResponse,

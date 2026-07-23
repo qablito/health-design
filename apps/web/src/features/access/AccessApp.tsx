@@ -7,6 +7,7 @@ import {
   clearLocalIdentity,
   ensureAnonymousIdentity,
   type DeviceSessionSummary,
+  type DeletionRequestStatus,
   type ProfileAccessSummary,
   type QrGrantResponse,
 } from "./access-client";
@@ -16,7 +17,7 @@ import { clearPublicAssetCaches } from "../../services/client-cache";
 
 import "./access.css";
 
-type AccessMode = "code" | "home" | "invitation" | "qr";
+type AccessMode = "code" | "deletion" | "home" | "invitation" | "qr";
 
 const PRIVATE_CODE_PATTERN = "(?:[A-Fa-f0-9]{4}-){7}[A-Fa-f0-9]{4}";
 const QR_PATTERN = "healthdesign-link-v1\\.[A-Za-z0-9_-]{22}";
@@ -120,6 +121,7 @@ export function AccessApp() {
   }>();
   const [qrGrant, setQrGrant] = useState<QrGrantResponse>();
   const [qrImage, setQrImage] = useState<string>();
+  const [deletionStatus, setDeletionStatus] = useState<DeletionRequestStatus>();
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.profileId === selectedProfileId),
@@ -294,6 +296,44 @@ export function AccessApp() {
     });
   }
 
+  async function requestDeletion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedProfileId || !selectedProfile) return;
+    const form = new FormData(event.currentTarget);
+    if (
+      formText(form, "confirmation") !==
+      "BORRAR MI PERFIL PERMANENTEMENTE"
+    ) {
+      setError("La frase de confirmación no coincide.");
+      return;
+    }
+    await run(async () => {
+      const status = await accessClient.createDeletionRequest(
+        selectedProfileId,
+        {
+          alias: formText(form, "alias"),
+          confirmationPhrase: "BORRAR MI PERFIL PERMANENTEMENTE",
+          irreversible: true,
+          schemaVersion: 1,
+        },
+        { idempotencyKey: crypto.randomUUID() },
+      );
+      setDeletionStatus(status);
+      setNotice(
+        "La solicitud irreversible ha sido registrada. Guarda el identificador de seguimiento.",
+      );
+    });
+  }
+
+  async function refreshDeletionStatus() {
+    if (!deletionStatus) return;
+    await run(async () => {
+      setDeletionStatus(
+        await accessClient.getDeletionRequest(deletionStatus.handle),
+      );
+    });
+  }
+
   return (
     <main className="access-shell">
       <header className="access-header">
@@ -400,6 +440,14 @@ export function AccessApp() {
                   type="button"
                 >
                   Rotar código privado
+                </button>
+                <button
+                  className="danger-button"
+                  disabled={busy}
+                  onClick={() => setMode("deletion")}
+                  type="button"
+                >
+                  Solicitar borrado permanente
                 </button>
               </div>
               {qrGrant && qrImage ? (
@@ -525,6 +573,66 @@ export function AccessApp() {
             {busy ? "Vinculando…" : "Vincular dispositivo"}
           </button>
         </form>
+      ) : null}
+
+      {mode === "deletion" && selectedProfile ? (
+        <section className="access-form" aria-labelledby="deletion-title">
+          <p className="eyebrow">ACCIÓN IRREVERSIBLE</p>
+          <h2 id="deletion-title">Borrar permanentemente este perfil</h2>
+          <p>
+            Se eliminarán el plan, cuestionarios, seguimientos, compras y archivos
+            privados. No existe recuperación posterior.
+          </p>
+          {deletionStatus ? (
+            <div role="status">
+              <p>
+                Estado: <strong>{deletionStatus.status}</strong>
+              </p>
+              <p>
+                Identificador de seguimiento: <code>{deletionStatus.handle}</code>
+              </p>
+              {deletionStatus.errorCode ? (
+                <p>Incidencia redactada: {deletionStatus.errorCode}</p>
+              ) : null}
+              <button
+                className="secondary-button"
+                disabled={busy}
+                onClick={() => void refreshDeletionStatus()}
+                type="button"
+              >
+                Actualizar estado
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={(event) => void requestDeletion(event)}>
+              <label className="check-field">
+                <input required type="checkbox" />
+                <span>Entiendo que el borrado no se puede deshacer.</span>
+              </label>
+              <label className="field">
+                <span>Escribe el alias exacto: {selectedProfile.alias}</span>
+                <input
+                  autoComplete="off"
+                  name="alias"
+                  pattern="[A-Za-z0-9 _-]+"
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Escribe BORRAR MI PERFIL PERMANENTEMENTE</span>
+                <input
+                  autoComplete="off"
+                  name="confirmation"
+                  pattern="BORRAR MI PERFIL PERMANENTEMENTE"
+                  required
+                />
+              </label>
+              <button className="danger-button" disabled={busy} type="submit">
+                Confirmar solicitud irreversible
+              </button>
+            </form>
+          )}
+        </section>
       ) : null}
 
       {mode === "qr" ? <QrLinkForm busy={busy} onSubmit={submitQr} /> : null}

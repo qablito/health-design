@@ -4,6 +4,7 @@ import {
   AdminApiError,
   adminClient,
   type AdminImpersonationContext,
+  type AdminDeletionJob,
   type AdminProfileSummary,
 } from "./admin-client";
 import { ProductReviewPanel } from "./ProductReviewPanel";
@@ -59,6 +60,8 @@ export function AdminApp() {
   const [factorId, setFactorId] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [deletionJob, setDeletionJob] = useState<AdminDeletionJob>();
+  const [deletionConfirmation, setDeletionConfirmation] = useState("");
 
   const activeProfile = useMemo(
     () =>
@@ -204,6 +207,26 @@ export function AdminApp() {
     });
   }
 
+  async function permanentlyDelete(profile: AdminProfileSummary) {
+    if (
+      profile.status !== "deletion_requested" ||
+      !profile.deletionJobVersion ||
+      deletionConfirmation !== "PURGAR PERFIL PERMANENTEMENTE"
+    ) {
+      setError("Escribe la frase de confirmación completa antes de continuar.");
+      return;
+    }
+    await run(async () => {
+      const job = await adminClient.permanentlyDeleteProfile(
+        profile.profileId,
+        profile.deletionJobVersion!,
+      );
+      setDeletionJob(job);
+      setDeletionConfirmation("");
+      await loadAdminData();
+    });
+  }
+
   return (
     <main className="admin-shell">
       {context.active ? (
@@ -236,6 +259,13 @@ export function AdminApp() {
           </button>
         ) : null}
       </header>
+
+      {stage === "ready" ? (
+        <div className="admin-audit-pending" role="status">
+          Sesión de superadministrador activa. Las acciones de esta pantalla afectan a
+          datos reales del entorno seleccionado.
+        </div>
+      ) : null}
 
       {error ? (
         <div className="admin-error" role="alert">
@@ -324,9 +354,46 @@ export function AdminApp() {
                   >
                     Acceder como este perfil
                   </button>
+                  {profile.status === "deletion_requested" &&
+                  profile.deletionJobVersion ? (
+                    <div className="admin-form">
+                      <label>
+                        Confirmación final
+                        <input
+                          autoComplete="off"
+                          onChange={(event) =>
+                            setDeletionConfirmation(event.target.value)
+                          }
+                          placeholder="PURGAR PERFIL PERMANENTEMENTE"
+                          value={deletionConfirmation}
+                        />
+                      </label>
+                      <button
+                        disabled={
+                          busy ||
+                          deletionConfirmation !==
+                            "PURGAR PERFIL PERMANENTEMENTE"
+                        }
+                        onClick={() => void permanentlyDelete(profile)}
+                        type="button"
+                      >
+                        Ejecutar borrado permanente
+                      </button>
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>
+            {deletionJob ? (
+              <div className="admin-audit-pending" role="status">
+                <strong>Job {deletionJob.status}</strong>
+                <span>
+                  {deletionJob.steps.filter((step) => step.completed).length}/
+                  {deletionJob.steps.length} pasos completados. Los errores mostrados
+                  están redactados.
+                </span>
+              </div>
+            ) : null}
           </section>
         </>
       ) : null}

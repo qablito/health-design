@@ -103,6 +103,8 @@ export declare const AdminMutationRequestSchema: z.ZodObject<{
 export declare const AdminProfileSummarySchema: z.ZodObject<{
     alias: z.ZodString;
     createdAt: z.ZodISODateTime;
+    deletionJobId: z.ZodOptional<z.ZodUUID>;
+    deletionJobVersion: z.ZodOptional<z.ZodNumber>;
     profileId: z.ZodUUID;
     status: z.ZodEnum<{
         active: "active";

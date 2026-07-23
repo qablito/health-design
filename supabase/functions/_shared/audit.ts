@@ -3,6 +3,7 @@ import type { LedgerReceipt } from "@health-design/contracts";
 export type AccessAuditAction =
   | "code_consume"
   | "invitation_redeem"
+  | "profile_deletion_request"
   | "private_code_rotate"
   | "qr_consume"
   | "qr_create"
@@ -43,18 +44,31 @@ export type AdminAuditAction =
   | "catalog_match_candidates_generate"
   | "catalog_publication_hide"
   | "catalog_revision_publish"
+  | "anonymous_auth_cleanup"
+  | "audit_range_delete_execute"
+  | "audit_range_delete_prepare"
+  | "backup_create"
   | "impersonation_end"
   | "impersonation_start"
   | "matching_rule_activate"
-  | "matching_rule_review";
+  | "matching_rule_review"
+  | "profile_deletion_permanent"
+  | "profile_deletion_resume"
+  | "restore_create"
+  | "restore_promote";
 export type AdminAuditTargetType =
+  | "audit_deletion_job"
+  | "auth_user"
+  | "backup_job"
   | "barcode_correction"
   | "commercial_product_revision"
   | "catalog_publication"
   | "catalog_revision"
   | "impersonation_session"
   | "product_matching_rule"
-  | "profile";
+  | "profile"
+  | "deletion_job"
+  | "restore_job";
 
 export type AdminIntentInput = {
   action: AdminAuditAction;

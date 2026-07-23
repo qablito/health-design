@@ -129,6 +129,8 @@ export const AdminProfileSummarySchema = z
   .object({
     alias: z.string().min(1).max(64),
     createdAt: z.iso.datetime({ offset: true }),
+    deletionJobId: UuidSchema.optional(),
+    deletionJobVersion: OperationsVersionSchema.optional(),
     profileId: UuidSchema,
     status: z.enum(PROFILE_STATUSES),
   })

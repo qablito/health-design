@@ -10,6 +10,8 @@ export type AccessRoute =
   | { kind: "qr-consume" }
   | { kind: "qr-create"; profileId: string }
   | { kind: "private-code-rotate"; profileId: string }
+  | { kind: "deletion-request-create"; profileId: string }
+  | { handle: string; kind: "deletion-request-status" }
   | { kind: "session-revoke"; profileId: string; sessionId: string }
   | { kind: "sessions-list"; profileId: string }
   | { kind: "session-touch" };
@@ -101,6 +103,24 @@ export function parseAccessRoute(url: URL): AccessRoute | null {
   };
   const staticRoute = staticRoutes[path];
   if (staticRoute) return staticRoute;
+
+  const deletionStatusMatch = /^\/v1\/deletion-requests\/([A-Za-z0-9_-]{43})$/.exec(
+    path,
+  );
+  if (deletionStatusMatch?.[1]) {
+    return { handle: deletionStatusMatch[1], kind: "deletion-request-status" };
+  }
+
+  const deletionRequestMatch = new RegExp(
+    `^/v1/profiles/(${UUID_PATTERN})/deletion-requests$`,
+    "i",
+  ).exec(path);
+  if (deletionRequestMatch?.[1]) {
+    return {
+      kind: "deletion-request-create",
+      profileId: deletionRequestMatch[1],
+    };
+  }
 
   const profileMatch = new RegExp(
     `^/v1/profiles/(${UUID_PATTERN})/(device-links/qr|private-code/rotate|sessions)$`,

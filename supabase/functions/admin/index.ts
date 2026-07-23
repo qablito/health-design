@@ -14,6 +14,8 @@ import {
   AdminCatalogPublicationMutationAckSchema,
   AdminCatalogPublishRequestSchema,
   AdminImpersonationContextSchema,
+  AdminDeletionJobSchema,
+  AdminPermanentDeletionRequestSchema,
   AdminMatchingRuleActivateRequestSchema,
   AdminMatchingRuleMutationAckSchema,
   AdminMutationRequestSchema,
@@ -25,6 +27,7 @@ import {
   type AdminCatalogMatchCandidatesAck,
   type AdminCatalogPublicationMutationAck,
   type AdminImpersonationContext,
+  type AdminDeletionJob,
   type AdminMatchingRuleMutationAck,
   type AdminSupermarketMatchingRuleReviewAck,
   type LedgerReceipt,
@@ -77,16 +80,31 @@ type AdminSuccessOutcomeInput = AdminIntentInput & {
 };
 
 export interface AdminDependencies {
+  appendDeletionTombstone?(input: {
+    markerKeyVersion: number;
+    operationId: string;
+    profileMarker: string;
+  }): Promise<LedgerReceipt>;
   appendFailureOutcome(input: AdminFailureOutcomeInput): Promise<LedgerReceipt>;
   appendIntent(input: AdminIntentInput): Promise<LedgerReceipt>;
   appendSuccessOutcome(input: AdminSuccessOutcomeInput): Promise<LedgerReceipt>;
   authenticate(token: string): Promise<AuthContext>;
+  deleteAuthUser?(authSubject: string): Promise<void>;
+  deletePrivateObjects?(paths: readonly string[]): Promise<void>;
   environment: EdgeEnvironment;
   now(): Date;
   rpc: AuditRpc;
   verifyIntentReceipt(
     receipt: LedgerReceipt,
     input: AdminIntentInput,
+  ): Promise<boolean>;
+  verifyDeletionReceipt?(
+    receipt: LedgerReceipt,
+    input: {
+      markerKeyVersion: number;
+      operationId: string;
+      profileMarker: string;
+    },
   ): Promise<boolean>;
   verifyOutcomeReceipt(
     receipt: LedgerReceipt,
@@ -104,6 +122,8 @@ type AdminRoute =
   | { kind: "context" }
   | { kind: "impersonation-end"; impersonationSessionId: string }
   | { kind: "impersonation-start"; profileId: string }
+  | { jobId: string; kind: "deletion-job-detail" }
+  | { kind: "profile-permanent-delete"; profileId: string }
   | { kind: "matching-rule-activate"; matchingRuleId: string }
   | { kind: "profiles-list" };
 
@@ -191,6 +211,21 @@ function parseRoute(url: URL): AdminRoute | null {
   }
   if (path.endsWith("/v1/admin/context")) return { kind: "context" };
   if (path.endsWith("/v1/admin/profiles")) return { kind: "profiles-list" };
+  const deletionJob = path.match(
+    /\/v1\/admin\/deletion-jobs\/([0-9a-f-]{36})$/i,
+  );
+  if (deletionJob?.[1] && UUID_PATTERN.test(deletionJob[1])) {
+    return { jobId: deletionJob[1], kind: "deletion-job-detail" };
+  }
+  const permanentDeletion = path.match(
+    /\/v1\/admin\/profiles\/([0-9a-f-]{36})\/permanent$/i,
+  );
+  if (permanentDeletion?.[1] && UUID_PATTERN.test(permanentDeletion[1])) {
+    return {
+      kind: "profile-permanent-delete",
+      profileId: permanentDeletion[1],
+    };
+  }
   if (path.endsWith("/v1/admin/barcode-corrections")) {
     const keys = [...url.searchParams.keys()];
     if (
@@ -248,13 +283,15 @@ function parseRoute(url: URL): AdminRoute | null {
   return null;
 }
 
-function expectedMethod(route: AdminRoute): "GET" | "POST" {
+function expectedMethod(route: AdminRoute): "DELETE" | "GET" | "POST" {
+  if (route.kind === "profile-permanent-delete") return "DELETE";
   return route.kind === "context" ||
     route.kind === "profiles-list" ||
     route.kind === "barcode-corrections-list" ||
     route.kind === "barcode-correction-detail" ||
     route.kind === "catalog-revisions-list" ||
-    route.kind === "supermarket-matching-rules-list"
+    route.kind === "supermarket-matching-rules-list" ||
+    route.kind === "deletion-job-detail"
     ? "GET"
     : "POST";
 }
@@ -581,17 +618,42 @@ async function listProfiles(
   if (!Array.isArray(result.data)) {
     throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
   }
-  const parsed = AdminProfileSummarySchema.array().safeParse(
-    result.data.map((row: unknown) => {
+  const summaries = await Promise.all(
+    result.data.map(async (row: unknown) => {
       const candidate = firstRow(row);
+      let deletionJob: AdminDeletionJob | undefined;
+      if (
+        candidate?.status === "deletion_requested" &&
+        typeof candidate.profile_id === "string"
+      ) {
+        const secret = firstRow(
+          await deletionRpc(
+            dependencies,
+            "internal_admin_get_profile_deletion_secret",
+            {
+              p_auth_session_id: auth.sessionId,
+              p_auth_subject: auth.userId,
+              p_profile_id: candidate.profile_id,
+            },
+          ),
+        );
+        deletionJob = deletionJobFrom(secret?.job);
+      }
       return {
         alias: candidate?.alias,
         createdAt: candidate?.created_at,
+        ...(deletionJob
+          ? {
+              deletionJobId: deletionJob.jobId,
+              deletionJobVersion: deletionJob.version,
+            }
+          : {}),
         profileId: candidate?.profile_id,
         status: candidate?.status,
       };
     }),
   );
+  const parsed = AdminProfileSummarySchema.array().safeParse(summaries);
   if (!parsed.success) throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
   return parsed.data;
 }
@@ -866,6 +928,348 @@ async function mutateSupermarketAdmin<T>(
   });
 }
 
+function deletionJobFrom(value: unknown): AdminDeletionJob {
+  const row = firstRow(value);
+  const parsed = AdminDeletionJobSchema.safeParse({
+    ...row,
+    schemaVersion: 1,
+  });
+  if (!parsed.success) throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  return parsed.data;
+}
+
+function completedDeletionSteps(job: AdminDeletionJob): Set<string> {
+  return new Set(job.steps.filter((step) => step.completed).map((step) => step.name));
+}
+
+async function deletionRpc(
+  dependencies: AdminDependencies,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  const result = await dependencies.rpc(name, args);
+  if (result.error) throw mapRpcError(result.error);
+  return result.data;
+}
+
+async function completeDeletionStep(
+  dependencies: AdminDependencies,
+  auth: AuthContext,
+  job: AdminDeletionJob,
+  step: string,
+  receiptSource: unknown,
+): Promise<AdminDeletionJob> {
+  return deletionJobFrom(
+    await deletionRpc(dependencies, "internal_admin_complete_deletion_step", {
+      p_auth_session_id: auth.sessionId,
+      p_auth_subject: auth.userId,
+      p_expected_version: job.version,
+      p_job_id: job.jobId,
+      p_receipt_digest: bytea(await sha256Hex(JSON.stringify(receiptSource))),
+      p_step_name: step,
+    }),
+  );
+}
+
+async function transitionDeletionJob(
+  dependencies: AdminDependencies,
+  auth: AuthContext,
+  job: AdminDeletionJob,
+  nextStatus: "failed" | "ledger_recorded" | "purged" | "purging" | "queued",
+  errorCode: string | null = null,
+): Promise<AdminDeletionJob> {
+  return deletionJobFrom(
+    await deletionRpc(dependencies, "internal_admin_transition_deletion_job", {
+      p_auth_session_id: auth.sessionId,
+      p_auth_subject: auth.userId,
+      p_error_code: errorCode,
+      p_expected_version: job.version,
+      p_job_id: job.jobId,
+      p_next_status: nextStatus,
+    }),
+  );
+}
+
+async function permanentDeleteProfile(
+  dependencies: AdminDependencies,
+  auth: AuthContext,
+  profileId: string,
+  requestId: string,
+  expectedVersion: number,
+): Promise<{ auditClosed: boolean; job: AdminDeletionJob }> {
+  if (
+    !dependencies.appendDeletionTombstone ||
+    !dependencies.verifyDeletionReceipt ||
+    !dependencies.deletePrivateObjects ||
+    !dependencies.deleteAuthUser
+  ) {
+    throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  }
+  const originalActorId = await authorize(dependencies, auth);
+  const secret = firstRow(
+    await deletionRpc(
+      dependencies,
+      "internal_admin_get_profile_deletion_secret",
+      {
+        p_auth_session_id: auth.sessionId,
+        p_auth_subject: auth.userId,
+        p_profile_id: profileId,
+      },
+    ),
+  );
+  if (
+    !secret ||
+    typeof secret.profileMarker !== "string" ||
+    !/^[a-f0-9]{64}$/.test(secret.profileMarker) ||
+    !Number.isInteger(secret.profileMarkerKeyVersion)
+  ) {
+    throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  }
+  let job = deletionJobFrom(secret.job);
+  if (job.version !== expectedVersion) {
+    throw new AdminHttpError("DOMAIN_CONSTRAINT", 409);
+  }
+  const intent: AdminIntentInput = {
+    action: job.status === "failed"
+      ? "profile_deletion_resume"
+      : "profile_deletion_permanent",
+    effectiveProfileId: profileId,
+    originalActorId,
+    requestId,
+    targetId: job.jobId,
+    targetType: "deletion_job",
+  };
+  const intentReceipt = await verifiedIntent(dependencies, intent);
+
+  try {
+    await deletionRpc(dependencies, "internal_record_t18_admin_intent", {
+      p_action: intent.action,
+      p_auth_session_id: auth.sessionId,
+      p_auth_subject: auth.userId,
+      p_effective_profile_id: intent.effectiveProfileId,
+      p_request_id: intent.requestId,
+      p_target_id: intent.targetId,
+      p_target_type: intent.targetType,
+      ...receiptRpcArgs(intentReceipt),
+    });
+
+    let steps = completedDeletionSteps(job);
+    if (job.status === "failed") {
+      const resumeStatus = steps.has("ledger")
+        ? steps.has("access")
+          ? "purging"
+          : "ledger_recorded"
+        : "queued";
+      job = await transitionDeletionJob(dependencies, auth, job, resumeStatus);
+    }
+
+    if (!steps.has("ledger")) {
+      const tombstoneInput = {
+        markerKeyVersion: secret.profileMarkerKeyVersion as number,
+        operationId: job.jobId,
+        profileMarker: secret.profileMarker,
+      };
+      const tombstoneReceipt = LedgerReceiptSchema.parse(
+        await dependencies.appendDeletionTombstone(tombstoneInput),
+      );
+      if (
+        tombstoneReceipt.stream !== "deletions" ||
+        !(await dependencies.verifyDeletionReceipt(
+          tombstoneReceipt,
+          tombstoneInput,
+        ))
+      ) {
+        throw new Error("ledger_verification_failed");
+      }
+      job = await completeDeletionStep(
+        dependencies,
+        auth,
+        job,
+        "ledger",
+        tombstoneReceipt,
+      );
+      steps = completedDeletionSteps(job);
+    }
+    if (job.status === "queued") {
+      job = await transitionDeletionJob(
+        dependencies,
+        auth,
+        job,
+        "ledger_recorded",
+      );
+    }
+
+    if (!steps.has("access")) {
+      await deletionRpc(dependencies, "internal_admin_revoke_profile_access", {
+        p_auth_session_id: auth.sessionId,
+        p_auth_subject: auth.userId,
+        p_expected_version: job.version,
+        p_job_id: job.jobId,
+      });
+      job = await completeDeletionStep(
+        dependencies,
+        auth,
+        job,
+        "access",
+        { jobId: job.jobId, step: "access" },
+      );
+      steps = completedDeletionSteps(job);
+    }
+    if (job.status === "ledger_recorded") {
+      job = await transitionDeletionJob(dependencies, auth, job, "purging");
+    }
+
+    if (!steps.has("exports") || !steps.has("storage")) {
+      const purgeEntries = await deletionRpc(
+        dependencies,
+        "internal_list_profile_export_purge_paths",
+        { p_job_id: job.jobId },
+      );
+      if (!Array.isArray(purgeEntries)) {
+        throw new Error("storage_verification_failed");
+      }
+      const paths = purgeEntries.map((entry) => {
+        const row = firstRow(entry);
+        if (typeof row?.storagePath !== "string") {
+          throw new Error("storage_verification_failed");
+        }
+        return row.storagePath;
+      });
+      await dependencies.deletePrivateObjects(paths);
+      await deletionRpc(dependencies, "internal_confirm_profile_export_purge", {
+        p_job_id: job.jobId,
+        p_removed_paths: paths,
+      });
+      if (!steps.has("exports")) {
+        job = await completeDeletionStep(
+          dependencies,
+          auth,
+          job,
+          "exports",
+          {
+            paths: await Promise.all(paths.map((path) => sha256Hex(path))),
+            step: "exports",
+          },
+        );
+      }
+      if (!steps.has("storage")) {
+        job = await completeDeletionStep(
+          dependencies,
+          auth,
+          job,
+          "storage",
+          { count: paths.length, step: "storage" },
+        );
+      }
+      steps = completedDeletionSteps(job);
+    }
+
+    if (!steps.has("profile_data")) {
+      await deletionRpc(dependencies, "internal_admin_purge_profile_data", {
+        p_auth_session_id: auth.sessionId,
+        p_auth_subject: auth.userId,
+        p_expected_version: job.version,
+        p_job_id: job.jobId,
+      });
+      job = await completeDeletionStep(
+        dependencies,
+        auth,
+        job,
+        "profile_data",
+        { jobId: job.jobId, step: "profile_data" },
+      );
+      steps = completedDeletionSteps(job);
+    }
+
+    if (!steps.has("auth")) {
+      const authSubjects = await deletionRpc(
+        dependencies,
+        "internal_admin_list_orphan_auth_subjects",
+        {
+          p_auth_session_id: auth.sessionId,
+          p_auth_subject: auth.userId,
+          p_job_id: job.jobId,
+        },
+      );
+      if (
+        !Array.isArray(authSubjects) ||
+        authSubjects.some(
+          (authSubject) =>
+            typeof authSubject !== "string" || !UUID_PATTERN.test(authSubject),
+        )
+      ) {
+        throw new Error("auth_cleanup_pending");
+      }
+      for (const authSubject of authSubjects) {
+        await dependencies.deleteAuthUser(authSubject as string);
+      }
+      job = await completeDeletionStep(
+        dependencies,
+        auth,
+        job,
+        "auth",
+        { deleted: authSubjects.length, step: "auth" },
+      );
+      steps = completedDeletionSteps(job);
+    }
+
+    if (!steps.has("verification")) {
+      const verified = await deletionRpc(
+        dependencies,
+        "internal_admin_verify_profile_purge",
+        {
+          p_auth_session_id: auth.sessionId,
+          p_auth_subject: auth.userId,
+          p_job_id: job.jobId,
+        },
+      );
+      if (verified !== true) throw new Error("verification_failed");
+      job = await completeDeletionStep(
+        dependencies,
+        auth,
+        job,
+        "verification",
+        { verified: true },
+      );
+    }
+    job = await transitionDeletionJob(dependencies, auth, job, "purged");
+    return {
+      auditClosed: await completeSuccessOutcome(
+        dependencies,
+        intent,
+        intentReceipt,
+      ),
+      job,
+    };
+  } catch (error) {
+    const code =
+      error instanceof Error &&
+      [
+        "auth_cleanup_pending",
+        "ledger_verification_failed",
+        "storage_verification_failed",
+        "verification_failed",
+      ].includes(error.message)
+        ? error.message
+        : "profile_purge_failed";
+    try {
+      if (job.status !== "failed" && job.status !== "purged") {
+        job = await transitionDeletionJob(
+          dependencies,
+          auth,
+          job,
+          "failed",
+          code,
+        );
+      }
+    } catch {
+      // El job conserva el último punto confirmado y sigue siendo reanudable.
+    }
+    await appendFailureBestEffort(dependencies, intent, intentReceipt, {});
+    throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  }
+}
+
 export async function handleAdmin(
   request: Request,
   dependencies: AdminDependencies,
@@ -883,7 +1287,7 @@ export async function handleAdmin(
         ...cors.headers,
         "access-control-allow-headers":
           "authorization, content-type, idempotency-key, apikey",
-        "access-control-allow-methods": "GET, POST, OPTIONS",
+        "access-control-allow-methods": "DELETE, GET, POST, OPTIONS",
         "cache-control": "no-store",
         vary: "Origin",
       },
@@ -916,6 +1320,40 @@ export async function handleAdmin(
       throw new AdminHttpError("UNAUTHENTICATED", 401);
     }
     if (auth.aal !== "aal2") throw new AdminHttpError("AAL2_REQUIRED", 403);
+
+    if (route.kind === "deletion-job-detail") {
+      return jsonResponse(
+        deletionJobFrom(
+          await deletionRpc(dependencies, "internal_admin_get_deletion_job", {
+            p_auth_session_id: auth.sessionId,
+            p_auth_subject: auth.userId,
+            p_job_id: route.jobId,
+          }),
+        ),
+        200,
+        cors.headers,
+      );
+    }
+    if (route.kind === "profile-permanent-delete") {
+      requireRecentMfa(auth, dependencies.now());
+      const idempotencyKey = requireUuid(request.headers.get("idempotency-key"));
+      const parsed = AdminPermanentDeletionRequestSchema.safeParse(
+        await readJson(request),
+      );
+      if (!parsed.success) throw new AdminHttpError("INVALID_INPUT", 400);
+      const result = await permanentDeleteProfile(
+        dependencies,
+        auth,
+        route.profileId,
+        idempotencyKey,
+        parsed.data.expectedVersion,
+      );
+      return jsonResponse(
+        result.job,
+        result.auditClosed ? 200 : 202,
+        cors.headers,
+      );
+    }
 
     if (route.kind === "context") {
       return jsonResponse(await currentContext(dependencies, auth), 200, cors.headers);
@@ -1236,6 +1674,17 @@ async function sha256Hex(value: string): Promise<string> {
   );
 }
 
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+      a.localeCompare(b),
+    );
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 async function hmacSha256Hex(value: string, secret: string): Promise<string> {
   if (new TextEncoder().encode(secret).byteLength < 32) {
     throw new Error("invalid_hmac_key");
@@ -1290,8 +1739,11 @@ function runtimeDependencies(): AdminDependencies {
     auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
   });
 
-  async function appendLedger(body: Record<string, unknown>): Promise<LedgerReceipt> {
-    const path = "/v1/admin-audit/append";
+  async function appendLedger(
+    body: Record<string, unknown>,
+    path = "/v1/admin-audit/append",
+    idempotencyKey = String(body.requestId),
+  ): Promise<LedgerReceipt> {
     const rawBody = JSON.stringify(body);
     const timestamp = new Date().toISOString();
     const nonce = crypto.randomUUID();
@@ -1303,7 +1755,7 @@ function runtimeDependencies(): AdminDependencies {
       body: rawBody,
       headers: {
         "content-type": "application/json",
-        "idempotency-key": String(body.requestId),
+        "idempotency-key": idempotencyKey,
         "x-ledger-nonce": nonce,
         "x-ledger-signature": signature,
         "x-ledger-timestamp": timestamp,
@@ -1317,6 +1769,21 @@ function runtimeDependencies(): AdminDependencies {
   }
 
   return {
+    appendDeletionTombstone: (input) => {
+      const body = {
+        markerKeyVersion: input.markerKeyVersion,
+        operationId: input.operationId,
+        profileMarker: input.profileMarker,
+        recordType: "profile_deletion",
+        schemaVersion: 1,
+        stream: "deletions",
+      };
+      return appendLedger(
+        body,
+        "/v1/deletions/append",
+        `${input.operationId}:profile_deletion:${input.markerKeyVersion}`,
+      );
+    },
     appendFailureOutcome: (input) =>
       appendLedger({
         action: input.action,
@@ -1375,6 +1842,31 @@ function runtimeDependencies(): AdminDependencies {
         userId: claims.sub,
       };
     },
+    deleteAuthUser: async (authSubject) => {
+      const { error } = await serviceClient.auth.admin.deleteUser(authSubject, false);
+      if (error) throw new Error("auth_cleanup_pending");
+    },
+    deletePrivateObjects: async (paths) => {
+      if (paths.length === 0) return;
+      const bucket = serviceClient.storage.from("plan-exports");
+      const { error } = await bucket.remove([...paths]);
+      if (error) throw new Error("storage_unavailable");
+      for (const path of paths) {
+        const separator = path.lastIndexOf("/");
+        const prefix = separator < 0 ? "" : path.slice(0, separator);
+        const name = separator < 0 ? path : path.slice(separator + 1);
+        const { data, error: listError } = await bucket.list(prefix, {
+          limit: 2,
+          search: name,
+        });
+        if (
+          listError ||
+          data?.some((entry) => entry.name === name)
+        ) {
+          throw new Error("storage_verification_failed");
+        }
+      }
+    },
     environment,
     now: () => new Date(),
     rpc: async (name, args) => {
@@ -1399,6 +1891,26 @@ function runtimeDependencies(): AdminDependencies {
         receipt.stream !== "admin-audit" ||
         receipt.idempotencyHash !==
           (await adminIntentIdempotencyHash(environment, input))
+      ) {
+        return false;
+      }
+      const publicKey = pinnedPublicKeys[receipt.keyVersion];
+      return publicKey ? verifyLedgerReceipt(receipt, publicKey) : false;
+    },
+    verifyDeletionReceipt: async (receipt, input) => {
+      const body = {
+        markerKeyVersion: input.markerKeyVersion,
+        operationId: input.operationId,
+        profileMarker: input.profileMarker,
+        recordType: "profile_deletion",
+        schemaVersion: 1,
+        stream: "deletions",
+      };
+      if (
+        receipt.environment !== environment ||
+        receipt.stream !== "deletions" ||
+        receipt.idempotencyHash !==
+          (await sha256Hex(canonicalJson({ environment, ...body })))
       ) {
         return false;
       }

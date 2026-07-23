@@ -6,6 +6,8 @@ import {
   AdminCatalogPublicationMutationAckSchema,
   AdminCatalogRevisionListSchema,
   AdminImpersonationContextSchema,
+  AdminDeletionJobSchema,
+  AdminPermanentDeletionRequestSchema,
   AdminMatchingRuleMutationAckSchema,
   AdminProfileSummarySchema,
   AdminSupermarketMatchingRuleListSchema,
@@ -17,6 +19,7 @@ import {
   type AdminCatalogPublicationMutationAck,
   type AdminCatalogRevisionList,
   type AdminImpersonationContext,
+  type AdminDeletionJob,
   type AdminMatchingRuleMutationAck,
   type AdminProfileSummary,
   type AdminSupermarketMatchingRuleList,
@@ -83,7 +86,7 @@ export function createAdminClient(dependencies: AdminClientDependencies) {
   async function request<T>(
     path: string,
     schema: Schema<T>,
-    method: "GET" | "POST",
+    method: "DELETE" | "GET" | "POST",
     body?: unknown,
     allowQuery = false,
   ): Promise<T> {
@@ -101,10 +104,10 @@ export function createAdminClient(dependencies: AdminClientDependencies) {
       "content-type": "application/json",
       "x-client-info": "health-design-web/admin-v1",
     };
-    if (method === "POST") headers["idempotency-key"] = crypto.randomUUID();
+    if (method !== "GET") headers["idempotency-key"] = crypto.randomUUID();
     const fetcher = dependencies.fetcher;
     const response = await fetcher(`${dependencies.baseUrl}${path}`, {
-      ...(method === "POST"
+      ...(method !== "GET"
         ? { body: JSON.stringify(body ?? { schemaVersion: 1 }) }
         : {}),
       headers,
@@ -117,6 +120,26 @@ export function createAdminClient(dependencies: AdminClientDependencies) {
   }
 
   return {
+    deletionJob(jobId: string) {
+      return request<AdminDeletionJob>(
+        `/v1/admin/deletion-jobs/${jobId}`,
+        AdminDeletionJobSchema,
+        "GET",
+      );
+    },
+    permanentlyDeleteProfile(profileId: string, expectedVersion: number) {
+      return request<AdminDeletionJob>(
+        `/v1/admin/profiles/${profileId}/permanent`,
+        AdminDeletionJobSchema,
+        "DELETE",
+        AdminPermanentDeletionRequestSchema.parse({
+          confirmationPhrase: "PURGAR PERFIL PERMANENTEMENTE",
+          confirmed: true,
+          expectedVersion,
+          schemaVersion: 1,
+        }),
+      );
+    },
     activateMatchingRule(matchingRuleId: string, expectedVersion: number) {
       return request<AdminMatchingRuleMutationAck>(
         `/v1/admin/matching-rules/${matchingRuleId}/activate`,
@@ -305,4 +328,4 @@ export const adminClient = createAdminClient({
   publishableKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
 });
 
-export type { AdminImpersonationContext, AdminProfileSummary };
+export type { AdminDeletionJob, AdminImpersonationContext, AdminProfileSummary };

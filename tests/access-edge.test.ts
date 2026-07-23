@@ -20,6 +20,8 @@ function dependencies(candidate: unknown): {
       authenticate: () =>
         Promise.resolve({ accessToken: "validated-jwt", sessionId, userId }),
       config: {
+        deletionMarkerKey: "deletion-marker-key-with-at-least-256-bits",
+        deletionMarkerKeyVersion: 1,
         idempotencyEncryptionKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
         privateCodePepper: "private-code-pepper",
         rateLimitPepper: "rate-limit-pepper",
@@ -79,6 +81,91 @@ async function publicError(response: Response): Promise<Record<string, unknown>>
 }
 
 describe("Edge de acceso", () => {
+  it("crea una solicitud irreversible y nunca devuelve marcadores internos", async () => {
+    const setup = dependencies(null);
+    setup.dependencies.rpc = (name, args) => {
+      setup.calls.push({ args, name });
+      if (name === "internal_request_profile_deletion") {
+        return Promise.resolve({
+          data: {
+            completedAt: null,
+            errorCode: null,
+            jobId: "71000000-0000-4000-8000-000000000001",
+            profileId: "51000000-0000-4000-8000-000000000001",
+            requestedAt: "2026-07-17T12:00:00.000Z",
+            status: "queued",
+            version: 1,
+            steps: [],
+          },
+          error: null,
+        });
+      }
+      return Promise.resolve({ data: null, error: null });
+    };
+    const response = await handleAccess(
+      new Request(
+        "https://api.test/access/v1/profiles/51000000-0000-4000-8000-000000000001/deletion-requests",
+        {
+          body: JSON.stringify({
+            alias: "Jose Pena",
+            confirmationPhrase: "BORRAR MI PERFIL PERMANENTEMENTE",
+            irreversible: true,
+            schemaVersion: 1,
+          }),
+          headers: {
+            authorization: "Bearer test-jwt",
+            "content-type": "application/json",
+            "idempotency-key": "10000000-0000-4000-8000-000000000001",
+            origin: "http://127.0.0.1:5173",
+          },
+          method: "POST",
+        },
+      ),
+      setup.dependencies,
+    );
+    expect(response.status).toBe(202);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body.handle).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(body).not.toHaveProperty("profileMarker");
+    expect(body).not.toHaveProperty("jobId");
+    expect(JSON.stringify(body)).not.toContain("\\x");
+  });
+
+  it("consulta solo el estado público allowlisted mediante el handle", async () => {
+    const setup = dependencies(null);
+    setup.dependencies.rpc = (name, args) => {
+      setup.calls.push({ args, name });
+      return Promise.resolve({
+        data: {
+          completedAt: null,
+          errorCode: "profile_purge_failed",
+          requestedAt: "2026-07-17T12:00:00.000Z",
+          status: "failed",
+        },
+        error: null,
+      });
+    };
+    const handle = "A".repeat(43);
+    const response = await handleAccess(
+      new Request(`https://api.test/access/v1/deletion-requests/${handle}`, {
+        headers: {
+          authorization: "Bearer test-jwt",
+          origin: "http://127.0.0.1:5173",
+        },
+      }),
+      setup.dependencies,
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      completedAt: null,
+      errorCode: "purge_incomplete",
+      handle,
+      requestedAt: "2026-07-17T12:00:00.000Z",
+      schemaVersion: 1,
+      status: "failed",
+    });
+  });
+
   it("hace indistinguibles alias inexistente y código incorrecto", async () => {
     const missing = dependencies({
       profile_alias: null,

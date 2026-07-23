@@ -46,6 +46,10 @@ function setup(
   const intents: AdminIntentInput[] = [];
   const failureOutcomes: Array<{ errorCode: string; requestId: string }> = [];
   const dependencies: AdminDependencies = {
+    appendDeletionTombstone: () => {
+      calls.push("ledger:deletion");
+      return Promise.resolve({ ...receipt, stream: "deletions" });
+    },
     appendFailureOutcome: (input) => {
       calls.push("ledger:failure");
       failureOutcomes.push({ errorCode: input.errorCode, requestId: input.requestId });
@@ -68,6 +72,14 @@ function setup(
         sessionId,
         userId,
       });
+    },
+    deleteAuthUser: () => {
+      calls.push("auth:delete");
+      return Promise.resolve();
+    },
+    deletePrivateObjects: () => {
+      calls.push("storage:delete");
+      return Promise.resolve();
     },
     environment: "local",
     now: () => now,
@@ -134,6 +146,10 @@ function setup(
       calls.push("receipt:verify");
       return Promise.resolve(options.receiptValid ?? true);
     },
+    verifyDeletionReceipt: () => {
+      calls.push("deletion-receipt:verify");
+      return Promise.resolve(options.receiptValid ?? true);
+    },
     verifyOutcomeReceipt: () => {
       calls.push("outcome:verify");
       return Promise.resolve(options.receiptValid ?? true);
@@ -156,6 +172,116 @@ function mutationRequest(path: string): Request {
 }
 
 describe("Edge administrativa", () => {
+  it("purga un perfil en orden, conserva el job y cierra el outcome", async () => {
+    const state = setup();
+    let version = 1;
+    let status = "queued";
+    const completed = new Set<string>();
+    const job = () => ({
+      attempts: 0,
+      completedAt: status === "purged" ? "2026-07-17T16:05:00.000Z" : null,
+      errorCode: null,
+      jobId: "71000000-0000-4000-8000-000000005101",
+      profileId: status === "purged" ? null : profileId,
+      requestedAt: "2026-07-17T15:00:00.000Z",
+      schemaVersion: 1,
+      status,
+      steps: [
+        "ledger",
+        "access",
+        "exports",
+        "storage",
+        "profile_data",
+        "auth",
+        "verification",
+      ].map((name) => ({ completed: completed.has(name), name })),
+      version,
+    });
+    state.dependencies.rpc = (name, args) => {
+      state.calls.push(`rpc:${name}`);
+      if (name === "internal_admin_authorize") {
+        return Promise.resolve({ data: actorId, error: null });
+      }
+      if (name === "internal_admin_get_profile_deletion_secret") {
+        return Promise.resolve({
+          data: {
+            job: job(),
+            profileMarker: "a".repeat(64),
+            profileMarkerKeyVersion: 1,
+          },
+          error: null,
+        });
+      }
+      if (name === "internal_admin_complete_deletion_step") {
+        completed.add(String(args.p_step_name));
+        version += 1;
+        return Promise.resolve({ data: job(), error: null });
+      }
+      if (name === "internal_admin_transition_deletion_job") {
+        status = String(args.p_next_status);
+        version += 1;
+        return Promise.resolve({ data: job(), error: null });
+      }
+      if (name === "internal_list_profile_export_purge_paths") {
+        return Promise.resolve({
+          data: [{ artifactId: crypto.randomUUID(), storagePath: "private/a.pdf" }],
+          error: null,
+        });
+      }
+      if (name === "internal_admin_list_orphan_auth_subjects") {
+        return Promise.resolve({
+          data: ["00000000-0000-4000-8000-000000005199"],
+          error: null,
+        });
+      }
+      if (name === "internal_admin_verify_profile_purge") {
+        return Promise.resolve({ data: true, error: null });
+      }
+      if (name === "internal_admin_finalize_audit_outbox") {
+        return Promise.resolve({ data: true, error: null });
+      }
+      return Promise.resolve({ data: job(), error: null });
+    };
+
+    const response = await handleAdmin(
+      new Request(
+        `https://api.test/admin/v1/admin/profiles/${profileId}/permanent`,
+        {
+          body: JSON.stringify({
+            confirmationPhrase: "PURGAR PERFIL PERMANENTEMENTE",
+            confirmed: true,
+            expectedVersion: 1,
+            schemaVersion: 1,
+          }),
+          headers: {
+            authorization: "Bearer test-jwt",
+            "content-type": "application/json",
+            "idempotency-key": requestId,
+            origin: "http://127.0.0.1:5173",
+          },
+          method: "DELETE",
+        },
+      ),
+      state.dependencies,
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      jobId: "71000000-0000-4000-8000-000000005101",
+      profileId: null,
+      status: "purged",
+    });
+    expect(state.calls.indexOf("ledger:deletion")).toBeLessThan(
+      state.calls.indexOf("rpc:internal_admin_revoke_profile_access"),
+    );
+    expect(state.calls).toContain("storage:delete");
+    expect(state.calls).toContain("auth:delete");
+    expect(state.calls.slice(-3)).toEqual([
+      "ledger:success",
+      "outcome:verify",
+      "rpc:internal_admin_finalize_audit_outbox",
+    ]);
+  });
+
   it("extrae solo la verificación TOTP más reciente del JWT validado", () => {
     expect(
       latestTotpTimestamp([

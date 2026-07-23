@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 
 import {
   CodeLinkRequestSchema,
+  DeletionRequestCreateSchema,
+  DeletionRequestStatusSchema,
   DeviceLinkHandleSchema,
   DeviceSessionSummarySchema,
   InvitationRedeemRequestSchema,
@@ -58,6 +60,8 @@ type AuthContext = {
 export interface AccessDependencies {
   authenticate(token: string): Promise<AuthContext>;
   config: {
+    deletionMarkerKey: string;
+    deletionMarkerKeyVersion: number;
     idempotencyEncryptionKey: string;
     privateCodePepper: string;
     rateLimitPepper: string;
@@ -225,9 +229,35 @@ function bytea(hex: string): string {
 }
 
 function expectedMethod(route: AccessRoute): "GET" | "POST" {
-  return route.kind === "profiles-list" || route.kind === "sessions-list"
+  return route.kind === "profiles-list" ||
+    route.kind === "sessions-list" ||
+    route.kind === "deletion-request-status"
     ? "GET"
     : "POST";
+}
+
+function hexToBase64Url(value: string): string {
+  const bytes = Uint8Array.from(
+    value.match(/.{2}/g) ?? [],
+    (pair) => Number.parseInt(pair, 16),
+  );
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+
+function deletionPublicError(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  if (value.startsWith("ledger_")) return "ledger_unavailable";
+  if (
+    value === "storage_unavailable" ||
+    value === "storage_verification_failed" ||
+    value === "export_purge_failed"
+  ) {
+    return "storage_unavailable";
+  }
+  if (value === "auth_cleanup_pending") return value;
+  return "purge_incomplete";
 }
 
 function routeOperation(route: AccessRoute): string {
@@ -1019,6 +1049,94 @@ async function handleSessionTouch(
   }
 }
 
+async function handleDeletionRequestCreate(
+  request: Request,
+  route: Extract<AccessRoute, { kind: "deletion-request-create" }>,
+  dependencies: AccessDependencies,
+  auth: AuthContext,
+  requestId: string,
+): Promise<unknown> {
+  const body = parseWithSchema(
+    DeletionRequestCreateSchema,
+    await readJsonBody(request),
+  );
+  const digests = await mutationDigests(request, route, body);
+  const rawHandle = hexToBase64Url(
+    await hmacSha256Hex(
+      idempotencyKey(request),
+      dependencies.config.deletionMarkerKey,
+    ),
+  );
+  const data = await rpc(
+    dependencies,
+    "internal_request_profile_deletion",
+    {
+      p_alias_normalized: body.alias.trim().replace(/ +/g, " ").toLowerCase(),
+      p_auth_session_id: auth.sessionId,
+      p_auth_subject: auth.userId,
+      p_idempotency_key_digest: bytea(digests.keyDigest),
+      p_profile_id: route.profileId,
+      p_profile_marker: bytea(
+        await hmacSha256Hex(
+          route.profileId,
+          dependencies.config.deletionMarkerKey,
+        ),
+      ),
+      p_profile_marker_key_version: dependencies.config.deletionMarkerKeyVersion,
+      p_request_digest: bytea(digests.requestDigest),
+      p_request_handle_hash: bytea(await hashSha256Hex(rawHandle)),
+    },
+    true,
+  );
+  const row = firstRow(data);
+  const response = parseWithSchema(DeletionRequestStatusSchema, {
+    completedAt: row?.completedAt ?? null,
+    errorCode: deletionPublicError(row?.errorCode),
+    handle: rawHandle,
+    requestedAt: row?.requestedAt,
+    schemaVersion: 1,
+    status: row?.status,
+  });
+  await audit(
+    dependencies,
+    auth,
+    requestId,
+    "profile_deletion_request",
+    "success",
+    "profile",
+    route.profileId,
+  );
+  return response;
+}
+
+async function handleDeletionRequestStatus(
+  route: Extract<AccessRoute, { kind: "deletion-request-status" }>,
+  dependencies: AccessDependencies,
+  auth: AuthContext,
+): Promise<unknown> {
+  const row = firstRow(
+    await rpc(
+      dependencies,
+      "internal_get_deletion_request",
+      {
+        p_auth_session_id: auth.sessionId,
+        p_auth_subject: auth.userId,
+        p_request_handle_hash: bytea(await hashSha256Hex(route.handle)),
+      },
+      true,
+    ),
+  );
+  if (!row) throw new AccessHttpError("NOT_FOUND", 404);
+  return parseWithSchema(DeletionRequestStatusSchema, {
+    completedAt: row.completedAt ?? null,
+    errorCode: deletionPublicError(row.errorCode),
+    handle: route.handle,
+    requestedAt: row.requestedAt,
+    schemaVersion: 1,
+    status: row.status,
+  });
+}
+
 async function dispatch(
   request: Request,
   route: AccessRoute,
@@ -1076,6 +1194,22 @@ async function dispatch(
     case "session-touch":
       return {
         body: await handleSessionTouch(request, route, dependencies, auth, requestId),
+        status: 200,
+      };
+    case "deletion-request-create":
+      return {
+        body: await handleDeletionRequestCreate(
+          request,
+          route,
+          dependencies,
+          auth,
+          requestId,
+        ),
+        status: 202,
+      };
+    case "deletion-request-status":
+      return {
+        body: await handleDeletionRequestStatus(route, dependencies, auth),
         status: 200,
       };
   }
@@ -1222,6 +1356,10 @@ function runtimeDependencies(): AccessDependencies {
       };
     },
     config: {
+      deletionMarkerKey: runtimeSecret("TOMBSTONE_HMAC_KEY"),
+      deletionMarkerKeyVersion: Number(
+        runtimeSecret("TOMBSTONE_HMAC_KEY_VERSION", "1"),
+      ),
       idempotencyEncryptionKey: runtimeSecret("ACCESS_IDEMPOTENCY_ENCRYPTION_KEY"),
       privateCodePepper: runtimeSecret("PRIVATE_ACCESS_CODE_PEPPER"),
       rateLimitPepper: runtimeSecret("ACCESS_RATE_LIMIT_PEPPER"),
