@@ -7,6 +7,8 @@ import type {
   ShoppingSnapshotResponse,
   SupermarketChain,
 } from "@health-design/contracts";
+import { PlanVersionDetailSchema } from "@health-design/contracts";
+import { exportNutrition } from "@health-design/test-fixtures/exports";
 
 const USER_ID = "00000000-0000-4000-8000-000000017801";
 const SESSION_ID = "21000000-0000-4000-8000-000000017801";
@@ -224,6 +226,10 @@ function browserSession() {
 async function installSession(page: Page): Promise<void> {
   await page.addInitScript((session) => {
     window.localStorage.setItem("sb-127-auth-token", JSON.stringify(session));
+    Object.defineProperty(window, "print", {
+      configurable: true,
+      value: () => document.documentElement.setAttribute("data-printed", "true"),
+    });
   }, browserSession());
 }
 
@@ -296,6 +302,85 @@ async function mockShoppingApi(page: Page, options: MockOptions = {}) {
           ],
         }),
         contentType: "application/json",
+        status: 200,
+      });
+    }
+    if (path.endsWith(`/v1/plans/${PLAN_ID}/versions/${PLAN_VERSION_ID}`)) {
+      return route.fulfill({
+        body: JSON.stringify(
+          PlanVersionDetailSchema.parse({
+            activatedAt: NOW,
+            archivedAt: null,
+            canonicalizationVersion: "canonical-json-v1",
+            completeness: "complete",
+            contextSnapshotId: uuid(80),
+            createdAt: NOW,
+            engineVersion: "engine-v3",
+            hashAlgorithm: "sha256",
+            id: PLAN_VERSION_ID,
+            inputHash: "a".repeat(64),
+            moduleResults: [
+              {
+                confidence: "high",
+                createdAt: NOW,
+                id: uuid(83),
+                module: "nutrition",
+                payload: exportNutrition,
+                status: "valid",
+                uncertainties: [],
+              },
+            ],
+            ordinal: 1,
+            outputHash: "b".repeat(64),
+            planId: PLAN_ID,
+            ruleSetRevisionId: uuid(81),
+            safetyFindings: [],
+            sourceManifestId: uuid(82),
+            status: "active",
+            validatedAt: NOW,
+            validation: { status: "valid" },
+            validationStatus: "valid",
+          }),
+        ),
+        contentType: "application/json",
+        status: 200,
+      });
+    }
+    return route.fulfill({ status: 404 });
+  });
+
+  await page.route("http://127.0.0.1:54321/functions/v1/exports/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const body: unknown = request.postData()
+      ? (request.postDataJSON() as unknown)
+      : null;
+    calls.push({
+      body,
+      idempotencyKey: request.headers()["idempotency-key"] ?? null,
+      method: request.method(),
+      path,
+    });
+    if (path.endsWith(`/v1/plans/${PLAN_VERSION_ID}/exports`)) {
+      return route.fulfill({
+        body: JSON.stringify({
+          artifactId: uuid(84),
+          createdAt: NOW,
+          detail: (body as { detail: string }).detail,
+          format: (body as { format: string }).format,
+          planVersionId: PLAN_VERSION_ID,
+          presentation: (body as { presentation: string }).presentation,
+          schemaVersion: 1,
+          status: "ready",
+        }),
+        contentType: "application/json",
+        status: 200,
+      });
+    }
+    if (path.endsWith(`/v1/exports/${uuid(84)}/content`)) {
+      return route.fulfill({
+        body: "%PDF-1.7",
+        contentType: "application/pdf",
         status: 200,
       });
     }
@@ -461,7 +546,9 @@ test("exige una elección explícita y limita multitienda a cadenas publicadas",
   await page.getByRole("button", { name: "Guardar y calcular" }).click();
   const basketHeading = page.getByRole("heading", { name: "Tu cesta orientativa" });
   await expect(basketHeading).toBeFocused();
-  await expect(page.getByText("Total orientativo")).toBeVisible();
+  await expect(
+    page.locator(".shopping-basket").getByText("Total orientativo"),
+  ).toBeVisible();
   await expect(page.locator(".shopping-total strong")).toHaveText("6,50 €");
   expect(
     calls.some(
@@ -488,13 +575,57 @@ test("presenta una cesta parcial sin llamar total al subtotal y conserva el orde
   });
   await page.goto(`/shopping?version=${PLAN_VERSION_ID}&profile=${PROFILE_ID}`);
 
-  await expect(page.getByText("Subtotal de productos confirmados")).toBeVisible();
+  await expect(
+    page.locator(".shopping-basket").getByText("Subtotal de productos confirmados"),
+  ).toBeVisible();
   await expect(page.getByText("1 de 4 productos resueltos")).toBeVisible();
-  await expect(page.getByText("Precio no disponible")).toBeVisible();
-  await expect(page.getByText("Envase pendiente de confirmar")).toBeVisible();
-  await expect(page.getByText("Selección manual pendiente")).toBeVisible();
+  const basket = page.locator(".shopping-basket");
+  await expect(basket.getByText("Precio no disponible")).toBeVisible();
+  await expect(basket.getByText("Envase pendiente de confirmar")).toBeVisible();
+  await expect(basket.getByText("Selección manual pendiente")).toBeVisible();
   const names = await page.locator("[data-shopping-item-name]").allTextContents();
   expect(names).toEqual(["Zanahoria", "Arroz", "Leche", "Tomate"]);
+});
+
+test("exporta la cesta congelada sin enviar filas ni permitir día o sustituciones", async ({
+  page,
+}) => {
+  const calls = await mockShoppingApi(page, { initialPreference: preference });
+  await page.goto(`/shopping?version=${PLAN_VERSION_ID}&profile=${PROFILE_ID}`);
+
+  const panel = page.getByRole("region", { name: "Exportar el plan" });
+  await expect(panel).toBeVisible();
+  await expect(
+    page.getByRole("radio", { name: "Cesta orientativa actual" }),
+  ).toBeChecked();
+  await expect(page.getByRole("radio", { name: "Un día" })).toBeDisabled();
+  await expect(page.getByLabel("Añadir lista de la compra")).toBeDisabled();
+
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Descargar PDF" }).click();
+  await download;
+  const request = calls.find(({ path }) =>
+    path.endsWith(`/v1/plans/${PLAN_VERSION_ID}/exports`),
+  )?.body as Record<string, unknown>;
+  expect(request).toMatchObject({
+    choices: [],
+    includeShopping: true,
+    range: { kind: "week" },
+    shoppingSnapshotId: SNAPSHOT_ID,
+  });
+  expect(request).not.toHaveProperty("shoppingRows");
+
+  await page.getByRole("button", { name: "Imprimir" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-printed", "true");
+  const printedShopping = page.locator(".export-print-shopping");
+  await expect(printedShopping.locator("tbody tr")).toHaveCount(1);
+  await expect(printedShopping).toContainText("3.25 EUR");
+  await expect(printedShopping).toContainText("6.5 EUR/kg");
+  await expect(printedShopping).toContainText("Elección manual");
+  await expect(printedShopping).toContainText("Ahorro orientativo: 0.01 EUR");
+  await expect(printedShopping).toContainText(
+    "La tienda habitual sigue siendo Mercadona",
+  );
 });
 
 test("explica la elección manual y mantiene la habitual ante un ahorro de un céntimo", async ({
@@ -518,11 +649,15 @@ test("mantiene el snapshot anterior si guardar preferencia funciona y resolver f
     initialPreference: preference,
   });
   await page.goto(`/shopping?version=${PLAN_VERSION_ID}&profile=${PROFILE_ID}`);
-  await expect(page.getByText("Pechuga de pollo")).toBeVisible();
+  await expect(
+    page.locator(".shopping-basket").getByText("Pechuga de pollo"),
+  ).toBeVisible();
 
   await page.getByLabel("Orden de la cesta").selectOption("name_desc");
   await page.getByRole("button", { name: "Guardar y recalcular" }).click();
-  await expect(page.getByText("Pechuga de pollo")).toBeVisible();
+  await expect(
+    page.locator(".shopping-basket").getByText("Pechuga de pollo"),
+  ).toBeVisible();
   await expect(page.getByText(/preferencia se ha guardado.*reintentar/i)).toBeVisible();
   await page.getByRole("button", { name: "Reintentar cálculo" }).click();
   await expect(
@@ -540,10 +675,14 @@ test("mantiene el snapshot anterior si guardar preferencia funciona y resolver f
 test("cada apertura nueva usa una clave de resolución distinta", async ({ page }) => {
   const calls = await mockShoppingApi(page, { initialPreference: preference });
   await page.goto(`/shopping?version=${PLAN_VERSION_ID}&profile=${PROFILE_ID}`);
-  await expect(page.getByText("Pechuga de pollo")).toBeVisible();
+  await expect(
+    page.locator(".shopping-basket").getByText("Pechuga de pollo"),
+  ).toBeVisible();
 
   await page.reload();
-  await expect(page.getByText("Pechuga de pollo")).toBeVisible();
+  await expect(
+    page.locator(".shopping-basket").getByText("Pechuga de pollo"),
+  ).toBeVisible();
 
   const createCalls = calls.filter(({ method, path }) => {
     return method === "POST" && path.endsWith(`/v1/plans/${PLAN_VERSION_ID}/shopping`);

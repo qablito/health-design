@@ -19,7 +19,7 @@ const baseRequest = {
 
 describe("contrato de exportación v1", () => {
   it("invalida artefactos previos cuando cambia la proyección pública", () => {
-    expect(EXPORT_RENDERER_VERSION).toBe("export-v2");
+    expect(EXPORT_RENDERER_VERSION).toBe("export-v3");
   });
 
   it("acepta semana o día y rechaza preparación semanal para un solo día", () => {
@@ -86,5 +86,30 @@ describe("contrato de exportación v1", () => {
       ExportArtifactAckSchema.safeParse({ ...ack, signedUrl: "https://example.test" })
         .success,
     ).toBe(false);
+  });
+
+  it("acepta solo snapshots semanales sin sustituciones ni filas del cliente", () => {
+    const shoppingSnapshotId = "91000000-0000-4000-8000-000000015005";
+    expect(
+      ExportCreateRequestSchema.parse({
+        ...baseRequest,
+        choices: [],
+        shoppingSnapshotId,
+      }),
+    ).toMatchObject({ shoppingSnapshotId });
+    for (const request of [
+      { ...baseRequest, choices: [], includeShopping: false, shoppingSnapshotId },
+      {
+        ...baseRequest,
+        choices: [],
+        range: { day: 1, kind: "day" },
+        shoppingSnapshotId,
+      },
+      { ...baseRequest, shoppingSnapshotId },
+      { ...baseRequest, choices: [], shoppingRows: [], shoppingSnapshotId },
+      { ...baseRequest, choices: [], shoppingSnapshotId: "not-a-uuid" },
+    ]) {
+      expect(ExportCreateRequestSchema.safeParse(request).success).toBe(false);
+    }
   });
 });

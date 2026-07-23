@@ -260,6 +260,8 @@ test("exporta elecciones actuales y mantiene impresión, PDF y XLSX en el mismo 
     presentation: "preparation",
     range: { day: 1, kind: "day" },
   });
+  expect(requests[0]).not.toHaveProperty("shoppingSnapshotId");
+  expect(requests[0]).not.toHaveProperty("shoppingRows");
 
   const xlsxButton = page.getByRole("button", { name: /XLSX/ });
   const xlsxDownload = page.waitForEvent("download");
@@ -277,6 +279,8 @@ test("exporta elecciones actuales y mantiene impresión, PDF y XLSX en el mismo 
     presentation: "preparation",
     range: { day: 1, kind: "day" },
   });
+  expect(requests[1]).not.toHaveProperty("shoppingSnapshotId");
+  expect(requests[1]).not.toHaveProperty("shoppingRows");
 
   await page.getByRole("button", { name: "Imprimir" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-printed", createdAt);

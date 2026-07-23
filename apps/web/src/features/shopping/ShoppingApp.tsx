@@ -1,6 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import {
+  NutritionWeekSchema,
+  normalizeNutritionWeek,
+  type NutritionWeekV2Contract,
   type ShoppingPreferenceRevision,
   type ShoppingSnapshotResponse,
   type ShoppingSort,
@@ -8,6 +11,7 @@ import {
 } from "@health-design/contracts";
 
 import { accessClient, type ProfileAccessSummary } from "../access/access-client";
+import { ExportPanel } from "../exports/ExportPanel";
 import {
   nutritionPlanClient,
   selectCurrentVersion,
@@ -38,7 +42,11 @@ type PreferenceForm = Readonly<{
   preferredChain: SupermarketChain | "";
   sorting: ShoppingSort;
 }>;
-type Context = Readonly<{ planVersionId: string; profileId: string }>;
+type Context = Readonly<{
+  planId: string;
+  planVersionId: string;
+  profileId: string;
+}>;
 type PendingResolution = Readonly<{
   idempotencyKey: string;
   preferenceRevisionId: string;
@@ -117,15 +125,19 @@ async function resolveContext(
   const profile =
     profiles.find(({ profileId }) => profileId === requestedProfile) ?? profiles[0];
   if (!profile) throw new Error("shopping_profile_required");
-  if (requestedVersion && UUID_PATTERN.test(requestedVersion)) {
-    return { planVersionId: requestedVersion, profileId: profile.profileId };
-  }
   const history = await nutritionPlanClient.getCurrent(profile.profileId);
-  const version = selectCurrentVersion(history);
+  const version =
+    requestedVersion && UUID_PATTERN.test(requestedVersion)
+      ? history.versions.find(({ id }) => id === requestedVersion)
+      : selectCurrentVersion(history);
   if (!version || version.status !== "active") {
     throw new Error("shopping_active_plan_required");
   }
-  return { planVersionId: version.id, profileId: profile.profileId };
+  return {
+    planId: version.planId,
+    planVersionId: version.id,
+    profileId: profile.profileId,
+  };
 }
 
 export function ShoppingApp() {
@@ -135,6 +147,10 @@ export function ShoppingApp() {
   const [editingProduct, setEditingProduct] = useState<string>();
   const [editingLeftover, setEditingLeftover] = useState<string>();
   const [error, setError] = useState<string>();
+  const [exportNutrition, setExportNutrition] = useState<{
+    nutrition: NutritionWeekV2Contract;
+    outputHash: string;
+  }>();
   const [form, setForm] = useState<PreferenceForm>(emptyPreference);
   const [legacyHint, setLegacyHint] = useState<{
     compatible: boolean;
@@ -175,11 +191,22 @@ export function ShoppingApp() {
         if (!active) return;
         setProfiles(nextProfiles);
         const nextContext = await resolveContext(nextProfiles);
-        const [chains, preferenceResponse] = await Promise.all([
+        const [chains, preferenceResponse, detail] = await Promise.all([
           shoppingClient.discoverAvailableChains(),
           shoppingClient.getPreference(nextContext.profileId),
+          nutritionPlanClient.getVersion(nextContext.planId, nextContext.planVersionId),
         ]);
         if (!active) return;
+        const nutritionModule = detail.moduleResults.find(
+          ({ module }) => module === "nutrition",
+        );
+        const parsedNutrition = NutritionWeekSchema.safeParse(nutritionModule?.payload);
+        if (parsedNutrition.success) {
+          setExportNutrition({
+            nutrition: normalizeNutritionWeek(parsedNutrition.data),
+            outputHash: detail.outputHash,
+          });
+        }
         setAvailableChains(chains);
         setContext(nextContext);
         setLegacyHint(preferenceResponse.legacyHint);
@@ -726,6 +753,15 @@ export function ShoppingApp() {
             ))}
           </div>
         </section>
+      ) : null}
+      {snapshot && exportNutrition ? (
+        <ExportPanel
+          choices={[]}
+          nutrition={exportNutrition.nutrition}
+          planOutputHash={exportNutrition.outputHash}
+          planVersionId={snapshot.snapshot.planVersionId}
+          shoppingSnapshot={snapshot}
+        />
       ) : null}
     </main>
   );

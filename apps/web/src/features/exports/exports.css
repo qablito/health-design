@@ -173,11 +173,13 @@
     color: #111;
   }
 
-  .nutrition-shell > :not(.export-panel) {
+  .nutrition-shell > :not(.export-panel),
+  .shopping-shell > :not(.export-panel) {
     display: none !important;
   }
 
-  .nutrition-shell {
+  .nutrition-shell,
+  .shopping-shell {
     width: auto;
     margin: 0;
     padding: 0;

@@ -5,6 +5,13 @@ import type { ExportModel } from "./model.ts";
 const MARGIN = 34;
 const BODY_SIZE = 9;
 const LINE_HEIGHT = 12;
+const chainLabels = { aldi: "ALDI", dia: "DIA", mercadona: "Mercadona" } as const;
+const stateLabels = {
+  no_confirmed_product: "Sin producto confirmado",
+  package_unconfirmed: "Envase pendiente de confirmar",
+  price_unavailable: "Precio no disponible",
+  resolved: "Producto confirmado",
+} as const;
 
 function lines(text: string, font: PDFFont, size: number, width: number): string[] {
   const result: string[] = [];
@@ -28,10 +35,8 @@ export async function renderPdf(model: ExportModel): Promise<Uint8Array> {
   const bold = await document.embedFont(StandardFonts.HelveticaBold);
   document.setTitle("Plan nutricional");
   document.setAuthor("Health Design");
-  document.setSubject(
-    `Versión del plan ${model.planVersionId}; renderizador ${model.rendererVersion}`,
-  );
-  document.setKeywords([model.detail, model.presentation, model.format]);
+  document.setSubject("Plan privado de alimentación y compra");
+  document.setKeywords(["Health Design", "alimentación", "compra"]);
 
   let page = document.addPage(PageSizes.A4);
   let y = page.getHeight() - MARGIN;
@@ -54,7 +59,6 @@ export async function renderPdf(model: ExportModel): Promise<Uint8Array> {
   };
 
   write("Plan nutricional", { font: bold, gap: 4, size: 18 });
-  write(`Versión ${model.planVersionId} · ${model.rendererVersion}`, { gap: 3 });
   write(
     `Total: ${model.totals.energyKcal} kcal · P ${model.totals.proteinG} g · C ${model.totals.carbohydratesG} g · G ${model.totals.fatG} g · Fibra ${model.totals.fiberG} g`,
     { gap: 8 },
@@ -75,9 +79,46 @@ export async function renderPdf(model: ExportModel): Promise<Uint8Array> {
     }
   }
 
-  if (model.shoppingList) {
+  if (model.shopping?.kind === "canonical") {
     write("Lista de la compra", { font: bold, gap: 2, size: 12 });
-    for (const item of model.shoppingList) write(`${item.name}: ${item.amountG} g`);
+    for (const item of model.shopping.items) write(`${item.name}: ${item.amountG} g`);
+  }
+  if (model.shopping?.kind === "snapshot") {
+    write("Compra semanal", { font: bold, gap: 2, size: 12 });
+    for (const item of model.shopping.items) {
+      write(`${item.name} · ${item.amountG} g · ${stateLabels[item.state]}`, {
+        font: bold,
+      });
+      if (item.selected) {
+        write(
+          `${chainLabels[item.selected.chain]} · ${item.selected.productName} · ${item.selected.formatText} · Precio base ${item.selected.basePriceEur} EUR · ${item.selected.packageCount} envases · Coste ${item.selected.totalCostEur} EUR · Remanente ${item.selected.estimatedRemainderG} g`,
+        );
+        if (item.selected.normalizedPrice) {
+          write(
+            `Precio normalizado ${item.selected.normalizedPrice.value} ${item.selected.normalizedPrice.unit}`,
+          );
+        }
+      }
+    }
+    const totals = model.shopping.totals;
+    write(
+      totals.kind === "complete"
+        ? `Total orientativo: ${totals.estimatedTotalEur} EUR`
+        : `Subtotal de productos confirmados: ${totals.partialSubtotalEur} EUR`,
+      { font: bold, gap: 2 },
+    );
+    write(
+      `Cobertura: ${totals.coverage.resolvedItems} de ${totals.coverage.totalItems} productos`,
+    );
+    if (model.shopping.comparison?.scope === "complete") {
+      write(
+        `Ahorro orientativo: ${model.shopping.comparison.savingsEur} EUR. La tienda habitual sigue siendo ${chainLabels[model.shopping.preference.preferredChain]}.`,
+      );
+    } else if (model.shopping.comparison?.scope === "partial") {
+      write(
+        `Comparación parcial: ${model.shopping.comparison.comparableItems} líneas comparables; no se declara un ahorro global.`,
+      );
+    }
   }
   if (model.weeklyPreparation) {
     write("Preparación semanal", { font: bold, gap: 2, size: 12 });

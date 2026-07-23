@@ -4,7 +4,7 @@ import {
   EXPORT_RENDERER_VERSION,
   type ExportCreateRequestContract,
 } from "@health-design/contracts";
-import { createExportModel } from "@health-design/export/model";
+import { createExportModel, sanitizeExternalText } from "@health-design/export/model";
 import {
   applyNutritionSubstitution,
   generateNutritionWeek,
@@ -13,6 +13,7 @@ import {
   commercialProductName,
   commercialProductPrivateSentinels,
   exportModels,
+  exportShoppingSnapshots,
 } from "@health-design/test-fixtures/exports";
 import { effectiveNutritionFoods } from "@health-design/test-fixtures/nutrition-plan";
 
@@ -126,7 +127,8 @@ describe("modelo canónico de exportación", () => {
       new Set([1, 2, 3, 4, 5, 6, 7]),
     );
     expect(new Set(day.rows.map(({ day: number }) => number))).toEqual(new Set([3]));
-    expect(result.shoppingList?.length).toBeGreaterThan(0);
+    expect(result.shopping?.kind).toBe("canonical");
+    expect(result.shopping?.items.length).toBeGreaterThan(0);
     expect(result.weeklyPreparation?.length).toBe(
       new Set(
         result.rows
@@ -174,5 +176,42 @@ describe("modelo canónico de exportación", () => {
     for (const sentinel of commercialProductPrivateSentinels) {
       expect(serialized).not.toContain(sentinel);
     }
+  });
+
+  it("proyecta el snapshot autorizado sin IDs, GTIN ni reordenación", () => {
+    const snapshot = exportShoppingSnapshots.partial.snapshot;
+    const result = model(
+      {
+        ...baseConfig,
+        shoppingSnapshotId: snapshot.id,
+      },
+      { shoppingSnapshot: snapshot },
+    );
+    const serialized = JSON.stringify(result.shopping);
+
+    expect(result.shopping).toMatchObject({
+      completeness: "partial",
+      kind: "snapshot",
+      totals: {
+        kind: "partial",
+        partialSubtotalEur: "6.5",
+      },
+    });
+    expect(result.shopping?.items.map(({ name }) => name)).toEqual([
+      "Pollo",
+      "=ARROZ()",
+    ]);
+    expect(serialized).not.toContain(snapshot.id);
+    expect(serialized).not.toContain("08412345678901");
+    expect(serialized).not.toContain("8412345678901");
+    expect(serialized).not.toContain("private-sku-17e");
+  });
+
+  it("retira hashes, almacenamiento y ubicación interna del texto externo", () => {
+    expect(
+      sanitizeExternalText(
+        `Pechuga ${"ab".repeat(32)} r2://health-design-catalog-source-dev/private Sevilla`,
+      ),
+    ).toBe("Pechuga");
   });
 });

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const EXPORT_SCHEMA_VERSION = 1 as const;
-export const EXPORT_RENDERER_VERSION = "export-v2" as const;
+export const EXPORT_RENDERER_VERSION = "export-v3" as const;
 export const EXPORT_MAX_BODY_BYTES = 16 * 1024;
 export const EXPORT_MAX_ARTIFACT_BYTES = 25 * 1024 * 1024;
 export const EXPORT_MAX_CHOICES = 7 * 6 * 4;
@@ -41,6 +41,7 @@ export const ExportCreateRequestSchema = z
     presentation: ExportPresentationSchema,
     range: ExportRangeSchema,
     schemaVersion: z.literal(EXPORT_SCHEMA_VERSION),
+    shoppingSnapshotId: z.uuid().optional(),
   })
   .strict()
   .superRefine((request, context) => {
@@ -50,6 +51,29 @@ export const ExportCreateRequestSchema = z
         message: "weekly_preparation_requires_week_range",
         path: ["includeWeeklyPreparation"],
       });
+    }
+    if (request.shoppingSnapshotId !== undefined) {
+      if (!request.includeShopping) {
+        context.addIssue({
+          code: "custom",
+          message: "shopping_snapshot_requires_shopping",
+          path: ["includeShopping"],
+        });
+      }
+      if (request.range.kind !== "week") {
+        context.addIssue({
+          code: "custom",
+          message: "shopping_snapshot_requires_week",
+          path: ["range"],
+        });
+      }
+      if (request.choices.length > 0) {
+        context.addIssue({
+          code: "custom",
+          message: "shopping_snapshot_forbids_choices",
+          path: ["choices"],
+        });
+      }
     }
   });
 

@@ -5,8 +5,10 @@ import {
   EXPORT_RENDERER_VERSION,
   ExportArtifactAckSchema,
   ExportCreateRequestSchema,
+  ShoppingSnapshotResponseSchema,
   type ExportArtifactAck,
   type ExportCreateRequestContract,
+  type ShoppingSnapshotResponse,
 } from "@health-design/contracts";
 import { createExportModel, type ExportModel } from "@health-design/export/model";
 import { renderPdf } from "@health-design/export/pdf";
@@ -55,6 +57,7 @@ type ErrorCode =
   | "NOT_FOUND"
   | "PAYLOAD_TOO_LARGE"
   | "RATE_LIMITED"
+  | "SHOPPING_SNAPSHOT_MISMATCH"
   | "UNAUTHENTICATED";
 
 class ExportHttpError extends Error {
@@ -231,12 +234,46 @@ function textField(record: Record<string, unknown>, field: string): string {
 
 function parseSource(value: unknown, planVersionId: string) {
   const record = asRecord(firstRow(value));
+  const profileId = textField(record, "profileId");
   const returnedVersionId = textField(record, "planVersionId");
   const outputHash = textField(record, "outputHash");
-  if (returnedVersionId !== planVersionId || !HEX_64_PATTERN.test(outputHash)) {
+  if (
+    !new RegExp(`^${UUID_PATTERN}$`, "i").test(profileId) ||
+    returnedVersionId !== planVersionId ||
+    !HEX_64_PATTERN.test(outputHash)
+  ) {
     throw new ExportHttpError("DEPENDENCY_UNAVAILABLE", 503);
   }
-  return { nutrition: record.nutrition, outputHash };
+  return { nutrition: record.nutrition, outputHash, profileId };
+}
+
+function parseShoppingSnapshot(
+  value: unknown,
+  planVersionId: string,
+  profileId: string,
+): ShoppingSnapshotResponse {
+  const parsed = ShoppingSnapshotResponseSchema.safeParse(firstRow(value));
+  if (!parsed.success) {
+    throw new ExportHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  }
+  if (
+    parsed.data.snapshot.planVersionId !== planVersionId ||
+    parsed.data.snapshot.profileId !== profileId
+  ) {
+    throw new ExportHttpError("SHOPPING_SNAPSHOT_MISMATCH", 409);
+  }
+  return parsed.data;
+}
+
+async function shoppingDescriptor(response: ShoppingSnapshotResponse) {
+  const snapshot = response.snapshot;
+  return {
+    contentDigest: await hashSha256Hex(canonicalJson(snapshot)),
+    inputDigest: snapshot.inputDigest,
+    resolverVersion: snapshot.resolverVersion,
+    revision: snapshot.revision,
+    snapshotId: snapshot.id,
+  };
 }
 
 type InternalArtifact = Readonly<{
@@ -398,9 +435,28 @@ async function createArtifact(
     }),
     route.planVersionId,
   );
-  const requestDigest = await hashSha256Hex(canonicalJson({ config, route }));
+  const shopping =
+    config.shoppingSnapshotId === undefined
+      ? undefined
+      : parseShoppingSnapshot(
+          await rpc(dependencies, "internal_get_shopping_snapshot", {
+            ...authArgs(auth),
+            p_snapshot_id: config.shoppingSnapshotId,
+          }),
+          route.planVersionId,
+          source.profileId,
+        );
+  const descriptor =
+    shopping === undefined ? undefined : await shoppingDescriptor(shopping);
+  const requestDigest = await hashSha256Hex(
+    canonicalJson({ config, route, shopping: descriptor }),
+  );
   const configDigest = await hashSha256Hex(
-    canonicalJson({ ...config, rendererVersion: EXPORT_RENDERER_VERSION }),
+    canonicalJson({
+      ...config,
+      rendererVersion: EXPORT_RENDERER_VERSION,
+      shopping: descriptor,
+    }),
   );
   const keyDigest = await hashSha256Hex(idempotencyKey(request));
   const ipDigest = await dependencies.digestIp(clientIp(request));
@@ -439,6 +495,7 @@ async function createArtifact(
       planOutputHash: source.outputHash,
       planVersionId: route.planVersionId,
       rendererVersion: EXPORT_RENDERER_VERSION,
+      ...(shopping === undefined ? {} : { shoppingSnapshot: shopping.snapshot }),
     });
     stage = "render";
     const bytes =

@@ -94,6 +94,32 @@ describe("cliente de exportaciones privadas", () => {
     );
   });
 
+  it("envía solo la referencia del snapshot y nunca filas comerciales", async () => {
+    const fetcher = vi.fn<typeof fetch>(() =>
+      Promise.resolve(
+        new Response(JSON.stringify(ack), {
+          headers: { "content-type": "application/json" },
+          status: 200,
+        }),
+      ),
+    );
+    const { client } = setup(fetcher);
+    const shoppingSnapshotId = "91000000-0000-4000-8000-000000015005";
+
+    await client.create(planVersionId, {
+      ...config,
+      choices: [],
+      shoppingSnapshotId,
+    });
+    const sentBody = fetcher.mock.calls[0]?.[1]?.body;
+    expect(typeof sentBody).toBe("string");
+    const body = JSON.parse(sentBody as string) as Record<string, unknown>;
+
+    expect(body).toMatchObject({ shoppingSnapshotId });
+    expect(body).not.toHaveProperty("shoppingRows");
+    expect(JSON.stringify(body)).not.toContain("externalSku");
+  });
+
   it("rechaza recibos con URL firmada o propiedades no contratadas", async () => {
     const fetcher = vi.fn<typeof fetch>(() =>
       Promise.resolve(
