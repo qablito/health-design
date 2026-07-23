@@ -823,7 +823,7 @@ git commit -m "feat(shopping): add optional multistore comparison"
 > **Recibo T17D_LOCAL_PASS (2026-07-23).** Rama local
 > `codex/task-17d-shopping-api-ui`, basada en `7df10ee`. Commits:
 > `61f0eed`, `75098c0`, `8e9dc63`, `58905ea`, `5a939c9`, `9bf0f4c`,
-> `a41faf1` y `cf7b91d`. Se implementaron contratos de transporte, preferencias
+> `a41faf1`, `cf7b91d` y `068ff4d`. Se implementaron contratos de transporte, preferencias
 > revisables, snapshots inmutables y su contexto confirmado, RLS/purga/cuotas,
 > adaptador Edge autorizado, replay/CAS, catálogo paginado y la interfaz `/shopping`
 > con cesta completa o parcial, cambio manual de producto y sobrantes confirmados.
