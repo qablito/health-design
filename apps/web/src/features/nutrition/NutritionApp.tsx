@@ -491,6 +491,14 @@ export function NutritionApp() {
           <a className="text-button" href="/wellness">
             Ver bienestar
           </a>
+          {ack?.status === "active" && profileId ? (
+            <a
+              className="text-button"
+              href={`/shopping?version=${ack.planVersionId}&profile=${profileId}`}
+            >
+              Preparar compra
+            </a>
+          ) : null}
         </div>
       </header>
 

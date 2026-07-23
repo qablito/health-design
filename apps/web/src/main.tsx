@@ -5,6 +5,7 @@ import { AccessApp } from "./features/access/AccessApp";
 import { AdminApp } from "./features/admin/AdminApp";
 import { FollowUpApp } from "./features/follow-up/FollowUpApp";
 import { NutritionApp } from "./features/nutrition/NutritionApp";
+import { ShoppingApp } from "./features/shopping/ShoppingApp";
 import { TrainingApp } from "./features/training/TrainingApp";
 import { WellnessApp } from "./features/wellness/WellnessApp";
 import { QuestionnaireRoute } from "./routes/questionnaire";
@@ -26,6 +27,8 @@ createRoot(rootElement).render(
       <QuestionnaireRoute />
     ) : window.location.pathname.startsWith("/nutrition") ? (
       <NutritionApp />
+    ) : window.location.pathname.startsWith("/shopping") ? (
+      <ShoppingApp />
     ) : window.location.pathname.startsWith("/training") ? (
       <TrainingApp />
     ) : window.location.pathname.startsWith("/wellness") ? (

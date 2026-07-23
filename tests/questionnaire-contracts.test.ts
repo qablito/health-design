@@ -258,7 +258,7 @@ describe("contratos del cuestionario", () => {
       QUESTIONNAIRE_PUBLIC_SCHEMA_V2.questions
         .find(({ id }) => id === "preferredSupermarket")
         ?.options?.map(({ value }) => value),
-    ).toEqual(["Mercadona", "Lidl", "DIA", "Carrefour", "Alcampo"]);
+    ).toEqual(["Mercadona", "DIA", "ALDI"]);
     expect(
       QUESTIONNAIRE_PUBLIC_SCHEMA_V2.questions.find(
         ({ id }) => id === "hydrationFluidRestriction",
