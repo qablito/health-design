@@ -32,6 +32,7 @@
     "test:t14:remote": "node scripts/ai-remote-smoke.mjs",
     "test:t15:remote": "node scripts/export-remote-smoke.mjs",
     "test:t16:remote": "node scripts/commercial-products-remote-smoke.mjs",
+    "test:t17:remote": "node scripts/supermarket-catalog-remote-smoke.mjs",
     "test:supply-chain": "node scripts/verify-supply-chain.mjs",
     "typecheck": "tsc --noEmit --project tsconfig.json",
     "validate:exercise-assets": "node scripts/validate-exercise-assets.mjs",

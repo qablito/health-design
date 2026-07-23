@@ -211,14 +211,18 @@ El acceso total del superadministrador es un requisito de producto; no se preten
 - Las acciones `correct`, `approve`, `reject` y `matching activate` exigen TOTP
   de menos de cinco minutos, clave idempotente, versión esperada y pares
   `intent/outcome`; el log conserva hashes anterior/nuevo, no snapshots ni GTIN.
-- Precio y disponibilidad pueden caducar sin alterar la verdad nutricional canónica.
+- Una revisión de precio permanece activa hasta su sustitución u ocultación
+  manual; la presencia en catálogo no acredita stock ni altera la verdad
+  nutricional canónica.
 - El origen de Sevilla se mantiene como metadato interno y no se muestra al usuario como explicación del precio nacional.
 - El scraper local (`supermercados/mercadona_chrome.mjs`) no debe ejecutarse con credenciales de producción ni conectarse a la base de perfiles.
 
 La activación remota de T16 sigue
 [`commercial-product-publication.md`](../runbooks/commercial-product-publication.md)
-y solo se ejecuta en desarrollo después de copia precrítica verificada y
-autorización expresa.
+con autorización expresa y una copia precrítica verificada. La publicación de
+catálogos T17 sigue
+[`catalog-publication.md`](../runbooks/catalog-publication.md). T17E local no
+autoriza migraciones, funciones, Preview ni smoke remotos.
 
 ## 8. Presupuesto y disponibilidad
 

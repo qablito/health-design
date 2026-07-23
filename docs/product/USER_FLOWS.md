@@ -184,6 +184,8 @@ objetivo puede abrir una revisión antes de cuatro semanas.
 6. El catálogo comercial no altera los valores nutricionales del plan.
 7. Se puede ordenar por precio ascendente (por defecto), precio descendente,
    A–Z o Z–A; el orden es idéntico en pantalla, PDF e impresión.
+8. La presencia de un producto significa que figura en el catálogo publicado;
+   no se muestra ni se infiere stock o disponibilidad física.
 
 ## 10. Exportación e impresión
 
@@ -196,6 +198,10 @@ objetivo puede abrir una revisión antes de cuatro semanas.
    según el contenido exportado.
 5. Los PDFs omiten nombres de compuestos farmacológicos/anabólicos; muestran
    únicamente las adaptaciones aplicadas y las advertencias necesarias.
+6. Desde compra, el usuario elige explícitamente la lista canónica o el
+   snapshot semanal actual. El snapshot se exporta congelado, sin elecciones
+   nutricionales locales y con el mismo orden en pantalla, impresión, PDF y
+   XLSX.
 
 ## 11. Sesiones, borrado y superadministración
 

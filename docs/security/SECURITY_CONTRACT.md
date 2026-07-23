@@ -277,6 +277,10 @@ detienen el trabajo al superar cualquier límite.
 - Nombres y metadatos no contienen alias, condición, medicación ni objetivo.
 - XLSX neutraliza celdas que comienzan por `=`, `+`, `-`, `@`, tabulador o retorno.
 - PDF/impresión/XLSX de plan no incluyen nombres de compuestos sensibles.
+- Una exportación de compra recibe solo `shoppingSnapshotId`; Edge autoriza el
+  snapshot contra la misma versión y proyecta el contenido congelado. No
+  acepta filas, precios o totales del cliente ni expone UUID, GTIN, hashes o
+  referencias R2.
 - La revocación o eliminación del perfil elimina objetos y bloquea nuevas URLs.
 
 ## 9. Logs
@@ -423,7 +427,8 @@ Antes de la primera invitación deben existir:
   y ausencia de GTIN/snapshot en logs, cachés, historial y Storage;
 - revocación inmediata aun con JWT vigente;
 - exportaciones privadas proxyficadas, sin bearer en URL, `no-referrer`,
-  `no-store` y neutralización de fórmulas;
+  `no-store`, neutralización de fórmulas y equivalencia de snapshot entre
+  pantalla, impresión, PDF y XLSX;
 - restore de las cuatro rotaciones sin revivir un perfil borrado;
 - ledger externo de borrado y auditoría verificado antes de cada restore, sin
   truncar eventos y con reconciliación normal de `intent` pendiente;

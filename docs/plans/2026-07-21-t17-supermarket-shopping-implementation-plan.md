@@ -1193,6 +1193,20 @@ git commit -m "docs(t17): add publication runbook and verification"
 
 En este punto el máximo estado permitido es `T17_LOCAL_PASS`.
 
+> **Recibo local 2026-07-23 — `T17_LOCAL_PASS`:** la migración aditiva
+> `20260723140000_export_snapshot_profile_binding.sql` se reconstruyó desde todo
+> el historial y quedó cubierta por pgTAP. Los commits funcionales son
+> `e3d109b8bcf7ad4e8b1c91d29cfc8b3503e58978` y
+> `7da7333fc67734de163b22797dae72065ff612a6`. Pasaron 93 pruebas dirigidas,
+> 743 Vitest, 422 pgTAP, 40 E2E, 7 de accesibilidad, los dry-run de Worker,
+> audit, supply chain, build y revisión independiente sin hallazgos críticos ni
+> altos. El smoke permanece en dry-run; T17E.3, remoto, Preview y Production no
+> se iniciaron. Mercadona sigue publicada; DIA y ALDI siguen sin publicar.
+> Multitienda remoto continúa
+> `NOT_APPLICABLE_REMOTE_ONLY_ONE_CHAIN_PUBLISHED`, publicación histórica
+> `NOT_APPLICABLE_WITHOUT_SAFE_PUBLICATION_CHANGE` y restauración integral T18
+> `NOT_IMPLEMENTED`.
+
 ## Tarea E.3: Activar y validar exclusivamente en desarrollo
 
 **Esta tarea requiere autorización explícita independiente.**

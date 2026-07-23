@@ -165,8 +165,8 @@ payload clínico completos.
 ### Compra consultiva
 
 El plan activo fija alimento y cantidad nutricional. El catálogo de
-supermercado solo resuelve SKU, formato, precio base, disponibilidad y
-envases/retales. La elección de supermercado habitual prevalece; el ahorro
+supermercado solo resuelve SKU, formato, precio base y envases/retales. La
+presencia en catálogo no acredita stock. La elección de supermercado habitual prevalece; el ahorro
 multitienda es opcional y se presenta como aviso.
 
 ## 6. Entornos y configuración

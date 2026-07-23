@@ -176,10 +176,10 @@ supermercados/precios permanecen en T17.
 
 | Requisito | Escenarios mínimos |
 |---|---|
-| REQ-EXP-001 | C06, C22, F70 |
+| REQ-EXP-001 | C06, C22, F70, F71 |
 | REQ-EXP-002 | C01, C06 |
-| REQ-EXP-003 | C06, C22 |
-| REQ-EXP-004 | C22, F70 |
+| REQ-EXP-003 | C06, C22, F71 |
+| REQ-EXP-004 | C22, F70, F71 |
 | REQ-FOL-001 | C18, F36, F47, F60 |
 | REQ-FOL-002 | F39, F48, F67 |
 | REQ-QA-001 | C01–C22, F01–F70 |

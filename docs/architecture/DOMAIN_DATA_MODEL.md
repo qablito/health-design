@@ -166,9 +166,11 @@ vacía. El SKU/cadena/precio de T17 permanece fuera de estas entidades.
 
 | Entidad | Propósito | Campos mínimos |
 |---|---|---|
-| `ShoppingPreferenceRevision` | supermercado habitual y modo versionados | `id`, `profile_id`, `preferred_chain`, `compare_multistore`, `sorting`, `created_at`, `supersedes_id?` |
-| `ShoppingSnapshot` | lista calculada para una versión | `id`, `plan_version_id`, `week_start`, `chain_mode`, `items`, `coverage`, `estimated_total`, `generated_at` |
-| `LeftoverConfirmation` | sobrante confirmado por usuario | `shopping_snapshot_id`, `product_id`, `quantity`, `confirmed_at` |
+| `ShoppingPreferenceRevision` | supermercado habitual, modo y orden versionados | `id`, `profile_id`, `version`, `preferred_chain`, `mode`, `compared_chains`, `sorting`, `lifecycle`, `created_at`, `supersedes_id?` |
+| `ShoppingSnapshot` | resolución semanal inmutable para una versión | `id`, `profile_id`, `plan_version_id`, `preference_revision_id`, `basket_seed_revision_id`, `revision`, `snapshot`, `input_digest`, `snapshot_hash`, `resolver_version`, `lifecycle`, `created_at`, `supersedes_id?` |
+| `ShoppingSnapshotPublication` | relación inmutable entre snapshot y revisiones de catálogo | `snapshot_id`, `catalog_publication_id` |
+| `LeftoverConfirmation` | sobrante confirmado para el mismo alimento canónico | `snapshot_id`, `canonical_food_key`, `declared_measure`, `confirmed_equivalent_g`, `sku_id?`, `confirmed_at`, `carried_from_id?` |
+| `ShoppingProductSelectionConfirmation` | elección manual de SKU para un alimento del snapshot | `snapshot_id`, `canonical_food_key`, `sku_id`, `confirmed_at`, `carried_from_id?` |
 | `ExportArtifact` | PDF o XLSX privado de una versión inmutable | `id`, `profile_id`, `actor_id`, `plan_version_id`, `renderer_version`, `config`, `config_digest`, `format=pdf\|xlsx`, `detail`, `presentation`, `storage_ref`, `mime_type`, `size_bytes`, `content_digest`, `status=pending\|ready\|failed`, `created_at`, `ready_at?`, `failed_at?`, `storage_deleted_at?` |
 
 La impresión no es una entidad persistente: es una proyección HTML/CSS A4 del
@@ -197,7 +199,7 @@ versión/configuración sin mezclar elecciones.
 10. Una alergia incluye contaminación cruzada y excluye producto con riesgo
    desconocido; una intolerancia registra tolerancia y gravedad.
 11. El SKU comercial no cambia los valores nutricionales del plan; solo envase,
-    precio, disponibilidad y sobrante.
+    precio y sobrante. La presencia en catálogo no representa stock.
 12. Solo existe una regla canónica activa por SKU. La ambigüedad permanece en
     `review`.
 13. Un actor representa un dispositivo lógico y puede tener varias membresías

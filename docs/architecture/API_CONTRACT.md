@@ -165,6 +165,7 @@ plan activo. Las puertas G1–G8 evalúan el lanzamiento, no cada petición.
 | `PUT /v1/profiles/{id}/shopping-preference` | guarda cadena habitual, comparación y orden |
 | `POST /v1/plans/{version_id}/shopping` | calcula cesta consultiva |
 | `POST /v1/shopping/{id}/leftovers` | confirma sobrantes; recalcula paquetes |
+| `POST /v1/shopping/{id}/product-selection` | confirma un SKU del mismo alimento y genera un snapshot derivado |
 | `GET /v1/shopping/{id}` | devuelve precio base, cobertura, pendientes y reglas de orden |
 
 El plan nutricional es la verdad. Si no hay equivalencia confirmada, el item
@@ -211,8 +212,11 @@ query o fragmento. La respuesta usa `Cache-Control: no-store, private`,
 La solicitud de exportación usa `schemaVersion=1`, formato `pdf|xlsx`, detalle
 `compact|complete`, presentación `ingredients|preparation`, alcance de día o
 semana, opciones de compra/preparación semanal y una lista acotada de elecciones
-`[dayIndex,mealIndex,foodIndex,choice]`. El servidor incorpora
-`rendererVersion=export-v2` al hash de configuración. La respuesta pública solo
+`[dayIndex,mealIndex,foodIndex,choice]`. Puede referenciar
+`shoppingSnapshotId`; en ese caso exige semana, compra incluida y elecciones
+vacías. El servidor carga y autoriza el snapshot de la misma versión, y el
+cliente no envía filas, precios o totales. El servidor incorpora
+`rendererVersion=export-v3` al hash de configuración. La respuesta pública solo
 contiene identificadores, formato, detalle, presentación, estado y fecha; no
 contiene perfil, actor, ruta, digest ni URL.
 
