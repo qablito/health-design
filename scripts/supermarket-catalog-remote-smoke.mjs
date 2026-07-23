@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 
 import { createClient } from "@supabase/supabase-js";
 import { createServer } from "../apps/web/node_modules/vite/dist/node/index.js";
@@ -151,14 +152,35 @@ function assertLinkedDevelopment() {
   assert(projectRef === DEVELOPMENT_PROJECT_REF, "linked_development_required");
 }
 
+export function isRetryableRemoteSql(sql) {
+  return /^\s*select\b[^;]*(?:;\s*)?$/i.test(sql);
+}
+
 function runSql(sql) {
   assertLinkedDevelopment();
-  const output = execFileSync(
-    "pnpm",
-    ["exec", "supabase", "db", "query", "--linked", sql],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-  );
-  return JSON.parse(output).rows;
+  const retryable = isRetryableRemoteSql(sql);
+  const attempts = retryable ? 2 : 1;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const output = execFileSync(
+        "pnpm",
+        ["exec", "supabase", "db", "query", "--linked", sql],
+        {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+          timeout: 15_000,
+        },
+      );
+      return JSON.parse(output).rows;
+    } catch {
+      if (attempt + 1 === attempts) {
+        throw new Error(
+          retryable ? "remote_sql_read_failed" : "remote_sql_write_failed",
+        );
+      }
+    }
+  }
+  throw new Error("remote_sql_read_failed");
 }
 
 function parseJson(responsePromise) {
@@ -409,7 +431,10 @@ function publishedCatalogState() {
 
 function compatiblePublishedFood() {
   const row = runSql(`
-    select food.food_key, food.name
+    select
+      food.food_key,
+      food.name,
+      count(distinct revision.sku_id)::int as eligible_sku_count
     from private.catalog_publications publication
     join private.supermarket_sku_revisions revision
       on revision.catalog_revision_id = publication.catalog_revision_id
@@ -433,12 +458,70 @@ function compatiblePublishedFood() {
       and revision.base_price_eur is not null
       and jsonb_array_length(revision.exclusion_reasons) = 0
     group by food.food_key, food.name
-    having count(distinct revision.sku_id) >= 2
-    order by food.food_key
+    order by count(distinct revision.sku_id) desc, food.food_key
     limit 1;
   `)[0];
-  assert(row?.food_key && row?.name, "published_alternative_food_required");
+  assert(
+    row?.food_key && row?.name && row.eligible_sku_count >= 1,
+    "published_compatible_food_required",
+  );
   return row;
+}
+
+export function decideManualSelection(item, eligibleSkuCount) {
+  const alternative = item?.alternatives?.find(
+    (candidate) =>
+      candidate.state === "resolved" &&
+      candidate.selection.projection.skuId !== item.selected.projection.skuId,
+  );
+  if (alternative) return { alternative, status: "PASS" };
+  assert(eligibleSkuCount < 2, "manual_alternative_required");
+  return {
+    alternative: null,
+    status: "NOT_APPLICABLE_REMOTE_NO_SECOND_PUBLISHED_SKU",
+  };
+}
+
+export function safeErrorCodes(error) {
+  const codes = [];
+  const visit = (current) => {
+    if (current instanceof AggregateError) {
+      current.errors.forEach(visit);
+      return;
+    }
+    const message = current instanceof Error ? current.message : "";
+    codes.push(/^[a-z][a-z0-9_]{0,63}$/.test(message) ? message : "unexpected_failure");
+  };
+  visit(error);
+  return [...new Set(codes)];
+}
+
+export function idempotencyKeyDigest(key) {
+  return createHash("sha256").update(JSON.stringify({ key })).digest("hex");
+}
+
+export function receiptKeyDigest(operation, key) {
+  return operation === "export-create"
+    ? createHash("sha256").update(key).digest("hex")
+    : idempotencyKeyDigest(key);
+}
+
+export async function deleteTemporaryUser(admin, userId) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const deleted = await admin.auth.admin.deleteUser(userId);
+      if (
+        !deleted.error ||
+        deleted.error.status === 404 ||
+        deleted.error.code === "user_not_found"
+      ) {
+        return;
+      }
+    } catch {
+      // A bounded retry is safe because deleting the same temporary user is idempotent.
+    }
+  }
+  throw new Error("temporary_auth_user_cleanup_failed");
 }
 
 function nutritionDigest(planVersionId) {
@@ -565,7 +648,7 @@ async function createProfilePlan(admin, actorId, label, nutrition, profileRegist
 }
 
 function assertIdempotencyReceipt(actorId, profileId, operation, key) {
-  const keyDigest = createHash("sha256").update(key).digest("hex");
+  const keyDigest = receiptKeyDigest(operation, key);
   const row = runSql(`
     select count(*)::int as receipt_count
     from private.plan_idempotency receipt
@@ -574,7 +657,10 @@ function assertIdempotencyReceipt(actorId, profileId, operation, key) {
       and receipt.operation = '${operation}'
       and receipt.key_digest = decode('${keyDigest}', 'hex');
   `)[0];
-  assert(row?.receipt_count === 1, "idempotency_receipt_required");
+  assert(
+    row?.receipt_count === 1,
+    `idempotency_receipt_required_${operation.replaceAll("-", "_")}`,
+  );
 }
 
 async function putPreference(publishableKey, identity, profileId, actorId) {
@@ -967,39 +1053,41 @@ async function execute() {
       "leftover_not_applied",
     );
 
-    const alternative = leftoverItem?.alternatives?.find(
-      (candidate) =>
-        candidate.state === "resolved" &&
-        candidate.selection.projection.skuId !== leftoverItem.selected.projection.skuId,
+    const manualSelection = decideManualSelection(
+      leftoverItem,
+      food.eligible_sku_count,
     );
-    assert(alternative?.state === "resolved", "manual_alternative_required");
-    const manual = await mutateSnapshot(
-      publishableKey,
-      identityA,
-      leftover.body.snapshotId,
-      "product-selection",
-      {
-        canonicalFoodKey: leftoverItem.canonicalFoodKey,
-        expectedVersion: leftoverEnvelope.body.snapshot.revision,
-        schemaVersion: 1,
-        skuId: alternative.selection.projection.skuId,
-      },
-    );
-    assert(manual.status === 200, "manual_selection_failed");
-    const activeEnvelope = await getSnapshot(
-      publishableKey,
-      identityA,
-      manual.body.snapshotId,
-    );
-    assert(
-      activeEnvelope.body?.snapshot?.items?.[0]?.selectionOrigin === "manual",
-      "manual_selection_not_preserved",
-    );
-    assert(
-      activeEnvelope.body?.snapshot?.items?.[0]?.selected?.projection?.skuId ===
-        alternative.selection.projection.skuId,
-      "manual_alternative_not_selected",
-    );
+    let activeSnapshotId = leftover.body.snapshotId;
+    if (manualSelection.alternative) {
+      const manual = await mutateSnapshot(
+        publishableKey,
+        identityA,
+        activeSnapshotId,
+        "product-selection",
+        {
+          canonicalFoodKey: leftoverItem.canonicalFoodKey,
+          expectedVersion: leftoverEnvelope.body.snapshot.revision,
+          schemaVersion: 1,
+          skuId: manualSelection.alternative.selection.projection.skuId,
+        },
+      );
+      assert(manual.status === 200, "manual_selection_failed");
+      activeSnapshotId = manual.body.snapshotId;
+      const activeEnvelope = await getSnapshot(
+        publishableKey,
+        identityA,
+        activeSnapshotId,
+      );
+      assert(
+        activeEnvelope.body?.snapshot?.items?.[0]?.selectionOrigin === "manual",
+        "manual_selection_not_preserved",
+      );
+      assert(
+        activeEnvelope.body?.snapshot?.items?.[0]?.selected?.projection?.skuId ===
+          manualSelection.alternative.selection.projection.skuId,
+        "manual_alternative_not_selected",
+      );
+    }
     const archivedEnvelope = await getSnapshot(
       publishableKey,
       identityA,
@@ -1017,7 +1105,7 @@ async function execute() {
       identityA,
       profileA.planVersionId,
       "pdf",
-      manual.body.snapshotId,
+      activeSnapshotId,
       exportKey,
     );
     assert(pdf.status === 200, "active_pdf_export_failed");
@@ -1027,7 +1115,7 @@ async function execute() {
       identityA,
       profileA.planVersionId,
       "pdf",
-      manual.body.snapshotId,
+      activeSnapshotId,
       exportKey,
     );
     assert(
@@ -1039,7 +1127,7 @@ async function execute() {
       identityA,
       profileA.planVersionId,
       "xlsx",
-      manual.body.snapshotId,
+      activeSnapshotId,
     );
     assert(xlsx.status === 200, "active_xlsx_export_failed");
     const archivedPdf = await createExport(
@@ -1087,7 +1175,7 @@ async function execute() {
       identityB,
       profileA.planVersionId,
       "pdf",
-      manual.body.snapshotId,
+      activeSnapshotId,
     );
     assert([403, 404].includes(crossProfileExport.status), "cross_profile_export");
 
@@ -1118,7 +1206,7 @@ async function execute() {
       crossProfileRejected: true,
       idempotencyConflictRejected: true,
       idempotencyReused: true,
-      manualSelectionApplied: true,
+      manualSelection: manualSelection.status,
       multistore: "NOT_APPLICABLE_REMOTE_ONLY_ONE_CHAIN_PUBLISHED",
       partialSnapshots: 1,
       pdfBytes: pdfEvidence.bytes,
@@ -1137,25 +1225,30 @@ async function execute() {
   } finally {
     const cleanupErrors = [];
     let storagePaths = [];
-    const attempt = async (operation) => {
+    const attempt = async (code, operation) => {
       try {
         await operation();
       } catch (error) {
-        cleanupErrors.push(error);
+        cleanupErrors.push(
+          ...safeErrorCodes(error).map(
+            (errorCode) =>
+              new Error(errorCode === "unexpected_failure" ? code : errorCode),
+          ),
+        );
       }
     };
-    await attempt(async () => {
+    await attempt("cleanup_export_paths_failed", async () => {
       if (profileIds.length > 0) {
         storagePaths = exportPaths(profileIds);
       }
     });
-    await attempt(async () => {
+    await attempt("cleanup_private_objects_failed", async () => {
       if (storagePaths.length > 0) {
         const removed = await admin.storage.from(BUCKET).remove(storagePaths);
         assert(!removed.error, "private_object_cleanup_failed");
       }
     });
-    await attempt(async () => {
+    await attempt("cleanup_rows_failed", async () => {
       if (profileIds.length > 0) {
         cleanupRows(profileIds, actorIds);
       } else if (actorIds.length > 0) {
@@ -1166,7 +1259,7 @@ async function execute() {
         `);
       }
     });
-    await attempt(async () => {
+    await attempt("cleanup_replay_failed", async () => {
       if (storagePaths.length > 0) {
         const removed = await admin.storage.from(BUCKET).remove(storagePaths);
         assert(!removed.error, "private_object_cleanup_replay_failed");
@@ -1182,15 +1275,14 @@ async function execute() {
       }
     });
     for (const identity of identities) {
-      await attempt(async () => {
-        const deleted = await admin.auth.admin.deleteUser(identity.userId);
-        assert(!deleted.error, "temporary_auth_user_cleanup_failed");
+      await attempt("cleanup_auth_user_failed", async () => {
+        await deleteTemporaryUser(admin, identity.userId);
         if (identity.auth) {
           await identity.auth.auth.signOut({ scope: "local" });
         }
       });
     }
-    await attempt(async () => {
+    await attempt("cleanup_verification_failed", async () => {
       const counts = [];
       if (profileIds.length > 0) {
         const profiles = profileIds.map(sqlLiteral).join(",");
@@ -1199,8 +1291,12 @@ async function execute() {
           `(select count(*) from private.export_artifacts where profile_id in (${profiles}))`,
           `(select count(*) from public.shopping_snapshots where profile_id in (${profiles}))`,
           `(select count(*) from public.shopping_preference_revisions where profile_id in (${profiles}))`,
-          `(select count(*) from public.shopping_leftover_confirmations where profile_id in (${profiles}))`,
-          `(select count(*) from public.shopping_product_selection_confirmations where profile_id in (${profiles}))`,
+          `(select count(*) from public.shopping_leftover_confirmations where snapshot_id in (
+            select id from public.shopping_snapshots where profile_id in (${profiles})
+          ))`,
+          `(select count(*) from public.shopping_product_selection_confirmations where snapshot_id in (
+            select id from public.shopping_snapshots where profile_id in (${profiles})
+          ))`,
           `(select count(*) from private.plan_idempotency where profile_id in (${profiles}))`,
           `(select count(*) from private.export_rate_limit_events where profile_id in (${profiles}))`,
           `(select count(*) from private.shopping_rate_limit_events where profile_id in (${profiles}))`,
@@ -1270,9 +1366,9 @@ async function main() {
   await execute();
 }
 
-main().catch((error) => {
-  const message = error instanceof Error ? error.message : "";
-  const code = /^[a-z][a-z0-9_]{0,63}$/.test(message) ? message : "unexpected_failure";
-  process.stderr.write(`t17_remote_smoke=${code}\n`);
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    process.stderr.write(`t17_remote_smoke=${safeErrorCodes(error).join(",")}\n`);
+    process.exitCode = 1;
+  });
+}
