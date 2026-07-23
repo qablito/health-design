@@ -822,6 +822,4 @@ export type ShoppingPreferenceReadResponse = z.infer<
   typeof ShoppingPreferenceReadResponseSchema
 >;
 export type ShoppingCatalogPage = z.infer<typeof ShoppingCatalogPageSchema>;
-export type ShoppingSnapshotResponse = z.infer<
-  typeof ShoppingSnapshotResponseSchema
->;
+export type ShoppingSnapshotResponse = z.infer<typeof ShoppingSnapshotResponseSchema>;

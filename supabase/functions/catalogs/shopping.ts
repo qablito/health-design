@@ -460,7 +460,8 @@ async function catalogPage(
     ) {
       throw new ShoppingHttpError("DEPENDENCY_UNAVAILABLE", 503);
     }
-    const last = raw.items.at(-1);
+    const items: unknown[] = raw.items;
+    const last = items.at(-1);
     const lastSku =
       last !== null && typeof last === "object" && !Array.isArray(last)
         ? (last as Record<string, unknown>).skuId
@@ -470,7 +471,7 @@ async function catalogPage(
     }
     const parsed = ShoppingCatalogPageSchema.safeParse({
       chain: query.chain,
-      items: raw.items,
+      items,
       nextCursor: raw.hasMore
         ? base64UrlEncode({ publicationId: raw.publicationId, skuId: lastSku, v: 1 })
         : null,

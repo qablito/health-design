@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import {
-  SUPERMARKET_CHAINS,
   type ShoppingPreferenceRevision,
   type ShoppingSnapshotResponse,
   type ShoppingSort,

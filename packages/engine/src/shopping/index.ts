@@ -282,12 +282,13 @@ function resolveLine(
   const itemId = input.resolutionMetadata.itemIds.find(
     ({ canonicalFoodKey }) => canonicalFoodKey === line.canonicalFoodKey,
   )!.shoppingItemId;
+  const selectionOrigin: SnapshotItem["selectionOrigin"] =
+    manualSelection === undefined ? "automatic" : "manual";
   const base = {
     amountG: line.amountG,
     canonicalFoodKey: line.canonicalFoodKey,
     name: line.name.normalize("NFC"),
-    selectionOrigin: (manualSelection === undefined ? "automatic" : "manual") as
-      SnapshotItem["selectionOrigin"],
+    selectionOrigin,
     shoppingItemId: itemId,
   };
 

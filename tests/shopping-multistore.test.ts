@@ -154,9 +154,7 @@ describe("tienda única y comparación T17C.2", () => {
       }),
     );
 
-    expect(snapshot.items[0]?.selected?.projection.skuId).toBe(
-      manual.projection.skuId,
-    );
+    expect(snapshot.items[0]?.selected?.projection.skuId).toBe(manual.projection.skuId);
     expect(snapshot.comparison).toMatchObject({
       basis: "automatic_equivalent",
       baselineSubtotalEur: "4",

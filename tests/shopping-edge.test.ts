@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { ShoppingResolutionInput } from "@health-design/contracts";
 import { resolveShopping } from "@health-design/engine/shopping";
 import {
   createCatalogConcurrencyGuard,
@@ -157,13 +158,15 @@ function setup(options: SetupOptions = {}) {
   const calls: Array<{ args: Record<string, unknown>; name: string }> = [];
   const resolvedInputs: unknown[] = [];
   let generated = 0;
-  const resolve = vi.fn(async (input) => {
+  const resolve = vi.fn((input: ShoppingResolutionInput) => {
     resolvedInputs.push(input);
     return resolveShopping(input);
   });
-  const rpc = vi.fn(async (name: string, args: Record<string, unknown>) => {
+  const rpc = vi.fn((name: string, args: Record<string, unknown>) => {
     calls.push({ args, name });
-    if (options.rpcError) return { data: null, error: options.rpcError };
+    if (options.rpcError) {
+      return Promise.resolve({ data: null, error: options.rpcError });
+    }
     const data: Record<string, unknown> = {
       internal_get_shopping_preference: {
         legacyHint: null,
@@ -192,7 +195,7 @@ function setup(options: SetupOptions = {}) {
         version: 1,
       },
     };
-    return { data: data[name], error: null };
+    return Promise.resolve({ data: data[name], error: null });
   });
   const dependencies: ShoppingEdgeDependencies = {
     authenticate: vi.fn().mockResolvedValue({ sessionId: SESSION_ID, userId: USER_ID }),
@@ -385,20 +388,21 @@ describe("Edge público de compra", () => {
       release = resolve;
     });
     const current = setup();
-    current.dependencies.rpc = vi.fn(async () => {
+    const delayedRpc = vi.fn(async () => {
       await pending;
       return {
         data: { hasMore: false, items: [projection], publicationId: PUBLICATION_ID },
         error: null,
       };
     });
+    current.dependencies.rpc = delayedRpc;
     const firstFour = Array.from({ length: 4 }, () =>
       handleShoppingCatalog(
         request("/v1/catalogs?chain=mercadona"),
         current.dependencies,
       ),
     );
-    await vi.waitFor(() => expect(current.dependencies.rpc).toHaveBeenCalledTimes(4));
+    await vi.waitFor(() => expect(delayedRpc).toHaveBeenCalledTimes(4));
     const fifth = await handleShoppingCatalog(
       request("/v1/catalogs?chain=mercadona"),
       current.dependencies,

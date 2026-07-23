@@ -212,7 +212,11 @@ describe("shopping client", () => {
         "idempotency-key": key,
       });
     }
-    expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body))).toEqual({
+    const secondRequest = fetcher.mock.calls[1]?.[1] as RequestInit | undefined;
+    const secondBody = secondRequest?.body;
+    expect(typeof secondBody).toBe("string");
+    if (typeof secondBody !== "string") throw new Error("request_body_missing");
+    expect(JSON.parse(secondBody)).toEqual({
       preferenceRevisionId: PREFERENCE_ID,
       schemaVersion: 1,
     });
@@ -326,7 +330,12 @@ describe("shopping client", () => {
         ),
       ),
     );
-    const error = await client.getCatalogPage("mercadona", 1).catch((value) => value);
+    let error: unknown;
+    try {
+      await client.getCatalogPage("mercadona", 1);
+    } catch (caught) {
+      error = caught;
+    }
     expect(error).toBeInstanceOf(ShoppingApiError);
     expect(error).toMatchObject({
       code: "RATE_LIMITED",

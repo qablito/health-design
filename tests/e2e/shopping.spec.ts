@@ -301,7 +301,9 @@ async function mockShoppingApi(page: Page, options: MockOptions = {}) {
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname;
-    const body = request.postData() ? request.postDataJSON() : null;
+    const body: unknown = request.postData()
+      ? (request.postDataJSON() as unknown)
+      : null;
     calls.push({ body, method: request.method(), path: `${path}${url.search}` });
 
     if (path.endsWith("/v1/catalogs")) {

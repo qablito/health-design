@@ -118,7 +118,7 @@ export function createShoppingClient(dependencies: Dependencies) {
     if (!response.ok) {
       throw new ShoppingApiError(
         response.status,
-        (value ?? {}) as ErrorBody,
+        value ?? {},
         response.headers.get("retry-after"),
       );
     }
