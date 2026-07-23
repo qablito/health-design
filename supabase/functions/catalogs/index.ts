@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { sha256CanonicalJson } from "@health-design/engine";
+import { resolveShopping } from "@health-design/engine/shopping";
 
+import { hmacSha256Hex } from "../_shared/access-security.ts";
 import {
   handleNutritionCatalog,
   type NutritionCatalogDependencies,
@@ -10,6 +12,13 @@ import {
   handleProductCatalog,
   type ProductCatalogDependencies,
 } from "./products.ts";
+import {
+  createCatalogConcurrencyGuard,
+  handleShoppingCatalog,
+  type ShoppingEdgeDependencies,
+} from "./shopping.ts";
+
+const shoppingCatalogGuard = createCatalogConcurrencyGuard(4);
 
 function runtimeValue(name: string): string | undefined {
   const deno = (
@@ -26,7 +35,9 @@ function secret(name: string, fallback?: string): string {
   return value;
 }
 
-function dependencies(): NutritionCatalogDependencies & ProductCatalogDependencies {
+function dependencies(): NutritionCatalogDependencies &
+  ProductCatalogDependencies &
+  ShoppingEdgeDependencies {
   const url = secret("SUPABASE_URL");
   const publishableKey =
     runtimeValue("SUPABASE_PUBLISHABLE_KEY") ?? secret("SUPABASE_ANON_KEY");
@@ -63,11 +74,16 @@ function dependencies(): NutritionCatalogDependencies & ProductCatalogDependenci
       };
     },
     environment,
+    catalogGuard: shoppingCatalogGuard,
+    digestIp: (ip) => hmacSha256Hex(ip, secret("ACCESS_RATE_LIMIT_PEPPER")),
     fetchOpenFoodFacts: (gtin) => {
       const userAgent = runtimeValue("OPEN_FOOD_FACTS_USER_AGENT");
       return fetchOpenFoodFactsProduct(gtin, userAgent ? { userAgent } : {});
     },
     hashCanonical: sha256CanonicalJson,
+    now: () => new Date().toISOString(),
+    randomUUID: () => crypto.randomUUID(),
+    resolveShopping,
     rpc: async (name, args) => {
       const result: unknown = await serviceClient.rpc(name as never, args as never);
       const { data, error } = result as {
@@ -82,7 +98,18 @@ function dependencies(): NutritionCatalogDependencies & ProductCatalogDependenci
 export default {
   fetch(request: Request) {
     const currentDependencies = dependencies();
-    return new URL(request.url).pathname.includes("/products/barcode/")
+    const pathname = new URL(request.url).pathname;
+    if (
+      pathname.includes("/v1/catalogs") ||
+      pathname.includes("/shopping-preference") ||
+      /\/v1\/plans\/[0-9a-f-]{36}\/shopping$/i.test(pathname) ||
+      /\/v1\/shopping\/[0-9a-f-]{36}(?:\/(?:leftovers|product-selection))?$/i.test(
+        pathname,
+      )
+    ) {
+      return handleShoppingCatalog(request, currentDependencies);
+    }
+    return pathname.includes("/products/barcode/")
       ? handleProductCatalog(request, currentDependencies)
       : handleNutritionCatalog(request, currentDependencies);
   },

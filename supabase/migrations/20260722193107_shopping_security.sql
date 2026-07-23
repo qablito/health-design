@@ -717,6 +717,7 @@ begin
       'basketSeedRevisionId', v_seed_id,
       'catalogItems', v_catalog_items,
       'catalogPublicationIds', to_jsonb(v_publication_ids),
+      'createdBy', v_actor_id,
       'expectedRevision', v_current_revision,
       'leftovers', coalesce((
         select jsonb_agg(jsonb_build_object(
