@@ -7,6 +7,9 @@ minimumReleaseAgeIgnoreMissingTime: false
 trustPolicy: no-downgrade
 blockExoticSubdeps: true
 
+overrides:
+  miniflare>sharp: 0.35.2
+
 allowBuilds:
   esbuild: true
   sharp: true
