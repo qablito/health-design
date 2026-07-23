@@ -148,6 +148,19 @@ select public.internal_create_plan_draft(
   decode(repeat('24', 32), 'hex')
 ) as response;
 
+create temporary table export_source as
+select public.internal_get_plan_export_source(
+  '00000000-0000-4000-8000-000000015101',
+  '21000000-0000-4000-8000-000000015101',
+  (select (response ->> 'planVersionId')::uuid from export_plan)
+) as response;
+
+select is(
+  (select response ->> 'profileId' from export_source),
+  '51000000-0000-4000-8000-000000015101',
+  'la fuente autorizada expone internamente el perfil para vincular snapshots'
+);
+
 select throws_ok(
   format(
     $$select public.internal_reserve_plan_export(
