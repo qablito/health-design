@@ -336,9 +336,9 @@ select throws_ok(
 );
 select throws_ok(
   $$ insert into public.actors (auth_subject) values (null) $$,
-  '23502',
+  '23514',
   null,
-  'auth_subject es obligatorio'
+  'auth_subject es obligatorio para actores activos'
 );
 select throws_ok(
   $$
