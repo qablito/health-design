@@ -293,6 +293,32 @@ describe("contratos T17 de preferencias y resolución", () => {
     expect(
       ShoppingResolutionInputSchema.safeParse({
         ...input,
+        catalogItems: Array.from({ length: 6 }, (_, index) => ({
+          ...input.catalogItems[0],
+          projection: {
+            ...input.catalogItems[0].projection,
+            externalSku: `sku-${index}`,
+            skuId: uuid(20 + index),
+          },
+        })),
+      }).success,
+    ).toBe(true);
+    expect(
+      ShoppingResolutionInputSchema.safeParse({
+        ...input,
+        catalogItems: Array.from({ length: 401 }, (_, index) => ({
+          ...input.catalogItems[0],
+          projection: {
+            ...input.catalogItems[0].projection,
+            externalSku: `sku-${index}`,
+            skuId: `92000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+          },
+        })),
+      }).success,
+    ).toBe(false);
+    expect(
+      ShoppingResolutionInputSchema.safeParse({
+        ...input,
         shoppingList: Array.from({ length: 81 }, (_, index) => ({
           ...input.shoppingList[0],
           canonicalFoodKey: `food:test-${index}`,

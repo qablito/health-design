@@ -478,15 +478,6 @@ export const ShoppingResolutionInputSchema = z
     ) {
       context.addIssue({ code: "custom", message: "shopping_item_metadata_mismatch" });
     }
-    const itemCounts = new Map<string, number>();
-    for (const item of value.catalogItems) {
-      const count = (itemCounts.get(item.canonicalFoodKey) ?? 0) + 1;
-      itemCounts.set(item.canonicalFoodKey, count);
-      if (count > SHOPPING_MAX_ALTERNATIVES + 1) {
-        context.addIssue({ code: "custom", message: "shopping_catalog_options_limit" });
-        break;
-      }
-    }
   });
 
 const ShoppingSelectionSchema = z
