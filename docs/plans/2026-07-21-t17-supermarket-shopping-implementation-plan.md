@@ -820,6 +820,27 @@ git commit -m "feat(shopping): add optional multistore comparison"
 
 # T17D — Persistencia de snapshots, API y UI
 
+> **Recibo T17D_LOCAL_PASS (2026-07-23).** Rama local
+> `codex/task-17d-shopping-api-ui`, basada en `7df10ee`. Commits:
+> `61f0eed`, `75098c0`, `8e9dc63`, `58905ea`, `5a939c9`, `9bf0f4c`,
+> `a41faf1` y `cf7b91d`. Se implementaron contratos de transporte, preferencias
+> revisables, snapshots inmutables y su contexto confirmado, RLS/purga/cuotas,
+> adaptador Edge autorizado, replay/CAS, catálogo paginado y la interfaz `/shopping`
+> con cesta completa o parcial, cambio manual de producto y sobrantes confirmados.
+> Las migraciones principales son
+> `20260722193055_shopping_snapshots.sql` y
+> `20260722193107_shopping_security.sql`; los puntos de entrada principales son
+> `supabase/functions/catalogs/shopping.ts` y
+> `apps/web/src/features/shopping/ShoppingApp.tsx`.
+>
+> Validación local: reconstrucción íntegra con 31 migraciones; `pnpm test:db`
+> 421/421; lint de esquemas `public` y `private` sin errores; `CI=true pnpm verify`
+> con 730/730 pruebas unitarias y 4/4 de navegador, además de contratos Edge,
+> formato, lint, tipos, activos y build; `pnpm test:a11y` 7/7; `pnpm test:e2e`
+> 39/39; `git diff --check` PASS. Una segunda revisión independiente confirmó
+> que no quedan hallazgos críticos ni altos. T17E, PDF/XLSX/impresión, validación
+> remota, desarrollo remoto, producción, merge y push no se iniciaron.
+
 ## Tarea D.1: Persistir preferencias y snapshots inmutables
 
 **Archivos:**
