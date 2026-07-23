@@ -72,7 +72,7 @@ export type AdminAuditTargetType =
 
 export type AdminIntentInput = {
   action: AdminAuditAction;
-  effectiveProfileId: string;
+  effectiveProfileId: string | null;
   originalActorId: string;
   requestId: string;
   targetId: string;

@@ -9,6 +9,9 @@
     "pnpm": "11.13.1"
   },
   "scripts": {
+    "backup:create": "node scripts/backup/create-backup.mjs",
+    "backup:prune": "node scripts/backup/prune-backups.mjs",
+    "backup:verify": "node scripts/backup/verify-backup.mjs",
     "build": "node scripts/build-web.mjs",
     "catalog:activate:ciqual": "node scripts/activate-ciqual-core.mjs",
     "check:public-env": "node scripts/check-public-env.mjs",

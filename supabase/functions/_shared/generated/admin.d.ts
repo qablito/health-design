@@ -73,6 +73,30 @@ export declare const AdminBackupJobSchema: z.ZodObject<{
     verifiedAt: z.ZodNullable<z.ZodISODateTime>;
     version: z.ZodNumber;
 }, z.core.$strict>;
+export declare const AdminBackupJobListSchema: z.ZodArray<z.ZodObject<{
+    backupId: z.ZodUUID;
+    createdAt: z.ZodISODateTime;
+    kind: z.ZodEnum<{
+        weekly: "weekly";
+        precritical: "precritical";
+    }>;
+    schemaVersion: z.ZodLiteral<1>;
+    status: z.ZodEnum<{
+        queued: "queued";
+        failed: "failed";
+        capturing: "capturing";
+        verifying: "verifying";
+        ready: "ready";
+        pruned: "pruned";
+    }>;
+    verifiedAt: z.ZodNullable<z.ZodISODateTime>;
+    version: z.ZodNumber;
+}, z.core.$strict>>;
+export declare const AdminRestoreCreateRequestSchema: z.ZodObject<{
+    backupId: z.ZodUUID;
+    schemaVersion: z.ZodLiteral<1>;
+    targetFingerprint: z.ZodString;
+}, z.core.$strict>;
 export declare const AdminRestoreJobSchema: z.ZodObject<{
     backupId: z.ZodUUID;
     createdAt: z.ZodISODateTime;
@@ -91,6 +115,24 @@ export declare const AdminRestoreJobSchema: z.ZodObject<{
     verifiedAt: z.ZodNullable<z.ZodISODateTime>;
     version: z.ZodNumber;
 }, z.core.$strict>;
+export declare const AdminRestoreJobListSchema: z.ZodArray<z.ZodObject<{
+    backupId: z.ZodUUID;
+    createdAt: z.ZodISODateTime;
+    restoreId: z.ZodUUID;
+    schemaVersion: z.ZodLiteral<1>;
+    status: z.ZodEnum<{
+        queued: "queued";
+        failed: "failed";
+        verifying: "verifying";
+        restoring: "restoring";
+        validating: "validating";
+        ready_for_promotion: "ready_for_promotion";
+        promoted: "promoted";
+        blocked: "blocked";
+    }>;
+    verifiedAt: z.ZodNullable<z.ZodISODateTime>;
+    version: z.ZodNumber;
+}, z.core.$strict>>;
 export declare const AdminRestorePromoteRequestSchema: z.ZodObject<{
     confirmationPhrase: z.ZodLiteral<"PROMOVER RESTAURACIÓN VERIFICADA">;
     confirmed: z.ZodLiteral<true>;
@@ -451,4 +493,7 @@ export type AdminImpersonationContext = z.infer<typeof AdminImpersonationContext
 export type LedgerReceipt = z.infer<typeof LedgerReceiptSchema>;
 export type AdminDeletionJob = z.infer<typeof AdminDeletionJobSchema>;
 export type AdminBackupJob = z.infer<typeof AdminBackupJobSchema>;
+export type AdminBackupJobList = z.infer<typeof AdminBackupJobListSchema>;
+export type AdminRestoreCreateRequest = z.infer<typeof AdminRestoreCreateRequestSchema>;
 export type AdminRestoreJob = z.infer<typeof AdminRestoreJobSchema>;
+export type AdminRestoreJobList = z.infer<typeof AdminRestoreJobListSchema>;

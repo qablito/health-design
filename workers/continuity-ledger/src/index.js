@@ -71,6 +71,20 @@ const ACTION_TARGETS = {
   restore_create: "restore_job",
   restore_promote: "restore_job",
 };
+const PROFILE_SCOPED_ACTIONS = new Set([
+  "barcode_correction_approve",
+  "barcode_correction_correct",
+  "barcode_correction_reject",
+  "catalog_match_candidates_generate",
+  "catalog_publication_hide",
+  "catalog_revision_publish",
+  "impersonation_end",
+  "impersonation_start",
+  "matching_rule_activate",
+  "matching_rule_review",
+  "profile_deletion_permanent",
+  "profile_deletion_resume",
+]);
 
 function json(body, status) {
   return new Response(JSON.stringify(body), {
@@ -191,7 +205,9 @@ export function validateAdminAuditPayload(candidate) {
     candidate.schemaVersion !== 1 ||
     candidate.stream !== "admin-audit" ||
     !UUID_PATTERN.test(candidate.originalActorId) ||
-    !UUID_PATTERN.test(candidate.effectiveProfileId) ||
+    (PROFILE_SCOPED_ACTIONS.has(candidate.action)
+      ? !UUID_PATTERN.test(candidate.effectiveProfileId)
+      : candidate.effectiveProfileId !== null) ||
     !UUID_PATTERN.test(candidate.requestId) ||
     !UUID_PATTERN.test(candidate.targetId) ||
     !(candidate.action in ACTION_TARGETS) ||

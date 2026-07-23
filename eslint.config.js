@@ -6,6 +6,7 @@ export default tseslint.config(
   {
     ignores: [
       "**/dist/**",
+      "**/*.d.mts",
       "**/node_modules/**",
       ".worktrees/**",
       "artifacts/**",

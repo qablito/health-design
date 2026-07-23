@@ -244,24 +244,21 @@ describe("Edge administrativa", () => {
     };
 
     const response = await handleAdmin(
-      new Request(
-        `https://api.test/admin/v1/admin/profiles/${profileId}/permanent`,
-        {
-          body: JSON.stringify({
-            confirmationPhrase: "PURGAR PERFIL PERMANENTEMENTE",
-            confirmed: true,
-            expectedVersion: 1,
-            schemaVersion: 1,
-          }),
-          headers: {
-            authorization: "Bearer test-jwt",
-            "content-type": "application/json",
-            "idempotency-key": requestId,
-            origin: "http://127.0.0.1:5173",
-          },
-          method: "DELETE",
+      new Request(`https://api.test/admin/v1/admin/profiles/${profileId}/permanent`, {
+        body: JSON.stringify({
+          confirmationPhrase: "PURGAR PERFIL PERMANENTEMENTE",
+          confirmed: true,
+          expectedVersion: 1,
+          schemaVersion: 1,
+        }),
+        headers: {
+          authorization: "Bearer test-jwt",
+          "content-type": "application/json",
+          "idempotency-key": requestId,
+          origin: "http://127.0.0.1:5173",
         },
-      ),
+        method: "DELETE",
+      }),
       state.dependencies,
     );
     expect(response.status).toBe(200);
@@ -466,6 +463,151 @@ describe("Edge administrativa", () => {
         profileId,
         status: "active",
       },
+    ]);
+  });
+
+  it("crea y consulta BackupJob sin exponer material criptográfico", async () => {
+    const state = setup();
+    const backup = {
+      backupId: requestId,
+      createdAt: "2026-07-23T16:00:00.000Z",
+      kind: "weekly",
+      schemaVersion: 1,
+      status: "queued",
+      verifiedAt: null,
+      version: 1,
+    };
+    state.dependencies.rpc = (name) => {
+      state.calls.push(`rpc:${name}`);
+      if (name === "internal_admin_authorize") {
+        return Promise.resolve({ data: actorId, error: null });
+      }
+      if (name === "internal_admin_list_backup_jobs") {
+        return Promise.resolve({ data: [backup], error: null });
+      }
+      if (name === "internal_admin_create_backup_job") {
+        return Promise.resolve({ data: backup, error: null });
+      }
+      if (name === "internal_admin_finalize_audit_outbox") {
+        return Promise.resolve({ data: true, error: null });
+      }
+      return Promise.resolve({ data: true, error: null });
+    };
+
+    const created = await handleAdmin(
+      new Request("https://api.test/admin/v1/admin/backups", {
+        body: JSON.stringify({ kind: "weekly", schemaVersion: 1 }),
+        headers: {
+          authorization: "Bearer test-jwt",
+          "content-type": "application/json",
+          "idempotency-key": requestId,
+          origin: "http://127.0.0.1:5173",
+        },
+        method: "POST",
+      }),
+      state.dependencies,
+    );
+    const listed = await handleAdmin(
+      new Request("https://api.test/admin/v1/admin/backups", {
+        headers: {
+          authorization: "Bearer test-jwt",
+          origin: "http://127.0.0.1:5173",
+        },
+      }),
+      state.dependencies,
+    );
+
+    expect(created.status).toBe(201);
+    await expect(created.json()).resolves.toEqual(backup);
+    expect(listed.status).toBe(200);
+    await expect(listed.json()).resolves.toEqual([backup]);
+    expect(state.intents.at(-1)).toMatchObject({
+      action: "backup_create",
+      effectiveProfileId: null,
+      targetType: "backup_job",
+    });
+  });
+
+  it("crea un restore aislado y autoriza su promoción por separado", async () => {
+    const state = setup();
+    const backupId = "71000000-0000-4000-8000-000000005188";
+    let restore = {
+      backupId,
+      createdAt: "2026-07-23T16:00:00.000Z",
+      restoreId: requestId,
+      schemaVersion: 1,
+      status: "queued",
+      verifiedAt: null as string | null,
+      version: 1,
+    };
+    state.dependencies.rpc = (name) => {
+      state.calls.push(`rpc:${name}`);
+      if (name === "internal_admin_authorize") {
+        return Promise.resolve({ data: actorId, error: null });
+      }
+      if (name === "internal_admin_create_restore_job") {
+        return Promise.resolve({ data: restore, error: null });
+      }
+      if (name === "internal_admin_promote_restore_job") {
+        restore = {
+          ...restore,
+          status: "promoted",
+          verifiedAt: "2026-07-23T16:10:00.000Z",
+          version: 2,
+        };
+        return Promise.resolve({ data: restore, error: null });
+      }
+      if (name === "internal_admin_finalize_audit_outbox") {
+        return Promise.resolve({ data: true, error: null });
+      }
+      return Promise.resolve({ data: true, error: null });
+    };
+
+    const created = await handleAdmin(
+      new Request("https://api.test/admin/v1/admin/restores", {
+        body: JSON.stringify({
+          backupId,
+          schemaVersion: 1,
+          targetFingerprint: "e".repeat(64),
+        }),
+        headers: {
+          authorization: "Bearer test-jwt",
+          "content-type": "application/json",
+          "idempotency-key": requestId,
+          origin: "http://127.0.0.1:5173",
+        },
+        method: "POST",
+      }),
+      state.dependencies,
+    );
+    const promoted = await handleAdmin(
+      new Request(`https://api.test/admin/v1/admin/restores/${requestId}/promote`, {
+        body: JSON.stringify({
+          confirmationPhrase: "PROMOVER RESTAURACIÓN VERIFICADA",
+          confirmed: true,
+          expectedVersion: 1,
+          schemaVersion: 1,
+        }),
+        headers: {
+          authorization: "Bearer test-jwt",
+          "content-type": "application/json",
+          "idempotency-key": "61000000-0000-4000-8000-000000005105",
+          origin: "http://127.0.0.1:5173",
+        },
+        method: "POST",
+      }),
+      state.dependencies,
+    );
+
+    expect(created.status).toBe(201);
+    expect(promoted.status).toBe(200);
+    await expect(promoted.json()).resolves.toMatchObject({
+      restoreId: requestId,
+      status: "promoted",
+    });
+    expect(state.intents.slice(-2).map((intent) => intent.action)).toEqual([
+      "restore_create",
+      "restore_promote",
     ]);
   });
 });

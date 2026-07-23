@@ -89,6 +89,16 @@ export const AdminBackupJobSchema = z
   })
   .strict();
 
+export const AdminBackupJobListSchema = z.array(AdminBackupJobSchema).max(50);
+
+export const AdminRestoreCreateRequestSchema = z
+  .object({
+    backupId: UuidSchema,
+    schemaVersion: z.literal(1),
+    targetFingerprint: Sha256HexSchema,
+  })
+  .strict();
+
 export const AdminRestoreJobSchema = z
   .object({
     backupId: UuidSchema,
@@ -109,6 +119,8 @@ export const AdminRestoreJobSchema = z
     version: OperationsVersionSchema,
   })
   .strict();
+
+export const AdminRestoreJobListSchema = z.array(AdminRestoreJobSchema).max(50);
 
 export const AdminRestorePromoteRequestSchema = z
   .object({
@@ -360,4 +372,7 @@ export type AdminImpersonationContext = z.infer<typeof AdminImpersonationContext
 export type LedgerReceipt = z.infer<typeof LedgerReceiptSchema>;
 export type AdminDeletionJob = z.infer<typeof AdminDeletionJobSchema>;
 export type AdminBackupJob = z.infer<typeof AdminBackupJobSchema>;
+export type AdminBackupJobList = z.infer<typeof AdminBackupJobListSchema>;
+export type AdminRestoreCreateRequest = z.infer<typeof AdminRestoreCreateRequestSchema>;
 export type AdminRestoreJob = z.infer<typeof AdminRestoreJobSchema>;
+export type AdminRestoreJobList = z.infer<typeof AdminRestoreJobListSchema>;

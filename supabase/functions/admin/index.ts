@@ -8,6 +8,9 @@ import {
   AdminBarcodeCorrectionMutationAckSchema,
   AdminBarcodeCorrectionRejectRequestSchema,
   AdminBarcodeCorrectionRequestSchema,
+  AdminBackupCreateRequestSchema,
+  AdminBackupJobListSchema,
+  AdminBackupJobSchema,
   AdminCatalogMatchCandidatesAckSchema,
   AdminCatalogMatchCandidatesRequestSchema,
   AdminCatalogPublicationHideRequestSchema,
@@ -20,15 +23,21 @@ import {
   AdminMatchingRuleMutationAckSchema,
   AdminMutationRequestSchema,
   AdminProfileSummarySchema,
+  AdminRestoreCreateRequestSchema,
+  AdminRestoreJobListSchema,
+  AdminRestoreJobSchema,
+  AdminRestorePromoteRequestSchema,
   AdminSupermarketMatchingRuleReviewAckSchema,
   AdminSupermarketMatchingRuleReviewRequestSchema,
   LedgerReceiptSchema,
   type AdminBarcodeCorrectionMutationAck,
+  type AdminBackupJob,
   type AdminCatalogMatchCandidatesAck,
   type AdminCatalogPublicationMutationAck,
   type AdminImpersonationContext,
   type AdminDeletionJob,
   type AdminMatchingRuleMutationAck,
+  type AdminRestoreJob,
   type AdminSupermarketMatchingRuleReviewAck,
   type LedgerReceipt,
 } from "@health-design/contracts";
@@ -120,10 +129,13 @@ type AdminRoute =
   | { cursor: string | null; kind: "barcode-corrections-list"; status: string }
   | { kind: "barcode-correction-reject"; correctionId: string }
   | { kind: "context" }
+  | { kind: "backups" }
   | { kind: "impersonation-end"; impersonationSessionId: string }
   | { kind: "impersonation-start"; profileId: string }
   | { jobId: string; kind: "deletion-job-detail" }
   | { kind: "profile-permanent-delete"; profileId: string }
+  | { kind: "restores" }
+  | { kind: "restore-promote"; restoreId: string }
   | { kind: "matching-rule-activate"; matchingRuleId: string }
   | { kind: "profiles-list" };
 
@@ -211,9 +223,15 @@ function parseRoute(url: URL): AdminRoute | null {
   }
   if (path.endsWith("/v1/admin/context")) return { kind: "context" };
   if (path.endsWith("/v1/admin/profiles")) return { kind: "profiles-list" };
-  const deletionJob = path.match(
-    /\/v1\/admin\/deletion-jobs\/([0-9a-f-]{36})$/i,
+  if (path.endsWith("/v1/admin/backups")) return { kind: "backups" };
+  if (path.endsWith("/v1/admin/restores")) return { kind: "restores" };
+  const restorePromotion = path.match(
+    /\/v1\/admin\/restores\/([0-9a-f-]{36})\/promote$/i,
   );
+  if (restorePromotion?.[1] && UUID_PATTERN.test(restorePromotion[1])) {
+    return { kind: "restore-promote", restoreId: restorePromotion[1] };
+  }
+  const deletionJob = path.match(/\/v1\/admin\/deletion-jobs\/([0-9a-f-]{36})$/i);
   if (deletionJob?.[1] && UUID_PATTERN.test(deletionJob[1])) {
     return { jobId: deletionJob[1], kind: "deletion-job-detail" };
   }
@@ -294,6 +312,13 @@ function expectedMethod(route: AdminRoute): "DELETE" | "GET" | "POST" {
     route.kind === "deletion-job-detail"
     ? "GET"
     : "POST";
+}
+
+function methodAllowed(route: AdminRoute, method: string): boolean {
+  if (route.kind === "backups" || route.kind === "restores") {
+    return method === "GET" || method === "POST";
+  }
+  return method === expectedMethod(route);
 }
 
 function bearerToken(request: Request): string {
@@ -938,6 +963,69 @@ function deletionJobFrom(value: unknown): AdminDeletionJob {
   return parsed.data;
 }
 
+function backupJobFrom(value: unknown): AdminBackupJob {
+  const parsed = AdminBackupJobSchema.safeParse(firstRow(value));
+  if (!parsed.success) throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  return parsed.data;
+}
+
+function restoreJobFrom(value: unknown): AdminRestoreJob {
+  const parsed = AdminRestoreJobSchema.safeParse(firstRow(value));
+  if (!parsed.success) throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  return parsed.data;
+}
+
+async function t18OperationMutation<T>(
+  dependencies: AdminDependencies,
+  auth: AuthContext,
+  input: {
+    action: "backup_create" | "restore_create" | "restore_promote";
+    parse(value: unknown): T;
+    requestId: string;
+    rpcArgs: Record<string, unknown>;
+    rpcName: string;
+    targetId: string;
+    targetType: "backup_job" | "restore_job";
+  },
+): Promise<{ auditClosed: boolean; value: T }> {
+  const intent: AdminIntentInput = {
+    action: input.action,
+    effectiveProfileId: null,
+    originalActorId: await authorize(dependencies, auth),
+    requestId: input.requestId,
+    targetId: input.targetId,
+    targetType: input.targetType,
+  };
+  const receipt = await verifiedIntent(dependencies, intent);
+  try {
+    await deletionRpc(dependencies, "internal_record_t18_admin_intent", {
+      p_action: intent.action,
+      p_auth_session_id: auth.sessionId,
+      p_auth_subject: auth.userId,
+      p_effective_profile_id: null,
+      p_request_id: intent.requestId,
+      p_target_id: intent.targetId,
+      p_target_type: intent.targetType,
+      ...receiptRpcArgs(receipt),
+    });
+    const value = input.parse(
+      await deletionRpc(dependencies, input.rpcName, {
+        p_auth_session_id: auth.sessionId,
+        p_auth_subject: auth.userId,
+        ...input.rpcArgs,
+      }),
+    );
+    return {
+      auditClosed: await completeSuccessOutcome(dependencies, intent, receipt),
+      value,
+    };
+  } catch (error) {
+    await appendFailureBestEffort(dependencies, intent, receipt, {});
+    if (error instanceof AdminHttpError) throw error;
+    throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  }
+}
+
 function completedDeletionSteps(job: AdminDeletionJob): Set<string> {
   return new Set(job.steps.filter((step) => step.completed).map((step) => step.name));
 }
@@ -1007,15 +1095,11 @@ async function permanentDeleteProfile(
   }
   const originalActorId = await authorize(dependencies, auth);
   const secret = firstRow(
-    await deletionRpc(
-      dependencies,
-      "internal_admin_get_profile_deletion_secret",
-      {
-        p_auth_session_id: auth.sessionId,
-        p_auth_subject: auth.userId,
-        p_profile_id: profileId,
-      },
-    ),
+    await deletionRpc(dependencies, "internal_admin_get_profile_deletion_secret", {
+      p_auth_session_id: auth.sessionId,
+      p_auth_subject: auth.userId,
+      p_profile_id: profileId,
+    }),
   );
   if (
     !secret ||
@@ -1030,9 +1114,10 @@ async function permanentDeleteProfile(
     throw new AdminHttpError("DOMAIN_CONSTRAINT", 409);
   }
   const intent: AdminIntentInput = {
-    action: job.status === "failed"
-      ? "profile_deletion_resume"
-      : "profile_deletion_permanent",
+    action:
+      job.status === "failed"
+        ? "profile_deletion_resume"
+        : "profile_deletion_permanent",
     effectiveProfileId: profileId,
     originalActorId,
     requestId,
@@ -1074,10 +1159,7 @@ async function permanentDeleteProfile(
       );
       if (
         tombstoneReceipt.stream !== "deletions" ||
-        !(await dependencies.verifyDeletionReceipt(
-          tombstoneReceipt,
-          tombstoneInput,
-        ))
+        !(await dependencies.verifyDeletionReceipt(tombstoneReceipt, tombstoneInput))
       ) {
         throw new Error("ledger_verification_failed");
       }
@@ -1091,12 +1173,7 @@ async function permanentDeleteProfile(
       steps = completedDeletionSteps(job);
     }
     if (job.status === "queued") {
-      job = await transitionDeletionJob(
-        dependencies,
-        auth,
-        job,
-        "ledger_recorded",
-      );
+      job = await transitionDeletionJob(dependencies, auth, job, "ledger_recorded");
     }
 
     if (!steps.has("access")) {
@@ -1106,13 +1183,10 @@ async function permanentDeleteProfile(
         p_expected_version: job.version,
         p_job_id: job.jobId,
       });
-      job = await completeDeletionStep(
-        dependencies,
-        auth,
-        job,
-        "access",
-        { jobId: job.jobId, step: "access" },
-      );
+      job = await completeDeletionStep(dependencies, auth, job, "access", {
+        jobId: job.jobId,
+        step: "access",
+      });
       steps = completedDeletionSteps(job);
     }
     if (job.status === "ledger_recorded") {
@@ -1141,25 +1215,16 @@ async function permanentDeleteProfile(
         p_removed_paths: paths,
       });
       if (!steps.has("exports")) {
-        job = await completeDeletionStep(
-          dependencies,
-          auth,
-          job,
-          "exports",
-          {
-            paths: await Promise.all(paths.map((path) => sha256Hex(path))),
-            step: "exports",
-          },
-        );
+        job = await completeDeletionStep(dependencies, auth, job, "exports", {
+          paths: await Promise.all(paths.map((path) => sha256Hex(path))),
+          step: "exports",
+        });
       }
       if (!steps.has("storage")) {
-        job = await completeDeletionStep(
-          dependencies,
-          auth,
-          job,
-          "storage",
-          { count: paths.length, step: "storage" },
-        );
+        job = await completeDeletionStep(dependencies, auth, job, "storage", {
+          count: paths.length,
+          step: "storage",
+        });
       }
       steps = completedDeletionSteps(job);
     }
@@ -1171,13 +1236,10 @@ async function permanentDeleteProfile(
         p_expected_version: job.version,
         p_job_id: job.jobId,
       });
-      job = await completeDeletionStep(
-        dependencies,
-        auth,
-        job,
-        "profile_data",
-        { jobId: job.jobId, step: "profile_data" },
-      );
+      job = await completeDeletionStep(dependencies, auth, job, "profile_data", {
+        jobId: job.jobId,
+        step: "profile_data",
+      });
       steps = completedDeletionSteps(job);
     }
 
@@ -1203,13 +1265,10 @@ async function permanentDeleteProfile(
       for (const authSubject of authSubjects) {
         await dependencies.deleteAuthUser(authSubject as string);
       }
-      job = await completeDeletionStep(
-        dependencies,
-        auth,
-        job,
-        "auth",
-        { deleted: authSubjects.length, step: "auth" },
-      );
+      job = await completeDeletionStep(dependencies, auth, job, "auth", {
+        deleted: authSubjects.length,
+        step: "auth",
+      });
       steps = completedDeletionSteps(job);
     }
 
@@ -1224,21 +1283,13 @@ async function permanentDeleteProfile(
         },
       );
       if (verified !== true) throw new Error("verification_failed");
-      job = await completeDeletionStep(
-        dependencies,
-        auth,
-        job,
-        "verification",
-        { verified: true },
-      );
+      job = await completeDeletionStep(dependencies, auth, job, "verification", {
+        verified: true,
+      });
     }
     job = await transitionDeletionJob(dependencies, auth, job, "purged");
     return {
-      auditClosed: await completeSuccessOutcome(
-        dependencies,
-        intent,
-        intentReceipt,
-      ),
+      auditClosed: await completeSuccessOutcome(dependencies, intent, intentReceipt),
       job,
     };
   } catch (error) {
@@ -1254,13 +1305,7 @@ async function permanentDeleteProfile(
         : "profile_purge_failed";
     try {
       if (job.status !== "failed" && job.status !== "purged") {
-        job = await transitionDeletionJob(
-          dependencies,
-          auth,
-          job,
-          "failed",
-          code,
-        );
+        job = await transitionDeletionJob(dependencies, auth, job, "failed", code);
       }
     } catch {
       // El job conserva el último punto confirmado y sigue siendo reanudable.
@@ -1308,7 +1353,7 @@ export async function handleAdmin(
     ) {
       throw new AdminHttpError("INVALID_INPUT", 400);
     }
-    if (request.method !== expectedMethod(route)) {
+    if (!methodAllowed(route, request.method)) {
       throw new AdminHttpError("NOT_FOUND", 404);
     }
 
@@ -1321,6 +1366,119 @@ export async function handleAdmin(
     }
     if (auth.aal !== "aal2") throw new AdminHttpError("AAL2_REQUIRED", 403);
 
+    if (route.kind === "backups") {
+      if (request.method === "GET") {
+        const rows = await deletionRpc(
+          dependencies,
+          "internal_admin_list_backup_jobs",
+          {
+            p_auth_session_id: auth.sessionId,
+            p_auth_subject: auth.userId,
+          },
+        );
+        const parsed = AdminBackupJobListSchema.safeParse(rows);
+        if (!parsed.success) {
+          throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+        }
+        return jsonResponse(parsed.data, 200, cors.headers);
+      }
+      if (dependencies.environment === "production") {
+        throw new AdminHttpError("DOMAIN_CONSTRAINT", 409);
+      }
+      requireRecentMfa(auth, dependencies.now());
+      const idempotencyKey = requireUuid(request.headers.get("idempotency-key"));
+      const parsed = AdminBackupCreateRequestSchema.safeParse(await readJson(request));
+      if (!parsed.success) throw new AdminHttpError("INVALID_INPUT", 400);
+      const mutation = await t18OperationMutation(dependencies, auth, {
+        action: "backup_create",
+        parse: backupJobFrom,
+        requestId: idempotencyKey,
+        rpcArgs: {
+          p_job_id: idempotencyKey,
+          p_kind: parsed.data.kind,
+          p_schema_version: parsed.data.schemaVersion,
+          p_source_environment: dependencies.environment,
+        },
+        rpcName: "internal_admin_create_backup_job",
+        targetId: idempotencyKey,
+        targetType: "backup_job",
+      });
+      return jsonResponse(
+        mutation.value,
+        mutation.auditClosed ? 201 : 202,
+        cors.headers,
+      );
+    }
+    if (route.kind === "restores") {
+      if (request.method === "GET") {
+        const rows = await deletionRpc(
+          dependencies,
+          "internal_admin_list_restore_jobs",
+          {
+            p_auth_session_id: auth.sessionId,
+            p_auth_subject: auth.userId,
+          },
+        );
+        const parsed = AdminRestoreJobListSchema.safeParse(rows);
+        if (!parsed.success) {
+          throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+        }
+        return jsonResponse(parsed.data, 200, cors.headers);
+      }
+      if (dependencies.environment === "production") {
+        throw new AdminHttpError("DOMAIN_CONSTRAINT", 409);
+      }
+      requireRecentMfa(auth, dependencies.now());
+      const idempotencyKey = requireUuid(request.headers.get("idempotency-key"));
+      const parsed = AdminRestoreCreateRequestSchema.safeParse(await readJson(request));
+      if (!parsed.success) throw new AdminHttpError("INVALID_INPUT", 400);
+      const mutation = await t18OperationMutation(dependencies, auth, {
+        action: "restore_create",
+        parse: restoreJobFrom,
+        requestId: idempotencyKey,
+        rpcArgs: {
+          p_backup_job_id: parsed.data.backupId,
+          p_job_id: idempotencyKey,
+          p_target_fingerprint: bytea(parsed.data.targetFingerprint),
+        },
+        rpcName: "internal_admin_create_restore_job",
+        targetId: idempotencyKey,
+        targetType: "restore_job",
+      });
+      return jsonResponse(
+        mutation.value,
+        mutation.auditClosed ? 201 : 202,
+        cors.headers,
+      );
+    }
+    if (route.kind === "restore-promote") {
+      if (dependencies.environment === "production") {
+        throw new AdminHttpError("DOMAIN_CONSTRAINT", 409);
+      }
+      requireRecentMfa(auth, dependencies.now());
+      const idempotencyKey = requireUuid(request.headers.get("idempotency-key"));
+      const parsed = AdminRestorePromoteRequestSchema.safeParse(
+        await readJson(request),
+      );
+      if (!parsed.success) throw new AdminHttpError("INVALID_INPUT", 400);
+      const mutation = await t18OperationMutation(dependencies, auth, {
+        action: "restore_promote",
+        parse: restoreJobFrom,
+        requestId: idempotencyKey,
+        rpcArgs: {
+          p_expected_version: parsed.data.expectedVersion,
+          p_job_id: route.restoreId,
+        },
+        rpcName: "internal_admin_promote_restore_job",
+        targetId: route.restoreId,
+        targetType: "restore_job",
+      });
+      return jsonResponse(
+        mutation.value,
+        mutation.auditClosed ? 200 : 202,
+        cors.headers,
+      );
+    }
     if (route.kind === "deletion-job-detail") {
       return jsonResponse(
         deletionJobFrom(
@@ -1348,11 +1506,7 @@ export async function handleAdmin(
         idempotencyKey,
         parsed.data.expectedVersion,
       );
-      return jsonResponse(
-        result.job,
-        result.auditClosed ? 200 : 202,
-        cors.headers,
-      );
+      return jsonResponse(result.job, result.auditClosed ? 200 : 202, cors.headers);
     }
 
     if (route.kind === "context") {
@@ -1859,10 +2013,7 @@ function runtimeDependencies(): AdminDependencies {
           limit: 2,
           search: name,
         });
-        if (
-          listError ||
-          data?.some((entry) => entry.name === name)
-        ) {
+        if (listError || data?.some((entry) => entry.name === name)) {
           throw new Error("storage_verification_failed");
         }
       }

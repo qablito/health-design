@@ -111,9 +111,7 @@ async function fixture() {
   return { bucket, env, ledger, publicKey, storage };
 }
 
-function deletionPayload(
-  operationId = "61000000-0000-4000-8000-000000005201",
-) {
+function deletionPayload(operationId = "61000000-0000-4000-8000-000000005201") {
   return {
     markerKeyVersion: 1,
     operationId,
@@ -184,9 +182,7 @@ async function signedRequest(
 
 describe("Worker de continuidad", () => {
   it("valida tombstones y recibos de rango mediante allowlists cerradas", () => {
-    expect(validateDeletionLedgerPayload(deletionPayload())).toEqual(
-      deletionPayload(),
-    );
+    expect(validateDeletionLedgerPayload(deletionPayload())).toEqual(deletionPayload());
     expect(() =>
       validateDeletionLedgerPayload({
         ...deletionPayload(),
@@ -211,9 +207,14 @@ describe("Worker de continuidad", () => {
     const state = await fixture();
     const body = deletionPayload();
     const first = await state.ledger.fetch(
-      await signedRequest(body, state.env.CONTINUITY_LEDGER_HMAC_KEY, crypto.randomUUID(), {
-        path: "/v1/deletions/append",
-      }),
+      await signedRequest(
+        body,
+        state.env.CONTINUITY_LEDGER_HMAC_KEY,
+        crypto.randomUUID(),
+        {
+          path: "/v1/deletions/append",
+        },
+      ),
     );
     const receipt = (await first.json()) as {
       recordHash: string;
@@ -225,9 +226,14 @@ describe("Worker de continuidad", () => {
     expect(state.bucket.objects.has("deletions/00000000000000000001.json")).toBe(true);
 
     const retry = await state.ledger.fetch(
-      await signedRequest(body, state.env.CONTINUITY_LEDGER_HMAC_KEY, crypto.randomUUID(), {
-        path: "/v1/deletions/append",
-      }),
+      await signedRequest(
+        body,
+        state.env.CONTINUITY_LEDGER_HMAC_KEY,
+        crypto.randomUUID(),
+        {
+          path: "/v1/deletions/append",
+        },
+      ),
     );
     await expect(retry.json()).resolves.toEqual(receipt);
 
@@ -282,16 +288,26 @@ describe("Worker de continuidad", () => {
     const body = deletionPayload("61000000-0000-4000-8000-000000005203");
     state.bucket.corruptReads = 1;
     const failed = await state.ledger.fetch(
-      await signedRequest(body, state.env.CONTINUITY_LEDGER_HMAC_KEY, crypto.randomUUID(), {
-        path: "/v1/deletions/append",
-      }),
+      await signedRequest(
+        body,
+        state.env.CONTINUITY_LEDGER_HMAC_KEY,
+        crypto.randomUUID(),
+        {
+          path: "/v1/deletions/append",
+        },
+      ),
     );
     expect(failed.status).toBe(503);
 
     const resumed = await state.ledger.fetch(
-      await signedRequest(body, state.env.CONTINUITY_LEDGER_HMAC_KEY, crypto.randomUUID(), {
-        path: "/v1/deletions/append",
-      }),
+      await signedRequest(
+        body,
+        state.env.CONTINUITY_LEDGER_HMAC_KEY,
+        crypto.randomUUID(),
+        {
+          path: "/v1/deletions/append",
+        },
+      ),
     );
     expect(resumed.status).toBe(200);
     expect(state.bucket.objects.size).toBe(1);
@@ -332,10 +348,14 @@ describe("Worker de continuidad", () => {
       restore_promote: "restore_job",
     } as const;
     for (const [action, targetType] of Object.entries(expectedTargets)) {
+      const profileScoped = action.startsWith("profile_deletion_");
       expect(() =>
         validateAdminAuditPayload({
           ...payload(crypto.randomUUID()),
           action,
+          effectiveProfileId: profileScoped
+            ? "51000000-0000-4000-8000-000000005101"
+            : null,
           targetType,
         }),
       ).not.toThrow();

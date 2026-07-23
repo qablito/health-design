@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   AdminBackupCreateRequestSchema,
+  AdminBackupJobListSchema,
   AdminBackupJobSchema,
   AdminDeletionJobSchema,
   AdminPermanentDeletionRequestSchema,
+  AdminRestoreCreateRequestSchema,
+  AdminRestoreJobListSchema,
   AdminRestoreJobSchema,
   AdminRestorePromoteRequestSchema,
   DeletionRequestCreateSchema,
@@ -124,6 +127,7 @@ describe("contratos operativos T18", () => {
       version: 4,
     } as const;
     expect(AdminBackupJobSchema.parse(backup)).toEqual(backup);
+    expect(AdminBackupJobListSchema.parse([backup])).toEqual([backup]);
     expect(() =>
       AdminBackupJobSchema.parse({ ...backup, objectPath: "privado/dump" }),
     ).toThrow();
@@ -138,6 +142,14 @@ describe("contratos operativos T18", () => {
       version: 6,
     } as const;
     expect(AdminRestoreJobSchema.parse(restore)).toEqual(restore);
+    expect(AdminRestoreJobListSchema.parse([restore])).toEqual([restore]);
+    expect(
+      AdminRestoreCreateRequestSchema.parse({
+        backupId: jobId,
+        schemaVersion: 1,
+        targetFingerprint: "e".repeat(64),
+      }),
+    ).toBeDefined();
     expect(
       AdminRestorePromoteRequestSchema.parse({
         confirmationPhrase: "PROMOVER RESTAURACIÓN VERIFICADA",

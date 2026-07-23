@@ -3,9 +3,11 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react
 import {
   AdminApiError,
   adminClient,
+  type AdminBackupJob,
   type AdminImpersonationContext,
   type AdminDeletionJob,
   type AdminProfileSummary,
+  type AdminRestoreJob,
 } from "./admin-client";
 import { ProductReviewPanel } from "./ProductReviewPanel";
 import { CatalogPublicationPanel } from "./CatalogPublicationPanel";
@@ -51,6 +53,13 @@ function formValue(form: FormData, field: string): string {
   return typeof value === "string" ? value : "";
 }
 
+async function sha256Hex(value: string): Promise<string> {
+  const digest = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)),
+  );
+  return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export function AdminApp() {
   const [stage, setStage] = useState<Stage>("loading");
   const [profiles, setProfiles] = useState<AdminProfileSummary[]>([]);
@@ -62,6 +71,9 @@ export function AdminApp() {
   const [error, setError] = useState<string>();
   const [deletionJob, setDeletionJob] = useState<AdminDeletionJob>();
   const [deletionConfirmation, setDeletionConfirmation] = useState("");
+  const [backups, setBackups] = useState<AdminBackupJob[]>([]);
+  const [restores, setRestores] = useState<AdminRestoreJob[]>([]);
+  const [restoreConfirmation, setRestoreConfirmation] = useState("");
 
   const activeProfile = useMemo(
     () =>
@@ -72,10 +84,16 @@ export function AdminApp() {
   );
 
   const loadAdminData = useCallback(async () => {
-    const nextProfiles = await adminClient.listProfiles();
-    const nextContext = await adminClient.currentContext();
+    const [nextProfiles, nextContext, nextBackups, nextRestores] = await Promise.all([
+      adminClient.listProfiles(),
+      adminClient.currentContext(),
+      adminClient.listBackups(),
+      adminClient.listRestores(),
+    ]);
     setProfiles(nextProfiles);
     setContext(nextContext);
+    setBackups(nextBackups);
+    setRestores(nextRestores);
   }, []);
 
   const prepareMfa = useCallback(async () => {
@@ -202,6 +220,8 @@ export function AdminApp() {
         await clearPublicAssetCaches();
       }
       setProfiles([]);
+      setBackups([]);
+      setRestores([]);
       setContext({ active: false });
       setStage("signed-out");
     });
@@ -223,6 +243,35 @@ export function AdminApp() {
       );
       setDeletionJob(job);
       setDeletionConfirmation("");
+      await loadAdminData();
+    });
+  }
+
+  async function createBackup(kind: "precritical" | "weekly") {
+    await run(async () => {
+      await adminClient.createBackup(kind);
+      await loadAdminData();
+    });
+  }
+
+  async function createRestore(backupId: string) {
+    await run(async () => {
+      const targetFingerprint = await sha256Hex(
+        `local-isolated:${backupId}:${crypto.randomUUID()}`,
+      );
+      await adminClient.createRestore(backupId, targetFingerprint);
+      await loadAdminData();
+    });
+  }
+
+  async function promoteRestore(restore: AdminRestoreJob) {
+    if (restoreConfirmation !== "PROMOVER RESTAURACIÓN VERIFICADA") {
+      setError("Escribe la frase exacta antes de autorizar la promoción.");
+      return;
+    }
+    await run(async () => {
+      await adminClient.promoteRestore(restore.restoreId, restore.version);
+      setRestoreConfirmation("");
       await loadAdminData();
     });
   }
@@ -335,6 +384,85 @@ export function AdminApp() {
         <>
           <CatalogPublicationPanel execute={executeOperation} />
           <ProductReviewPanel execute={executeOperation} />
+          <section aria-labelledby="admin-recovery-title" className="admin-card">
+            <h2 id="admin-recovery-title">Copias y restauraciones</h2>
+            <p>
+              El panel gobierna los trabajos. La captura y la restauración se ejecutan
+              mediante scripts de operador y nunca guardan la KEK aquí.
+            </p>
+            <div className="admin-actions">
+              <button
+                disabled={busy}
+                onClick={() => void createBackup("weekly")}
+                type="button"
+              >
+                Crear job semanal
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => void createBackup("precritical")}
+                type="button"
+              >
+                Crear job precrítico
+              </button>
+            </div>
+            <h3>Backups</h3>
+            <ul className="admin-profile-list">
+              {backups.map((backup) => (
+                <li key={backup.backupId}>
+                  <div>
+                    <strong>{backup.kind}</strong>
+                    <span>
+                      {backup.status} · versión {backup.version}
+                    </span>
+                  </div>
+                  <button
+                    disabled={busy || backup.status !== "ready"}
+                    onClick={() => void createRestore(backup.backupId)}
+                    type="button"
+                  >
+                    Preparar restore aislado
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <h3>Restores</h3>
+            <ul className="admin-profile-list">
+              {restores.map((restore) => (
+                <li key={restore.restoreId}>
+                  <div>
+                    <strong>{restore.status}</strong>
+                    <span>Backup {restore.backupId}</span>
+                  </div>
+                  {restore.status === "ready_for_promotion" ? (
+                    <div className="admin-form">
+                      <label>
+                        Confirmación de promoción
+                        <input
+                          autoComplete="off"
+                          onChange={(event) =>
+                            setRestoreConfirmation(event.target.value)
+                          }
+                          placeholder="PROMOVER RESTAURACIÓN VERIFICADA"
+                          value={restoreConfirmation}
+                        />
+                      </label>
+                      <button
+                        disabled={
+                          busy ||
+                          restoreConfirmation !== "PROMOVER RESTAURACIÓN VERIFICADA"
+                        }
+                        onClick={() => void promoteRestore(restore)}
+                        type="button"
+                      >
+                        Autorizar promoción
+                      </button>
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </section>
           <section aria-labelledby="admin-profiles-title" className="admin-card">
             <h2 id="admin-profiles-title">Perfiles</h2>
             {profiles.length === 0 ? <p>No hay perfiles disponibles.</p> : null}
@@ -371,8 +499,7 @@ export function AdminApp() {
                       <button
                         disabled={
                           busy ||
-                          deletionConfirmation !==
-                            "PURGAR PERFIL PERMANENTEMENTE"
+                          deletionConfirmation !== "PURGAR PERFIL PERMANENTEMENTE"
                         }
                         onClick={() => void permanentlyDelete(profile)}
                         type="button"

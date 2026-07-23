@@ -2,6 +2,9 @@ import {
   AdminBarcodeCorrectionDetailSchema,
   AdminBarcodeCorrectionListSchema,
   AdminBarcodeCorrectionMutationAckSchema,
+  AdminBackupCreateRequestSchema,
+  AdminBackupJobListSchema,
+  AdminBackupJobSchema,
   AdminCatalogMatchCandidatesAckSchema,
   AdminCatalogPublicationMutationAckSchema,
   AdminCatalogRevisionListSchema,
@@ -10,11 +13,16 @@ import {
   AdminPermanentDeletionRequestSchema,
   AdminMatchingRuleMutationAckSchema,
   AdminProfileSummarySchema,
+  AdminRestoreCreateRequestSchema,
+  AdminRestoreJobListSchema,
+  AdminRestoreJobSchema,
+  AdminRestorePromoteRequestSchema,
   AdminSupermarketMatchingRuleListSchema,
   AdminSupermarketMatchingRuleReviewAckSchema,
   type AdminBarcodeCorrectionDetail,
   type AdminBarcodeCorrectionList,
   type AdminBarcodeCorrectionMutationAck,
+  type AdminBackupJob,
   type AdminCatalogMatchCandidatesAck,
   type AdminCatalogPublicationMutationAck,
   type AdminCatalogRevisionList,
@@ -22,6 +30,7 @@ import {
   type AdminDeletionJob,
   type AdminMatchingRuleMutationAck,
   type AdminProfileSummary,
+  type AdminRestoreJob,
   type AdminSupermarketMatchingRuleList,
   type AdminSupermarketMatchingRuleReviewAck,
   type CommercialProductSnapshot,
@@ -120,6 +129,26 @@ export function createAdminClient(dependencies: AdminClientDependencies) {
   }
 
   return {
+    createBackup(kind: "precritical" | "weekly") {
+      return request<AdminBackupJob>(
+        "/v1/admin/backups",
+        AdminBackupJobSchema,
+        "POST",
+        AdminBackupCreateRequestSchema.parse({ kind, schemaVersion: 1 }),
+      );
+    },
+    createRestore(backupId: string, targetFingerprint: string) {
+      return request<AdminRestoreJob>(
+        "/v1/admin/restores",
+        AdminRestoreJobSchema,
+        "POST",
+        AdminRestoreCreateRequestSchema.parse({
+          backupId,
+          schemaVersion: 1,
+          targetFingerprint,
+        }),
+      );
+    },
     deletionJob(jobId: string) {
       return request<AdminDeletionJob>(
         `/v1/admin/deletion-jobs/${jobId}`,
@@ -243,6 +272,13 @@ export function createAdminClient(dependencies: AdminClientDependencies) {
         "GET",
       );
     },
+    listBackups() {
+      return request<AdminBackupJob[]>(
+        "/v1/admin/backups",
+        AdminBackupJobListSchema,
+        "GET",
+      );
+    },
     listBarcodeCorrections(
       status: "approved" | "pending" | "rejected" | "superseded" = "pending",
       cursor?: string,
@@ -273,6 +309,26 @@ export function createAdminClient(dependencies: AdminClientDependencies) {
         "GET",
         undefined,
         true,
+      );
+    },
+    listRestores() {
+      return request<AdminRestoreJob[]>(
+        "/v1/admin/restores",
+        AdminRestoreJobListSchema,
+        "GET",
+      );
+    },
+    promoteRestore(restoreId: string, expectedVersion: number) {
+      return request<AdminRestoreJob>(
+        `/v1/admin/restores/${restoreId}/promote`,
+        AdminRestoreJobSchema,
+        "POST",
+        AdminRestorePromoteRequestSchema.parse({
+          confirmationPhrase: "PROMOVER RESTAURACIÓN VERIFICADA",
+          confirmed: true,
+          expectedVersion,
+          schemaVersion: 1,
+        }),
       );
     },
     publishCatalogRevision(
@@ -328,4 +384,10 @@ export const adminClient = createAdminClient({
   publishableKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
 });
 
-export type { AdminDeletionJob, AdminImpersonationContext, AdminProfileSummary };
+export type {
+  AdminBackupJob,
+  AdminDeletionJob,
+  AdminImpersonationContext,
+  AdminProfileSummary,
+  AdminRestoreJob,
+};
