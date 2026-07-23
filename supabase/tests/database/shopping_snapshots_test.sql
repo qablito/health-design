@@ -208,6 +208,108 @@ insert into private.catalog_publications (
   '31000000-0000-4000-8000-000000017401'
 );
 
+insert into private.supermarket_skus (
+  id, market, chain, external_sku, gtin14
+)
+select
+  format('8b00000%s-0000-4000-8000-00000001741%s', value, value)::uuid,
+  'ES', 'mercadona', format('test-chicken-%s', value), null
+from generate_series(1, 5) value;
+insert into private.supermarket_sku_revisions (
+  id, catalog_revision_id, sku_id, name, category_path, format_text,
+  purchase_form, package, base_price_eur, normalized_price, source_fields,
+  usability, exclusion_reasons, content_hash
+)
+select
+  format('8c00000%s-0000-4000-8000-00000001741%s', value, value)::uuid,
+  '8a000000-0000-4000-8000-000000017401',
+  format('8b00000%s-0000-4000-8000-00000001741%s', value, value)::uuid,
+  format('Pechuga de pollo %s', value),
+  '["Carne","Pollo"]'::jsonb, '500 g', 'fresh',
+  '{"equivalenceEvidenceRef":null,"equivalentEdibleMassG":null,"saleMeasure":{"dimension":"mass","quantity":"500","unit":"g"}}'::jsonb,
+  3.2500, '{"dimension":"mass","unit":"EUR/kg","value":"6.5"}'::jsonb,
+  '{}'::jsonb, 'calculable', '[]'::jsonb, decode(repeat('08', 32), 'hex')
+from generate_series(1, 5) value;
+insert into private.supermarket_sku_matching_rule_revisions (
+  id, sku_id, canonical_food_id, match_state, food_state, purchase_form,
+  edible_part, criteria, evidence, exclusions, gtin_consistency,
+  critical_issue_open, version, status, reviewed_by, activated_at
+)
+select
+  format('8d00000%s-0000-4000-8000-00000001741%s', value, value)::uuid,
+  format('8b00000%s-0000-4000-8000-00000001741%s', value, value)::uuid,
+  '86000000-0000-4000-8000-000000017401', 'exact', 'raw', 'fresh',
+  'edible',
+  '{"catalogRevisionId":"8a000000-0000-4000-8000-000000017401","skuContentHash":"0808080808080808080808080808080808080808080808080808080808080808"}'::jsonb,
+  '[]'::jsonb, '[]'::jsonb, 'consistent', false, 1, 'active',
+  '31000000-0000-4000-8000-000000017401', now()
+from generate_series(1, 5) value;
+
+insert into private.supermarket_source_manifests (
+  id, market, chain, source_kind, source_location_internal, collected_at,
+  importer_version, canonicalization_version, raw_object_ref,
+  normalized_object_ref, capture_evidence_ref, raw_sha256, normalized_sha256,
+  import_key, record_count, price_count, error_count, coverage,
+  license_status, source_terms_status
+) values (
+  '89000000-0000-4000-8000-000000017402', 'ES', 'dia',
+  'manual_export', 'test-only', now(), 'test-v1', 'catalog-v1',
+  'private/test/dia/raw', 'private/test/dia/normalized', 'private/test/dia/evidence',
+  decode(repeat('71', 32), 'hex'), decode(repeat('72', 32), 'hex'),
+  decode(repeat('73', 32), 'hex'), 1, 1, 0, '{}'::jsonb,
+  'approved', 'approved'
+);
+insert into private.supermarket_catalog_revisions (
+  id, market, chain, manifest_id, revision_number, state, quality_status,
+  record_count, usable_count, observed_at
+) values (
+  '8a000000-0000-4000-8000-000000017402', 'ES', 'dia',
+  '89000000-0000-4000-8000-000000017402', 1, 'published', 'current',
+  1, 1, now()
+);
+insert into private.supermarket_skus (
+  id, market, chain, external_sku, gtin14
+) values (
+  '8b000000-0000-4000-8000-000000017402', 'ES', 'dia',
+  'test-chicken-dia', null
+);
+insert into private.supermarket_sku_revisions (
+  id, catalog_revision_id, sku_id, name, category_path, format_text,
+  purchase_form, package, base_price_eur, normalized_price, source_fields,
+  usability, exclusion_reasons, content_hash
+) values (
+  '8c000000-0000-4000-8000-000000017402',
+  '8a000000-0000-4000-8000-000000017402',
+  '8b000000-0000-4000-8000-000000017402', 'Pechuga DIA',
+  '["Carne","Pollo"]'::jsonb, '500 g', 'fresh',
+  '{"equivalenceEvidenceRef":null,"equivalentEdibleMassG":null,"saleMeasure":{"dimension":"mass","quantity":"500","unit":"g"}}'::jsonb,
+  3.2500, '{"dimension":"mass","unit":"EUR/kg","value":"6.5"}'::jsonb,
+  '{}'::jsonb, 'calculable', '[]'::jsonb, decode(repeat('74', 32), 'hex')
+);
+insert into private.supermarket_sku_matching_rule_revisions (
+  id, sku_id, canonical_food_id, match_state, food_state, purchase_form,
+  edible_part, criteria, evidence, exclusions, gtin_consistency,
+  critical_issue_open, version, status, reviewed_by, activated_at
+) values (
+  '8d000000-0000-4000-8000-000000017402',
+  '8b000000-0000-4000-8000-000000017402',
+  '86000000-0000-4000-8000-000000017401', 'exact', 'raw', 'fresh',
+  'edible',
+  '{"catalogRevisionId":"8a000000-0000-4000-8000-000000017402","skuContentHash":"7474747474747474747474747474747474747474747474747474747474747474"}'::jsonb,
+  '[]'::jsonb, '[]'::jsonb, 'consistent', false, 1, 'active',
+  '31000000-0000-4000-8000-000000017401', now()
+);
+insert into private.catalog_publications (
+  id, market, chain, catalog_revision_id, basket_seed_revision_id, coverage,
+  coverage_hash, source_use_decision, published_by
+) values (
+  '8e000000-0000-4000-8000-000000017402', 'ES', 'dia',
+  '8a000000-0000-4000-8000-000000017402',
+  '87000000-0000-4000-8000-000000017401', '{}',
+  decode(repeat('75', 32), 'hex'), 'development_approved',
+  '31000000-0000-4000-8000-000000017401'
+);
+
 create temporary table shopping_preference_one as
 select public.internal_put_shopping_preference(
   '00000000-0000-4000-8000-000000017401',
@@ -292,8 +394,9 @@ select ok(
      and response #>> '{source,shoppingList,0,name}' = 'Pollo'
      and response #>> '{source,shoppingList,0,purchaseContext,purchaseForm}' = 'fresh'
      and response #>> '{source,catalogItems,0,projection,basePriceEur}' = '3.25'
+     and jsonb_array_length(response #> '{source,catalogItems}') = 7
    from shopping_source_one),
-  'el servidor conserva gramos y nombre nutricionales y enriquece desde semilla'
+  'el servidor conserva nutrición y no trunca silenciosamente candidatos del resolver'
 );
 
 create temporary table shopping_ack_one as
@@ -330,6 +433,57 @@ select public.internal_persist_shopping_resolution(
 
 select is((select response ->> 'version' from shopping_ack_one), '1',
   'la primera resolución persiste la revisión 1');
+select throws_ok(
+  $$select public.internal_persist_shopping_resolution(
+    '00000000-0000-4000-8000-000000017401',
+    '21000000-0000-4000-8000-000000017401',
+    '82000000-0000-4000-8000-000000017401',
+    '96000000-0000-4000-8000-000000017401',
+    (select (response #>> '{source,preferenceRevision,id}')::uuid
+     from shopping_source_one),
+    '87000000-0000-4000-8000-000000017401', 1,
+    decode(repeat('e1', 32), 'hex'), decode(repeat('e2', 32), 'hex'),
+    'shopping-resolver-v2',
+    jsonb_build_object(
+      'id','96000000-0000-4000-8000-000000017401',
+      'profileId','51000000-0000-4000-8000-000000017401',
+      'planVersionId','82000000-0000-4000-8000-000000017401',
+      'preferenceRevisionId',
+        (select response #>> '{source,preferenceRevision,id}'
+         from shopping_source_one),
+      'basketSeedRevisionId','87000000-0000-4000-8000-000000017401',
+      'revision',2,
+      'supersedesId','91000000-0000-4000-8000-000000017401',
+      'inputDigest',repeat('e1',32),
+      'resolverVersion','shopping-resolver-v2',
+      'schemaVersion',1,
+      'createdAt','2026-07-22T12:00:30.000Z',
+      'catalogPublicationIds',
+        (select response #> '{source,catalogPublicationIds}'
+         from shopping_source_one),
+      'items',jsonb_build_array(
+        jsonb_build_object('canonicalFoodKey','food:test.chicken')
+      )
+    ),
+    (select array(
+       select jsonb_array_elements_text(
+         response #> '{source,catalogPublicationIds}'
+       )
+     )::uuid[] from shopping_source_one),
+    jsonb_build_object(
+      'leftovers','[]'::jsonb,
+      'selections',jsonb_build_array(jsonb_build_object(
+        'canonicalFoodKey','food:test.chicken',
+        'skuId','8b000000-0000-4000-8000-000000017402',
+        'carriedFromId',null
+      ))
+    ),
+    'shopping-product-select',decode(repeat('e3',32),'hex'),
+    decode(repeat('e4',32),'hex')
+  )$$,
+  '22023', 'shopping_selection_not_eligible',
+  'persistencia rechaza una selección nueva fuera de la cadena autorizada'
+);
 select is(
   public.internal_prepare_shopping_resolution(
     '00000000-0000-4000-8000-000000017401',
@@ -423,6 +577,22 @@ select is(
    where snapshot_id = '92000000-0000-4000-8000-000000017401'),
   '100.000000',
   'el snapshot conserva el conjunto completo de sobrantes confirmados'
+);
+select is(
+  public.internal_prepare_shopping_resolution(
+    '00000000-0000-4000-8000-000000017401',
+    '21000000-0000-4000-8000-000000017401',
+    '82000000-0000-4000-8000-000000017401', null,
+    'shopping-snapshot-create',
+    jsonb_build_object(
+      'preferenceRevisionId',
+      (select response ->> 'preferenceRevisionId' from shopping_preference_three)
+    ),
+    decode(repeat('36', 32), 'hex'), decode(repeat('37', 32), 'hex'),
+    decode(repeat('38', 32), 'hex')
+  ) #>> '{source,leftovers,0,confirmedEquivalentG}',
+  '100',
+  'una apertura nueva hereda el contexto confirmado del snapshot activo'
 );
 
 create temporary table shopping_source_three as
@@ -547,6 +717,20 @@ select ok(
   (select response #>> '{source,selectionsForPersistence,0,carriedFromId}' is not null
    from shopping_source_five),
   'una mutación distinta conserva la selección manual con carried_from_id'
+);
+
+select throws_ok(
+  $$select public.internal_prepare_shopping_resolution(
+    '00000000-0000-4000-8000-000000017401',
+    '21000000-0000-4000-8000-000000017401',
+    '82000000-0000-4000-8000-000000017401',
+    '94000000-0000-4000-8000-000000017401', 'shopping-product-select',
+    '{"schemaVersion":1,"canonicalFoodKey":"food:test.chicken","expectedVersion":4,"skuId":"8b000000-0000-4000-8000-000000017402"}'::jsonb,
+    decode(repeat('76', 32), 'hex'), decode(repeat('77', 32), 'hex'),
+    decode(repeat('78', 32), 'hex')
+  )$$,
+  '22023', 'shopping_selection_not_eligible',
+  'tienda única rechaza selecciones de cadenas usadas solo para comparar'
 );
 
 select is(

@@ -334,10 +334,7 @@ as $$
       sku_revision.name, sku_revision.category_path, sku_revision.format_text,
       sku_revision.purchase_form, sku_revision.package,
       sku_revision.base_price_eur, sku_revision.normalized_price,
-      sku_revision.usability, sku_revision.exclusion_reasons,
-      row_number() over (
-        partition by food.food_key order by sku.chain, sku.id
-      ) option_rank
+      sku_revision.usability, sku_revision.exclusion_reasons
     from private.catalog_publications publication
     join private.supermarket_sku_revisions sku_revision
       on sku_revision.catalog_revision_id = publication.catalog_revision_id
@@ -357,32 +354,37 @@ as $$
       and rule.gtin_consistency <> 'conflict'
       and rule.critical_issue_open is false
       and p_exclude_for_allergy is false
+  ),
+  bounded as (
+    select * from eligible
+    order by food_key, chain, sku_id
+    limit 401
   )
   select coalesce(jsonb_agg(jsonb_build_object(
-    'canonicalFoodKey', eligible.food_key,
-    'matchState', eligible.match_state,
-    'matchedEdiblePart', eligible.edible_part,
-    'matchedFoodState', eligible.food_state,
-    'matchedPurchaseForm', eligible.matched_purchase_form,
+    'canonicalFoodKey', bounded.food_key,
+    'matchState', bounded.match_state,
+    'matchedEdiblePart', bounded.edible_part,
+    'matchedFoodState', bounded.food_state,
+    'matchedPurchaseForm', bounded.matched_purchase_form,
     'projection', jsonb_build_object(
-      'basePriceEur', private.shopping_decimal_text(eligible.base_price_eur),
-      'categoryPath', eligible.category_path,
-      'chain', eligible.chain,
-      'exclusionReasons', eligible.exclusion_reasons,
-      'externalSku', eligible.external_sku,
-      'formatText', eligible.format_text,
-      'gtin14', eligible.gtin14,
+      'basePriceEur', private.shopping_decimal_text(bounded.base_price_eur),
+      'categoryPath', bounded.category_path,
+      'chain', bounded.chain,
+      'exclusionReasons', bounded.exclusion_reasons,
+      'externalSku', bounded.external_sku,
+      'formatText', bounded.format_text,
+      'gtin14', bounded.gtin14,
       'market', 'ES',
-      'name', eligible.name,
-      'normalizedPrice', eligible.normalized_price,
-      'package', eligible.package,
-      'purchaseForm', eligible.purchase_form,
+      'name', bounded.name,
+      'normalizedPrice', bounded.normalized_price,
+      'package', bounded.package,
+      'purchaseForm', bounded.purchase_form,
       'schemaVersion', 1,
-      'skuId', eligible.sku_id,
-      'usability', eligible.usability
+      'skuId', bounded.sku_id,
+      'usability', bounded.usability
     )
-  ) order by eligible.food_key, eligible.chain, eligible.sku_id), '[]'::jsonb)
-  from eligible where eligible.option_rank <= 5
+  ) order by bounded.food_key, bounded.chain, bounded.sku_id), '[]'::jsonb)
+  from bounded
 $$;
 
 create function private.prepare_shopping_resolution(
@@ -408,6 +410,7 @@ declare
   v_base_snapshot public.shopping_snapshots%rowtype;
   v_catalog_items jsonb;
   v_chains text[];
+  v_mutation_chains text[];
   v_context public.context_snapshots%rowtype;
   v_current_revision integer;
   v_expected_version integer;
@@ -520,9 +523,10 @@ begin
     raise exception using errcode = '55000', message = 'active_basket_seed_required';
   end if;
 
-  v_chains := case when v_preference.mode = 'single'
+  v_mutation_chains := case when v_preference.mode = 'single'
     then array[v_preference.preferred_chain]
     else v_preference.compared_chains end;
+  v_chains := v_mutation_chains;
   if not exists (
     select 1 from private.catalog_publications publication
     where publication.chain = v_preference.preferred_chain
@@ -564,6 +568,9 @@ begin
     and snapshot.plan_version_id = p_plan_version_id
     and snapshot.lifecycle = 'active';
   v_current_revision := coalesce(v_active_snapshot.revision, 0);
+  if p_operation = 'shopping-snapshot-create' then
+    v_base_snapshot := v_active_snapshot;
+  end if;
 
   if v_base_snapshot.id is not null then
     select coalesce(jsonb_agg(jsonb_build_object(
@@ -644,6 +651,7 @@ begin
           )
         join public.canonical_foods food on food.id = rule.canonical_food_id
         where publication.id = any(v_publication_ids)
+          and publication.chain = any(v_mutation_chains)
           and sku_revision.sku_id = v_sku_id
           and food.food_key = v_food_key
           and sku_revision.usability = 'calculable'
@@ -689,6 +697,7 @@ begin
         )
       join public.canonical_foods food on food.id = rule.canonical_food_id
       where publication.id = any(v_publication_ids)
+        and publication.chain = any(v_mutation_chains)
         and sku_revision.sku_id = v_sku_id
         and food.food_key = v_food_key
         and sku_revision.usability = 'calculable'
@@ -710,6 +719,11 @@ begin
   v_catalog_items := private.shopping_catalog_items(
     v_seed_id, v_chains, v_allergy_uncertain
   );
+  if jsonb_array_length(v_catalog_items) > 400 then
+    raise exception using
+      errcode = '55000',
+      message = 'shopping_catalog_universe_too_large';
+  end if;
 
   return jsonb_build_object(
     'replay', false,
@@ -976,6 +990,11 @@ begin
         )
       join public.canonical_foods food on food.id = rule.canonical_food_id
       where publication.id = any(p_catalog_publication_ids)
+        and publication.chain = any(
+          case when v_preference.mode = 'single'
+            then array[v_preference.preferred_chain]
+            else v_preference.compared_chains end
+        )
         and sku_revision.sku_id = (v_item ->> 'skuId')::uuid
         and food.food_key = v_item ->> 'canonicalFoodKey'
         and sku_revision.equivalent_edible_mass_g is not null
@@ -1022,6 +1041,11 @@ begin
         )
       join public.canonical_foods food on food.id = rule.canonical_food_id
       where publication.id = any(p_catalog_publication_ids)
+        and publication.chain = any(
+          case when v_preference.mode = 'single'
+            then array[v_preference.preferred_chain]
+            else v_preference.compared_chains end
+        )
         and sku_revision.sku_id = (v_item ->> 'skuId')::uuid
         and food.food_key = v_item ->> 'canonicalFoodKey'
         and sku_revision.usability = 'calculable'

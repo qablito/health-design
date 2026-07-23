@@ -140,6 +140,7 @@ export function ShoppingApp() {
     compatible: boolean;
     value: string;
   } | null>(null);
+  const [openResolutionKey] = useState(() => crypto.randomUUID());
   const [pendingResolution, setPendingResolution] = useState<PendingResolution>();
   const [preference, setPreference] = useState<ShoppingPreferenceRevision | null>(null);
   const [profiles, setProfiles] = useState<ProfileAccessSummary[]>([]);
@@ -189,10 +190,15 @@ export function ShoppingApp() {
           chains.includes(preferenceResponse.preference.preferredChain)
         ) {
           setStatus("Calculando desde la preferencia guardada…");
+          const retry = {
+            idempotencyKey: openResolutionKey,
+            preferenceRevisionId: preferenceResponse.preference.id,
+          };
+          setPendingResolution(retry);
           await resolveFromPreference(
             nextContext,
-            preferenceResponse.preference.id,
-            `shopping-open:${nextContext.planVersionId}:${preferenceResponse.preference.id}`,
+            retry.preferenceRevisionId,
+            retry.idempotencyKey,
           );
         }
         if (!active) return;

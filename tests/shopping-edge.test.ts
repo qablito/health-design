@@ -152,6 +152,7 @@ const envelope = {
 type SetupOptions = Readonly<{
   prepare?: unknown;
   rpcError?: Readonly<{ code?: string; message?: string }>;
+  snapshot?: unknown;
 }>;
 
 function setup(options: SetupOptions = {}) {
@@ -173,7 +174,7 @@ function setup(options: SetupOptions = {}) {
         preference: null,
         schemaVersion: 1,
       },
-      internal_get_shopping_snapshot: envelope,
+      internal_get_shopping_snapshot: options.snapshot ?? envelope,
       internal_list_shopping_catalog: {
         hasMore: false,
         items: [projection],
@@ -494,6 +495,46 @@ describe("Edge público de compra", () => {
     expect(response.status).toBe(200);
     expect(current.resolve).not.toHaveBeenCalled();
     expect(current.calls.map(({ name }) => name)).toEqual([
+      "internal_prepare_shopping_resolution",
+    ]);
+  });
+
+  it("permite que PostgreSQL reproduzca una mutación cuya base ya fue archivada", async () => {
+    const archivedEnvelope = {
+      ...envelope,
+      lifecycle: {
+        archivedAt: "2026-07-23T09:01:00.000Z",
+        status: "archived" as const,
+      },
+    };
+    const current = setup({
+      prepare: {
+        replay: true,
+        response: {
+          schemaVersion: 1,
+          snapshotId: SNAPSHOT_ID,
+          status: "active",
+          version: 2,
+        },
+      },
+      snapshot: archivedEnvelope,
+    });
+    const response = await handleShoppingCatalog(
+      request(`/v1/shopping/${SNAPSHOT_ID}/leftovers`, {
+        body: {
+          action: "clear",
+          canonicalFoodKey: "food:test.chicken",
+          expectedVersion: 1,
+          schemaVersion: 1,
+        },
+        method: "POST",
+      }),
+      current.dependencies,
+    );
+    expect(response.status).toBe(200);
+    expect(current.resolve).not.toHaveBeenCalled();
+    expect(current.calls.map(({ name }) => name)).toEqual([
+      "internal_get_shopping_snapshot",
       "internal_prepare_shopping_resolution",
     ]);
   });

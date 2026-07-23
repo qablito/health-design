@@ -236,7 +236,12 @@ type MockOptions = Readonly<{
 }>;
 
 async function mockShoppingApi(page: Page, options: MockOptions = {}) {
-  const calls: Array<{ body: unknown; method: string; path: string }> = [];
+  const calls: Array<{
+    body: unknown;
+    idempotencyKey: string | null;
+    method: string;
+    path: string;
+  }> = [];
   const publishedChains = new Set(options.publishedChains ?? ["mercadona", "dia"]);
   let currentEnvelope = options.envelope ?? completeEnvelope();
   let preferenceValue = options.initialPreference ?? null;
@@ -304,7 +309,12 @@ async function mockShoppingApi(page: Page, options: MockOptions = {}) {
     const body: unknown = request.postData()
       ? (request.postDataJSON() as unknown)
       : null;
-    calls.push({ body, method: request.method(), path: `${path}${url.search}` });
+    calls.push({
+      body,
+      idempotencyKey: request.headers()["idempotency-key"] ?? null,
+      method: request.method(),
+      path: `${path}${url.search}`,
+    });
 
     if (path.endsWith("/v1/catalogs")) {
       const chain = url.searchParams.get("chain") as SupermarketChain;
@@ -523,6 +533,25 @@ test("mantiene el snapshot anterior si guardar preferencia funciona y resolver f
     path.includes(`/plans/${PLAN_VERSION_ID}/shopping`),
   );
   expect(createCalls).toHaveLength(3);
+  expect(createCalls[1]?.idempotencyKey).not.toBeNull();
+  expect(createCalls[1]?.idempotencyKey).toBe(createCalls[2]?.idempotencyKey);
+});
+
+test("cada apertura nueva usa una clave de resolución distinta", async ({ page }) => {
+  const calls = await mockShoppingApi(page, { initialPreference: preference });
+  await page.goto(`/shopping?version=${PLAN_VERSION_ID}&profile=${PROFILE_ID}`);
+  await expect(page.getByText("Pechuga de pollo")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText("Pechuga de pollo")).toBeVisible();
+
+  const createCalls = calls.filter(({ method, path }) => {
+    return method === "POST" && path.endsWith(`/v1/plans/${PLAN_VERSION_ID}/shopping`);
+  });
+  expect(createCalls).toHaveLength(2);
+  expect(createCalls[0]?.idempotencyKey).not.toBeNull();
+  expect(createCalls[1]?.idempotencyKey).not.toBeNull();
+  expect(createCalls[0]?.idempotencyKey).not.toBe(createCalls[1]?.idempotencyKey);
 });
 
 test("envía cambio de producto y set/clear de sobrante como mutaciones controladas", async ({

@@ -621,9 +621,6 @@ async function resolveAndPersist(
       }),
     );
     if (!current.success) throw new ShoppingHttpError("DEPENDENCY_UNAVAILABLE", 503);
-    if (current.data.lifecycle.status !== "active") {
-      throw new ShoppingHttpError("SHOPPING_SNAPSHOT_MISMATCH", 409);
-    }
     planVersionId = current.data.snapshot.planVersionId;
   }
 
