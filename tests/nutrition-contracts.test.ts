@@ -40,11 +40,13 @@ const fallbackPreparation = {
   status: "provisional",
 } as const;
 
+const generatedWeek = generateNutritionWeek({
+  answers,
+  catalog: effectiveNutritionFoods,
+});
+
 function legacyWeek() {
-  const generated = generateNutritionWeek({
-    answers,
-    catalog: effectiveNutritionFoods,
-  });
+  const generated = structuredClone(generatedWeek);
   const { nutritionSchemaVersion, preparation, ...week } = generated;
   void nutritionSchemaVersion;
   void preparation;
