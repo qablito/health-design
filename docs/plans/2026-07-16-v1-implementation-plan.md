@@ -1111,10 +1111,10 @@ pnpm test:t16:remote # solo después de autorización explícita y copia precrí
 
 ## Tarea 17 — Catálogos de supermercado y optimizador de compra
 
-> **Estado 2026-07-23:** T17A–D fusionados; T17E.1–E.2 en
-> `T17_LOCAL_PASS`.
+> **Estado 2026-07-23:** T17A–D fusionados; T17E.1–E.3 en
+> `T17_COMPLETE_REMOTE_PASS` exclusivamente en Development.
 > Mercadona está publicada en Development; DIA y ALDI continúan sin publicar.
-> La activación remota de T17D/E requiere autorización independiente.
+> Production no fue modificada.
 
 **Resultado:** cesta orientativa por cadena o multitienda sin checkout y sin
 alterar kcal/macros.

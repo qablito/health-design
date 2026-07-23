@@ -2,7 +2,7 @@
 
 > **Fecha:** 2026-07-23
 >
-> **Estado actual:** `T17_LOCAL_PASS`
+> **Estado actual:** `T17_COMPLETE_REMOTE_PASS`
 >
 > **Rama:** `codex/task-17e-shopping-exports-ops`
 >
@@ -13,11 +13,16 @@
 > - `e3d109b8bcf7ad4e8b1c91d29cfc8b3503e58978`
 >   (`fix(exports): expose authorized profile binding`);
 > - `7da7333fc67734de163b22797dae72065ff612a6`
->   (`feat(exports): render frozen shopping snapshots`).
+>   (`feat(exports): render frozen shopping snapshots`);
+> - `7bc531f27d2d516a7b0da908ea429fbaee9ecd72`
+>   (`docs(t17): add publication runbook and verification`);
+> - `4c7cf2c4d5c9c4d833279d594a8bdff54c293176`
+>   (`fix(shopping): align development remote validation`), árbol funcional
+>   exacto validado en Development.
 >
-> **Entorno validado en este recibo:** TypeScript, navegador, Supabase local y
-> empaquetado local de Cloudflare Worker. T17E.3 no se ha ejecutado; no se han
-> aplicado migraciones, desplegado funciones ni modificado datos en remoto.
+> **Entorno validado en este recibo:** local y Supabase Development
+> `nwoivdxdupklervtnovd`, con UI exclusiva en Pages Preview. Production no fue
+> modificada.
 
 ## Alcance acumulado
 
@@ -29,7 +34,8 @@
 - T17D persistió preferencias y snapshots, añadió la API autorizada y la
   interfaz consultiva de compra.
 - T17E.1 proyecta el mismo snapshot congelado en impresión, PDF y XLSX.
-- T17E.2 incorpora el runbook y un smoke remoto ejecutable, pero no ejecutado.
+- T17E.2 incorpora el runbook y el smoke remoto.
+- T17E.3 activa y valida T17 exclusivamente en Development.
 
 ## Evidencia local T17E
 
@@ -40,14 +46,14 @@
 | `playwright test tests/e2e/exports.spec.ts tests/e2e/shopping.spec.ts` | PASS; 10/10 |
 | `pnpm test:e2e` | PASS; 40/40 |
 | `pnpm test:a11y` | PASS; 7/7 |
-| reconstrucción desde todo el historial de migraciones | PASS; incluye `20260723140000_export_snapshot_profile_binding.sql` |
-| `supabase test db` | PASS; 19 archivos/422 pruebas pgTAP |
+| reconstrucción desde todo el historial de migraciones | PASS; incluye `20260723140000_export_snapshot_profile_binding.sql` y `20260723154700_shopping_create_schema_version.sql` |
+| `supabase test db` | PASS; 19 archivos/423 pruebas pgTAP |
 | `pnpm edge:generate` y `pnpm edge:check` | PASS |
 | `pnpm worker:check` | PASS; dry-run de desarrollo y producción, sin despliegue |
 | `pnpm test:supply-chain` | PASS |
 | `pnpm supply-chain:artifacts` | PASS; 331 componentes y 29 artefactos |
 | `pnpm audit --audit-level high` | PASS; sin vulnerabilidades conocidas |
-| `CI=true pnpm verify` | PASS; 83 archivos/743 pruebas Vitest, 2 archivos/4 pruebas de navegador y build |
+| `CI=true pnpm verify` | PASS; 84 archivos/751 pruebas Vitest, 2 archivos/4 pruebas de navegador y build |
 | `node scripts/supermarket-catalog-remote-smoke.mjs --dry-run` | PASS; cero red y cero secretos |
 | dry-run con referencias de Production | PASS de seguridad; rechazo cerrado `production_is_forbidden` |
 | `git diff --check` | PASS |
@@ -96,8 +102,8 @@ El smoke `test:t17:remote`:
    límites y objetos privados con replay idempotente y verificación residual;
 10. comprueba que el digest del catálogo global no cambió.
 
-El modo `--dry-run` no usa red ni exige secretos. El modo `--execute` no se ha
-ejecutado en este recibo.
+El modo `--dry-run` no usa red ni exige secretos. El modo `--execute` terminó
+en `T17_REMOTE_SMOKE_PASS`.
 
 ## Revisión independiente
 
@@ -109,24 +115,54 @@ nutricional y la limpieza residual/idempotente. El último detalle bajo —consu
 de nuevo el recibo antes del replay conflictivo— también quedó corregido antes
 de esta evidencia.
 
-## T17E.3 pendiente
+## Evidencia remota T17E.3
 
-Estado: `NOT_RUN`.
+| Comprobación | Resultado |
+|---|---|
+| copia precrítica cifrada | PASS; SHA-256 `385ed979bfbc05735af1f81333a8e7888656c897d995cf94f738e83572dfbd4d`; cuatro rotaciones |
+| migraciones Development | PASS; historial local/remoto alineado hasta `20260723154700_shopping_create_schema_version.sql` |
+| `catalogs` | ACTIVE v6; SHA-256 `d458168a31ecba8b7c9f7eb49ca674151a3744536f9efa612146252d0ae3cf7e` |
+| `exports` | ACTIVE v8; SHA-256 `f960cb6437431fd7801d071d2fac0e462ebe4ac054a5e4c3dea2bab80a1bf07e` |
+| Pages Preview | PASS; despliegue `9473ff36-82b2-4c58-8b6f-9568dcb11841`; alias canónico permitido por CORS `https://task-02-environments.health-design.pages.dev` |
+| cabeceras Preview | PASS; CSP conecta solo con Development, `noindex`, `no-referrer` y `nosniff` |
+| autorización | PASS; AAL1 rechazado antes de administración y AAL2/TOTP reciente aceptado |
+| aislamiento | PASS; acceso cruzado entre perfiles rechazado |
+| shopping | PASS; una cesta completa y una parcial, sobrante aplicado y snapshot anterior archivado |
+| idempotencia | PASS; replay exacto, conflicto de payload y recibos persistidos |
+| rate limit | PASS; un único 429 sembrado con `Retry-After` |
+| PDF privado | PASS; 25.062 bytes y SHA-256 `bff2bc6d7ba88fb4c3470c642d04a6ba2b3a18488dd7cd73fd1d2f49fad34fa6` |
+| XLSX privado | PASS; 61.559 bytes y SHA-256 `c8a542c849906184e147cd0511b2ae0bffc06ab0c3e70ca8f59f605836afe623` |
+| snapshot activo y archivado | PASS; ambos exportados desde la misma proyección congelada |
+| privacidad de artefactos | PASS; Storage privado, sin redirect público |
+| invariancia nutricional | PASS; contenido y hash nutricional sin cambios |
+| purga | PASS; cero usuarios, perfiles y objetos sintéticos residuales |
+| catálogo global | PASS; digest y estado sin cambios |
 
-Requiere una autorización independiente antes de:
+La activación requirió una migración aditiva de compatibilidad,
+`20260723154700_shopping_create_schema_version.sql`: valida `schemaVersion: 1`
+en la frontera pública y conserva la función privada histórica sin modificar
+una migración ya aplicada. Las pruebas pgTAP reconstruyen esta conducta desde
+todo el historial.
 
-- comprobar las migraciones enlazadas de desarrollo;
-- crear y verificar la copia cifrada precrítica T17;
-- aplicar la migración aditiva;
-- desplegar únicamente `catalogs` y `exports`, si el diff remoto confirma que
-  siguen siendo las únicas funciones modificadas;
-- publicar la UI únicamente en Pages Preview;
-- ejecutar el smoke con AAL2/TOTP real;
-- verificar PDF/XLSX privados y limpieza;
-- registrar hashes y recibos remotos no sensibles.
+Estado de cadenas:
 
-Producción permanece fuera de alcance. No se declara
-`T17_COMPLETE_REMOTE_PASS`.
+- Mercadona: `published`, 73/80 y puerta por grupos superada.
+- DIA: `not_published`, 62/80.
+- ALDI: `not_published`, 41/80.
+
+Subgates declarados:
+
+- selección manual remota:
+  `NOT_APPLICABLE_REMOTE_NO_SECOND_PUBLISHED_SKU`; cubierta localmente;
+- multitienda:
+  `NOT_APPLICABLE_REMOTE_ONLY_ONE_CHAIN_PUBLISHED`; cubierta localmente;
+- publicación histórica:
+  `NOT_APPLICABLE_WITHOUT_SAFE_PUBLICATION_CHANGE`;
+- restauración integral: `FULL_RESTORE_T18: NOT_IMPLEMENTED`.
+
+No se publicaron DIA o ALDI para satisfacer pruebas. No se volvió a importar,
+scrapear ni alterar R2. Production, T18 y Pages Production permanecieron
+intactos.
 
 ## Referencias
 

@@ -1322,6 +1322,19 @@ T17_COMPLETE_REMOTE_PASS
 Una cadena fallida debe figurar `not_published`; nunca se inventará evidencia para cerrar
 su publicación.
 
+> **Recibo remoto 2026-07-23 — `T17_COMPLETE_REMOTE_PASS`:** Development quedó
+> alineado hasta la migración aditiva
+> `20260723154700_shopping_create_schema_version.sql`; `catalogs` v6 y `exports`
+> v8 están activos, y la UI se validó exclusivamente en Pages Preview. El smoke
+> remoto pasó AAL1/AAL2, aislamiento RLS, cestas completa/parcial, snapshot
+> archivado, idempotencia, 429 controlado, PDF/XLSX privados, invariancia
+> nutricional y purga con cero residuos. Mercadona permanece publicada; DIA y
+> ALDI permanecen `not_published`. Selección manual sin segundo SKU,
+> multitienda con una sola cadena y publicación histórica sin cambio seguro
+> figuran como `NOT_APPLICABLE`; la restauración integral T18 continúa
+> `NOT_IMPLEMENTED`. Producción no se modificó. La evidencia íntegra está en
+> [`TASK_17_VERIFICATION.md`](../quality/TASK_17_VERIFICATION.md).
+
 **Commit de evidencia después del smoke:**
 
 ```bash

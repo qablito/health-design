@@ -23,10 +23,11 @@ conserva en [`TASK_16_VERIFICATION.md`](TASK_16_VERIFICATION.md), con estado
 `T16_COMPLETE_REMOTE_PASS`. Cubre los fragmentos T16 de G3/G5–G8 —incluidos
 copia precrítica, migraciones y funciones de desarrollo, perfiles sintéticos,
 AAL2 y exportaciones— sin acreditar producción. G6 mantiene pendientes los
-SKU, precios y cobertura de T17, cuyo contrato está aprobado pero aún no
-constituye evidencia de implementación. La evidencia local T17 se conserva en
-[`TASK_17_VERIFICATION.md`](TASK_17_VERIFICATION.md); la activación remota de
-T17D/E continúa separada y no se presume por las pruebas locales.
+SKU, precios y cobertura de cadenas que no superaron su puerta. La evidencia
+local y remota de Development de T17 se conserva en
+[`TASK_17_VERIFICATION.md`](TASK_17_VERIFICATION.md), con estado
+`T17_COMPLETE_REMOTE_PASS`; no acredita Production ni las cadenas que
+permanecen `not_published`.
 
 ## Criterio de evaluación por puerta
 
