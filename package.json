@@ -25,6 +25,8 @@
     "import:nutrition": "node scripts/import-nutrition/index.ts",
     "import:supermarkets": "node scripts/import-supermarket-catalog/index.ts",
     "lint": "eslint .",
+    "restore:drill": "node scripts/restore/restore-drill.mjs",
+    "restore:verify": "node scripts/restore/verify-restore.mjs",
     "supply-chain:artifacts": "node scripts/verify-supply-chain.mjs --generate-release && node scripts/verify-supply-chain.mjs --verify-release",
     "test": "vitest run",
     "test:a11y": "playwright test --grep accesible",
