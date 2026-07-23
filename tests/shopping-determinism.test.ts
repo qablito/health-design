@@ -117,7 +117,6 @@ function input(): ShoppingResolutionInput {
       ],
       resolverVersion: SHOPPING_RESOLVER_VERSION,
       revision: 1,
-      status: "active",
       supersedesId: null,
     },
     schemaVersion: 1,
@@ -125,18 +124,22 @@ function input(): ShoppingResolutionInput {
       {
         amountG: "500",
         canonicalFoodKey: "food:rice-dry",
-        ediblePart: "dry_product",
-        foodState: "raw",
         name: "Arroz",
-        purchaseForm: "dry",
+        purchaseContext: {
+          ediblePart: "dry_product",
+          foodState: "raw",
+          purchaseForm: "dry",
+        },
       },
       {
         amountG: "700",
         canonicalFoodKey: "food:apple-raw",
-        ediblePart: "whole_edible_product",
-        foodState: "raw",
         name: "Manzana",
-        purchaseForm: "fresh",
+        purchaseContext: {
+          ediblePart: "whole_edible_product",
+          foodState: "raw",
+          purchaseForm: "fresh",
+        },
       },
     ],
   });
@@ -191,7 +194,6 @@ describe("determinismo del resolver T17C", () => {
           shoppingItemId: uuid(60 + index),
         })),
         revision: 4,
-        status: "archived",
         supersedesId: uuid(52),
       },
     });

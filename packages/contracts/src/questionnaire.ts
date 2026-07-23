@@ -523,10 +523,8 @@ const labSuggestions = options([
 
 const supermarketSuggestions = options([
   ["Mercadona", "Mercadona"],
-  ["Lidl", "Lidl"],
   ["DIA", "DIA"],
-  ["Carrefour", "Carrefour"],
-  ["Alcampo", "Alcampo"],
+  ["ALDI", "ALDI"],
 ]);
 
 const trainingStyleSuggestions = options([

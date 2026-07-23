@@ -16,6 +16,7 @@
       "@health-design/engine/nutrition": [
         "./packages/engine/src/modules/nutrition/index.ts"
       ],
+      "@health-design/engine/shopping": ["./packages/engine/src/shopping/index.ts"],
       "@health-design/export": ["./packages/export/src/index.ts"],
       "@health-design/export/*": ["./packages/export/src/*"],
       "@health-design/test-fixtures/nutrition": [
@@ -52,6 +53,7 @@
     "supabase/functions/admin-reconciler/index.ts",
     "supabase/functions/catalogs/index.ts",
     "supabase/functions/catalogs/nutrition.ts",
+    "supabase/functions/catalogs/shopping.ts",
     "supabase/functions/exports/**/*.ts",
     "supabase/functions/medications/**/*.ts",
     "supabase/functions/plans/**/*.ts",

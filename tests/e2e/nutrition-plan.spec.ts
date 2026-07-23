@@ -400,6 +400,10 @@ test("genera, recalcula una sustitución y activa solo el borrador original", as
   await expect(page.locator(".nutrition-toolbar span")).toHaveText(dailyBefore ?? "");
   await page.getByRole("button", { name: "Activar plan" }).click();
   await expect(page.getByRole("button", { name: "Plan activo" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Preparar compra" })).toHaveAttribute(
+    "href",
+    `/shopping?version=${planVersionId}&profile=${profileId}`,
+  );
 
   const activation = requests.find(({ path }) => path.endsWith("/activate"));
   expect(activation).toMatchObject({

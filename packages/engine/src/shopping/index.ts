@@ -16,7 +16,7 @@ import {
 } from "../decimal.ts";
 import { sha256CanonicalJson } from "../index.ts";
 
-export const SHOPPING_RESOLVER_VERSION = "shopping-resolver-v1" as const;
+export const SHOPPING_RESOLVER_VERSION = "shopping-resolver-v2" as const;
 
 type CatalogItem = ShoppingResolutionInput["catalogItems"][number];
 type ShoppingLine = ShoppingResolutionInput["shoppingList"][number];
@@ -92,13 +92,14 @@ function calculateSelection(
 }
 
 function identityMatches(line: ShoppingLine, item: CatalogItem): boolean {
+  if (line.purchaseContext === null) return false;
   return (
     item.canonicalFoodKey === line.canonicalFoodKey &&
     activeMatch.has(item.matchState) &&
-    item.matchedEdiblePart === line.ediblePart &&
-    item.matchedFoodState === line.foodState &&
-    item.matchedPurchaseForm === line.purchaseForm &&
-    item.projection.purchaseForm === line.purchaseForm
+    item.matchedEdiblePart === line.purchaseContext.ediblePart &&
+    item.matchedFoodState === line.purchaseContext.foodState &&
+    item.matchedPurchaseForm === line.purchaseContext.purchaseForm &&
+    item.projection.purchaseForm === line.purchaseContext.purchaseForm
   );
 }
 
@@ -281,12 +282,25 @@ function resolveLine(
   const itemId = input.resolutionMetadata.itemIds.find(
     ({ canonicalFoodKey }) => canonicalFoodKey === line.canonicalFoodKey,
   )!.shoppingItemId;
+  const selectionOrigin: SnapshotItem["selectionOrigin"] =
+    manualSelection === undefined ? "automatic" : "manual";
   const base = {
     amountG: line.amountG,
     canonicalFoodKey: line.canonicalFoodKey,
     name: line.name.normalize("NFC"),
+    selectionOrigin,
     shoppingItemId: itemId,
   };
+
+  if (line.purchaseContext === null) {
+    return {
+      ...base,
+      alternatives: [],
+      selected: null,
+      state: "no_confirmed_product",
+      uncertainties: ["shopping_purchase_context_missing"],
+    };
+  }
 
   if (manualSelection !== undefined) {
     const manual = calculated.find(
@@ -457,6 +471,7 @@ function buildComparison(
   const differenceEur = subtractDecimals(baselineSubtotalEur, candidateSubtotalEur);
   return {
     comparison: {
+      basis: "automatic_equivalent",
       baselineChains: [preferredChain],
       baselineSubtotalEur,
       candidateChains: [...candidateChains].sort(compareText),
@@ -494,14 +509,18 @@ function chooseComparison(
 
 function resolveComparison(
   input: ShoppingResolutionInput,
-  items: readonly SnapshotItem[],
 ): ShoppingSnapshot["comparison"] {
   const preferredChain = input.preferenceRevision.preferredChain;
+  const baseline = resolveLines(input, [preferredChain], false);
   if (input.preferenceRevision.mode === "multistore") {
-    const baseline = resolveLines(input, [preferredChain], false);
+    const candidate = resolveLines(
+      input,
+      input.preferenceRevision.comparedChains,
+      false,
+    );
     const comparison = buildComparison(
       baseline,
-      items,
+      candidate,
       input.preferenceRevision.comparedChains,
       "multistore",
       preferredChain,
@@ -518,7 +537,7 @@ function resolveComparison(
   return chooseComparison(
     alternativeChains.flatMap((chain) => {
       const comparison = buildComparison(
-        items,
+        baseline,
         resolveLines(input, [chain], false),
         [chain],
         "chain",
@@ -529,10 +548,24 @@ function resolveComparison(
   );
 }
 
+function normalizeDigestText(value: unknown): unknown {
+  if (typeof value === "string") return value.normalize("NFC");
+  if (Array.isArray(value)) return value.map(normalizeDigestText);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key.normalize("NFC"),
+        normalizeDigestText(item),
+      ]),
+    );
+  }
+  return value;
+}
+
 function canonicalDigestInput(input: ShoppingResolutionInput) {
   const byFoodKey = <T extends { canonicalFoodKey: string }>(left: T, right: T) =>
     compareText(left.canonicalFoodKey, right.canonicalFoodKey);
-  return {
+  return normalizeDigestText({
     basketSeedRevisionId: input.basketSeedRevisionId,
     catalogItems: [...input.catalogItems].sort((left, right) => {
       const food = byFoodKey(left, right);
@@ -556,7 +589,7 @@ function canonicalDigestInput(input: ShoppingResolutionInput) {
     resolverVersion: input.resolutionMetadata.resolverVersion,
     schemaVersion: input.schemaVersion,
     shoppingList: [...input.shoppingList].sort(byFoodKey),
-  };
+  });
 }
 
 export async function resolveShopping(
@@ -583,7 +616,7 @@ export async function resolveShopping(
   return ShoppingSnapshotSchema.parse({
     basketSeedRevisionId: input.basketSeedRevisionId,
     catalogPublicationIds: [...input.catalogPublicationIds].sort(compareText),
-    comparison: resolveComparison(input, items),
+    comparison: resolveComparison(input),
     completeness,
     createdAt: metadata.createdAt,
     createdBy: metadata.createdBy,
@@ -602,7 +635,6 @@ export async function resolveShopping(
     resolverVersion: metadata.resolverVersion,
     revision: metadata.revision,
     schemaVersion: 1,
-    status: metadata.status,
     supersedesId: metadata.supersedesId,
     totals:
       completeness === "complete"

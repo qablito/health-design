@@ -6,13 +6,17 @@ import {
   ConfirmedPackageSchema,
   SHOPPING_HTTP_BODY_BYTES,
   ShoppingLeftoverRequestSchema,
+  ShoppingCatalogPageSchema,
+  ShoppingLegacyPreferenceHintSchema,
   ShoppingMutationAckSchema,
   ShoppingPreferenceAckSchema,
   ShoppingPreferencePutSchema,
+  ShoppingPreferenceReadResponseSchema,
   ShoppingPreferenceRevisionSchema,
   ShoppingProductSelectionRequestSchema,
   ShoppingResolutionInputSchema,
   ShoppingSnapshotSchema,
+  ShoppingSnapshotResponseSchema,
   SupermarketSourceManifestSchema,
   SupermarketSourceRecordSchema,
 } from "@health-design/contracts";
@@ -266,9 +270,8 @@ describe("contratos T17 de preferencias y resolución", () => {
             shoppingItemId: uuid(10),
           },
         ],
-        resolverVersion: "shopping-resolver-v1",
+        resolverVersion: "shopping-resolver-v2",
         revision: 1,
-        status: "active",
         supersedesId: null,
       },
       schemaVersion: 1,
@@ -276,15 +279,43 @@ describe("contratos T17 de preferencias y resolución", () => {
         {
           amountG: "1000",
           canonicalFoodKey: "food:chicken-breast-raw",
-          ediblePart: "meat_without_skin",
-          foodState: "raw",
           name: "Pechuga de pollo",
-          purchaseForm: "fresh",
+          purchaseContext: {
+            ediblePart: "meat_without_skin",
+            foodState: "raw",
+            purchaseForm: "fresh",
+          },
         },
       ],
     } as const;
 
     expect(ShoppingResolutionInputSchema.parse(input)).toEqual(input);
+    expect(
+      ShoppingResolutionInputSchema.safeParse({
+        ...input,
+        catalogItems: Array.from({ length: 6 }, (_, index) => ({
+          ...input.catalogItems[0],
+          projection: {
+            ...input.catalogItems[0].projection,
+            externalSku: `sku-${index}`,
+            skuId: uuid(20 + index),
+          },
+        })),
+      }).success,
+    ).toBe(true);
+    expect(
+      ShoppingResolutionInputSchema.safeParse({
+        ...input,
+        catalogItems: Array.from({ length: 401 }, (_, index) => ({
+          ...input.catalogItems[0],
+          projection: {
+            ...input.catalogItems[0].projection,
+            externalSku: `sku-${index}`,
+            skuId: `92000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+          },
+        })),
+      }).success,
+    ).toBe(false);
     expect(
       ShoppingResolutionInputSchema.safeParse({
         ...input,
@@ -331,6 +362,7 @@ describe("contratos T17 de preferencias y resolución", () => {
           canonicalFoodKey: "food:chicken-breast-raw",
           name: "Pechuga de pollo",
           selected,
+          selectionOrigin: "automatic",
           shoppingItemId: uuid(10),
           state: "resolved",
           uncertainties: [],
@@ -341,6 +373,7 @@ describe("contratos T17 de preferencias y resolución", () => {
           canonicalFoodKey: "food:tomato-raw",
           name: "Tomate",
           selected: null,
+          selectionOrigin: "automatic",
           shoppingItemId: uuid(11),
           state: "no_confirmed_product",
           uncertainties: ["shopping_sku_missing"],
@@ -355,10 +388,9 @@ describe("contratos T17 de preferencias y resolución", () => {
         sorting: "normalized_price_asc",
       },
       profileId: uuid(4),
-      resolverVersion: "shopping-resolver-v1",
+      resolverVersion: "shopping-resolver-v2",
       revision: 1,
       schemaVersion: 1,
-      status: "active",
       supersedesId: null,
       totals: {
         coverage: { resolvedItems: 1, totalItems: 2 },
@@ -368,6 +400,7 @@ describe("contratos T17 de preferencias y resolución", () => {
         unresolvedItems: 1,
       },
       comparison: {
+        basis: "automatic_equivalent",
         baselineChains: ["mercadona"],
         baselineSubtotalEur: "6.5",
         candidateChains: ["dia", "mercadona"],
@@ -450,6 +483,7 @@ describe("contratos T17 de preferencias y resolución", () => {
             canonicalFoodKey: "food:chicken-breast-raw",
             name: "Pechuga de pollo",
             selected: zeroSelection,
+            selectionOrigin: "automatic",
             shoppingItemId: uuid(10),
             state: "resolved",
             uncertainties: [],
@@ -464,10 +498,9 @@ describe("contratos T17 de preferencias y resolución", () => {
         },
         preferenceRevisionId: preference.id,
         profileId: uuid(4),
-        resolverVersion: "shopping-resolver-v1",
+        resolverVersion: "shopping-resolver-v2",
         revision: 1,
         schemaVersion: 1,
-        status: "active",
         supersedesId: null,
         totals: {
           coverage: { resolvedItems: 1, totalItems: 1 },
@@ -483,6 +516,7 @@ describe("contratos T17 de preferencias y resolución", () => {
   it("separa la clave de línea, el SKU y la clave canónica en mutaciones", () => {
     expect(
       ShoppingLeftoverRequestSchema.safeParse({
+        action: "set",
         canonicalFoodKey: "food:chicken-breast-raw",
         declaredMeasure: { dimension: "mass", quantity: "250", unit: "g" },
         expectedVersion: 1,
@@ -491,6 +525,7 @@ describe("contratos T17 de preferencias y resolución", () => {
     ).toBe(true);
     expect(
       ShoppingLeftoverRequestSchema.safeParse({
+        action: "set",
         canonicalFoodKey: "food:olive-oil",
         declaredMeasure: { dimension: "volume", quantity: "250", unit: "ml" },
         expectedVersion: 1,
@@ -499,11 +534,12 @@ describe("contratos T17 de preferencias y resolución", () => {
     ).toBe(false);
     expect(
       ShoppingLeftoverRequestSchema.safeParse({
+        action: "set",
         canonicalFoodKey: "food:olive-oil",
         declaredMeasure: { dimension: "volume", quantity: "250", unit: "ml" },
         expectedVersion: 1,
         schemaVersion: 1,
-        skuRevisionId: uuid(12),
+        skuId: uuid(12),
       }).success,
     ).toBe(true);
     expect(
@@ -552,5 +588,141 @@ describe("contratos T17 de preferencias y resolución", () => {
         ShoppingMutationAckSchema.safeParse({ ...mutationAck, ...forbidden }).success,
       ).toBe(false);
     }
+  });
+});
+
+describe("reconciliación contractual T17D.0", () => {
+  const resolutionInput = {
+    basketSeedRevisionId: uuid(6),
+    catalogItems: [],
+    catalogPublicationIds: [uuid(7)],
+    leftovers: [],
+    manualSelections: [],
+    planVersionId: uuid(8),
+    preferenceRevision: preference,
+    profileId: uuid(4),
+    resolutionMetadata: {
+      createdAt: "2026-07-21T10:00:00.000Z",
+      createdBy: uuid(2),
+      id: uuid(9),
+      itemIds: [
+        {
+          canonicalFoodKey: "food:chicken-breast-raw",
+          shoppingItemId: uuid(10),
+        },
+      ],
+      resolverVersion: "shopping-resolver-v2",
+      revision: 1,
+      supersedesId: null,
+    },
+    schemaVersion: 1,
+    shoppingList: [
+      {
+        amountG: "1000",
+        canonicalFoodKey: "food:chicken-breast-raw",
+        name: "Pechuga de pollo",
+        purchaseContext: null,
+      },
+    ],
+  } as const;
+
+  it("separa el ciclo de vida del input y admite contexto de compra ausente", () => {
+    expect(ShoppingResolutionInputSchema.parse(resolutionInput)).toEqual(
+      resolutionInput,
+    );
+    expect(
+      ShoppingResolutionInputSchema.safeParse({
+        ...resolutionInput,
+        resolutionMetadata: {
+          ...resolutionInput.resolutionMetadata,
+          status: "active",
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("permite establecer y borrar sobrantes sin aceptar equivalencias del cliente", () => {
+    expect(
+      ShoppingLeftoverRequestSchema.safeParse({
+        action: "set",
+        canonicalFoodKey: "food:chicken-breast-raw",
+        declaredMeasure: { dimension: "mass", quantity: "250", unit: "g" },
+        expectedVersion: 1,
+        schemaVersion: 1,
+      }).success,
+    ).toBe(true);
+    expect(
+      ShoppingLeftoverRequestSchema.safeParse({
+        action: "set",
+        canonicalFoodKey: "food:olive-oil",
+        declaredMeasure: { dimension: "volume", quantity: "250", unit: "ml" },
+        expectedVersion: 1,
+        schemaVersion: 1,
+        skuId: uuid(12),
+      }).success,
+    ).toBe(true);
+    expect(
+      ShoppingLeftoverRequestSchema.safeParse({
+        action: "clear",
+        canonicalFoodKey: "food:olive-oil",
+        expectedVersion: 1,
+        schemaVersion: 1,
+      }).success,
+    ).toBe(true);
+    expect(
+      ShoppingLeftoverRequestSchema.safeParse({
+        action: "set",
+        canonicalFoodKey: "food:olive-oil",
+        confirmedEquivalentG: "225",
+        declaredMeasure: { dimension: "volume", quantity: "250", unit: "ml" },
+        expectedVersion: 1,
+        schemaVersion: 1,
+        skuId: uuid(12),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("define lecturas estrictas sin crear una preferencia predeterminada", () => {
+    const legacyHint = {
+      compatible: false,
+      value: "lidl",
+    } as const;
+    expect(ShoppingLegacyPreferenceHintSchema.parse(legacyHint)).toEqual(legacyHint);
+    expect(
+      ShoppingPreferenceReadResponseSchema.parse({
+        legacyHint,
+        preference: null,
+        schemaVersion: 1,
+      }),
+    ).toEqual({ legacyHint, preference: null, schemaVersion: 1 });
+    expect(
+      ShoppingCatalogPageSchema.safeParse({
+        chain: "mercadona",
+        items: [projection],
+        nextCursor: "cursor-opaco",
+        publicationId: uuid(7),
+        schemaVersion: 1,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("valida un envelope de lifecycle sin reescribir el snapshot", () => {
+    expect(
+      ShoppingSnapshotResponseSchema.safeParse({
+        lifecycle: { archivedAt: null, status: "active" },
+        schemaVersion: 1,
+        snapshot: {},
+      }).success,
+    ).toBe(false);
+    expect(
+      ShoppingSnapshotResponseSchema.safeParse({
+        lifecycle: {
+          archivedAt: "2026-07-22T10:00:00.000Z",
+          status: "active",
+        },
+        schemaVersion: 1,
+        snapshot: {},
+      }).success,
+    ).toBe(false);
   });
 });
