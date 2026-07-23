@@ -219,6 +219,14 @@ test("un desafío AAL2 caducado vuelve a mostrar la confirmación TOTP", async (
       });
       return;
     }
+    if (path.endsWith("/v1/admin/catalog-revisions")) {
+      await route.fulfill({
+        body: JSON.stringify({ items: [], nextCursor: null, schemaVersion: 1 }),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
     if (path.endsWith("/v1/admin/barcode-corrections")) {
       await route.fulfill({
         body: JSON.stringify({ items: [], nextCursor: null }),
