@@ -5,8 +5,15 @@ import {
   assertContainedPath,
   assertSafeLogicalPath,
   canonicalJson,
+  signOperatorAttestation,
+  verifyOperatorAttestation,
   verifyRecoverySet,
 } from "../backup/recovery-set.mjs";
+import {
+  verifyDeletionTombstones,
+  verifyLedgerContinuity,
+} from "../operations/ledger-verifiers.mjs";
+import { SECURITY_POLICY_MANIFEST_DIGEST } from "./supabase-operator-adapter.mjs";
 
 const decoder = new TextDecoder();
 
@@ -40,7 +47,12 @@ export async function assertIsolatedRestoreTarget({
   }
   if (
     !Array.isArray(knownProjectRefs) ||
-    knownProjectRefs.some((value) => typeof value !== "string")
+    knownProjectRefs.length === 0 ||
+    new Set(knownProjectRefs).size !== knownProjectRefs.length ||
+    knownProjectRefs.some(
+      (value) =>
+        typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value),
+    )
   ) {
     throw new Error("known_project_refs_required");
   }
@@ -64,8 +76,22 @@ function requireObject(objects, type) {
   return matching[0];
 }
 
+function assertLedgerHead(actual, embedded, remote, code) {
+  if (
+    !embedded ||
+    !remote ||
+    embedded.hash !== actual.head ||
+    embedded.sequence !== actual.sequence ||
+    remote.hash !== actual.head ||
+    remote.sequence !== actual.sequence
+  ) {
+    throw new Error(code);
+  }
+}
+
 function stableAudit(records) {
   const byId = new Map();
+  const bySequence = new Map();
   for (const record of records) {
     if (
       !record ||
@@ -75,7 +101,16 @@ function stableAudit(records) {
     ) {
       throw new Error("invalid_audit_record");
     }
+    const existingId = byId.get(record.id);
+    if (existingId && canonicalJson(existingId) !== canonicalJson(record)) {
+      throw new Error("audit_record_collision");
+    }
+    const existingSequence = bySequence.get(record.sequence);
+    if (existingSequence && canonicalJson(existingSequence) !== canonicalJson(record)) {
+      throw new Error("audit_sequence_collision");
+    }
     byId.set(record.id, record);
+    bySequence.set(record.sequence, record);
   }
   return [...byId.values()].sort(
     (left, right) =>
@@ -89,7 +124,8 @@ function validateDatabaseFixture(database) {
     !Array.isArray(database.sessions) ||
     !Array.isArray(database.audit) ||
     database.security?.rlsEnabled !== true ||
-    database.security?.aal2Required !== true
+    database.security?.aal2Required !== true ||
+    database.security?.policyDigest !== SECURITY_POLICY_MANIFEST_DIGEST
   ) {
     throw new Error("restored_database_invariant_failed");
   }
@@ -111,7 +147,7 @@ export async function restoreFixtureRecoverySet(input) {
   const verified = await verifyRecoverySet({
     directory: input.directory,
     keyring: input.keyring,
-    remoteLedgerHeads: input.remoteLedgerHeads,
+    ledgerHeadProvider: input.ledgerHeadProvider,
   });
   const databaseObject = requireObject(verified.decryptedObjects, "database");
   const deletionObject = requireObject(verified.decryptedObjects, "deletions-ledger");
@@ -124,7 +160,9 @@ export async function restoreFixtureRecoverySet(input) {
     !Array.isArray(deletions.records) ||
     !Array.isArray(adminAudit.records) ||
     !Array.isArray(adminAudit.pendingIntents) ||
-    !Array.isArray(adminAudit.incompleteRanges)
+    !Array.isArray(adminAudit.incompleteRanges) ||
+    (adminAudit.completedRanges !== undefined &&
+      !Array.isArray(adminAudit.completedRanges))
   ) {
     throw new Error("invalid_ledger_shape");
   }
@@ -134,19 +172,62 @@ export async function restoreFixtureRecoverySet(input) {
   if (adminAudit.incompleteRanges.length > 0) {
     throw new Error("incomplete_audit_range");
   }
-  const deletedMarkers = new Set(
-    deletions.records.map((record) => {
-      if (
-        !record ||
-        typeof record !== "object" ||
-        typeof record.profileMarker !== "string" ||
-        record.profileMarker.length === 0
-      ) {
-        throw new Error("invalid_deletion_tombstone");
-      }
-      return record.profileMarker;
-    }),
+  if (!(input.knownTombstoneKeyVersions instanceof Set)) {
+    throw new Error("known_tombstone_key_versions_required");
+  }
+  const deletionHead = verifyDeletionTombstones(
+    [...deletions.records, ...verified.ledgerHeads.deletions.suffixRecords],
+    input.knownTombstoneKeyVersions,
   );
+  if (deletionHead.incompleteAuditRanges.length > 0) {
+    throw new Error("incomplete_audit_range");
+  }
+  const completeAuditRecords = [
+    ...adminAudit.records,
+    ...verified.ledgerHeads["admin-audit"].suffixRecords,
+  ];
+  const auditHead = verifyLedgerContinuity(completeAuditRecords, {
+    gaps: adminAudit.completedRanges ?? [],
+    stream: "admin-audit",
+  });
+  const embeddedDeletionHead = verifyLedgerContinuity(deletions.records, {
+    stream: "deletions",
+  });
+  const embeddedAuditHead = verifyLedgerContinuity(adminAudit.records, {
+    gaps: adminAudit.completedRanges ?? [],
+    stream: "admin-audit",
+  });
+  assertLedgerHead(
+    embeddedDeletionHead,
+    deletions.head,
+    {
+      hash: verified.ledgerHeads.deletions.requested.recordHash,
+      sequence: verified.ledgerHeads.deletions.requested.sequence,
+    },
+    "deletions_ledger_head_mismatch",
+  );
+  assertLedgerHead(
+    embeddedAuditHead,
+    adminAudit.head,
+    {
+      hash: verified.ledgerHeads["admin-audit"].requested.recordHash,
+      sequence: verified.ledgerHeads["admin-audit"].requested.sequence,
+    },
+    "admin_audit_ledger_head_mismatch",
+  );
+  if (
+    deletionHead.head !== verified.ledgerHeads.deletions.current.recordHash ||
+    deletionHead.sequence !== verified.ledgerHeads.deletions.current.sequence
+  ) {
+    throw new Error("deletions_ledger_current_head_mismatch");
+  }
+  if (
+    auditHead.head !== verified.ledgerHeads["admin-audit"].current.recordHash ||
+    auditHead.sequence !== verified.ledgerHeads["admin-audit"].current.sequence
+  ) {
+    throw new Error("admin_audit_ledger_current_head_mismatch");
+  }
+  const deletedMarkers = new Set(deletionHead.activeProfileMarkers);
   validateDatabaseFixture(database);
 
   database.profiles = database.profiles.filter((profile) => {
@@ -159,7 +240,18 @@ export async function restoreFixtureRecoverySet(input) {
     ...session,
     revoked: true,
   }));
-  database.audit = stableAudit([...database.audit, ...adminAudit.records]);
+  database.audit = stableAudit([
+    ...database.audit,
+    ...completeAuditRecords.map((record) =>
+      typeof record.payload.id === "string"
+        ? { id: record.payload.id, sequence: record.sequence }
+        : {
+            ...record.payload,
+            id: `${record.payload.requestId}:${record.payload.phase}`,
+            sequence: record.sequence,
+          },
+    ),
+  ]);
 
   const restoredStoragePaths = [];
   for (const object of verified.decryptedObjects.filter(
@@ -175,7 +267,7 @@ export async function restoreFixtureRecoverySet(input) {
   }
   restoredStoragePaths.sort((left, right) => left.localeCompare(right, "en"));
 
-  const result = {
+  const unsignedResult = {
     backupId: verified.envelope.backupId,
     database,
     restoredStoragePaths,
@@ -184,10 +276,92 @@ export async function restoreFixtureRecoverySet(input) {
     targetRef: input.targetRef,
     trafficEnabled: false,
   };
+  if (
+    typeof input.backupJobId !== "string" ||
+    typeof input.restoreJobId !== "string" ||
+    typeof input.targetFingerprint !== "string" ||
+    !/^[a-f0-9]{64}$/.test(input.targetFingerprint)
+  ) {
+    throw new Error("restore_promotion_identity_required");
+  }
+  const promotionPayload = {
+    aal2Required: true,
+    adminAuditHead: verified.ledgerHeads["admin-audit"].requested.recordHash,
+    backupJobId: input.backupJobId,
+    deletedProfilesAbsent: database.profiles.every(
+      (profile) => !deletedMarkers.has(profile.marker),
+    ),
+    deletionsHead: verified.ledgerHeads.deletions.requested.recordHash,
+    incompleteRanges: 0,
+    manifestDigest: verified.envelope.manifest.plaintextHash,
+    pendingIntents: 0,
+    restoreJobId: input.restoreJobId,
+    rlsVerified: database.security.rlsEnabled === true,
+    schemaVersion: 1,
+    securityPolicyDigest: database.security.policyDigest,
+    sessionsRevoked: database.sessions.every((session) => session.revoked === true),
+    storageComplete:
+      restoredStoragePaths.length +
+        verified.decryptedObjects.filter(
+          (object) =>
+            object.type === "storage" &&
+            object.profileMarker !== undefined &&
+            deletedMarkers.has(object.profileMarker),
+        ).length ===
+      verified.manifest.objects.filter((object) => object.type === "storage").length,
+    targetFingerprint: input.targetFingerprint,
+    targetIsolated: true,
+    trafficEnabled: false,
+  };
+  const result = {
+    ...unsignedResult,
+    attestation: await signOperatorAttestation(input.keyring, unsignedResult),
+    promotion: {
+      attestation: await signOperatorAttestation(input.keyring, promotionPayload),
+      payload: promotionPayload,
+    },
+  };
   await writeFile(
     join(targetPath, "restore-validation.json"),
     `${canonicalJson(result)}\n`,
     { flag: "wx", mode: 0o600 },
   );
   return result;
+}
+
+export async function verifyRestoreValidation(validation, keyring) {
+  if (!validation || typeof validation !== "object" || Array.isArray(validation)) {
+    throw new Error("restore_validation_failed");
+  }
+  const { attestation, promotion, ...unsigned } = validation;
+  if (
+    validation.status !== "ready_for_promotion" ||
+    validation.targetEnvironment !== "local-isolated" ||
+    validation.trafficEnabled !== false ||
+    validation.database?.security?.rlsEnabled !== true ||
+    validation.database?.security?.aal2Required !== true ||
+    validation.database?.security?.policyDigest !== SECURITY_POLICY_MANIFEST_DIGEST ||
+    !Array.isArray(validation.database?.sessions) ||
+    validation.database.sessions.some((session) => session.revoked !== true) ||
+    !(await verifyOperatorAttestation(keyring, unsigned, attestation)) ||
+    !promotion ||
+    !(await verifyOperatorAttestation(
+      keyring,
+      promotion.payload,
+      promotion.attestation,
+    )) ||
+    promotion.payload?.targetIsolated !== true ||
+    promotion.payload?.trafficEnabled !== false ||
+    promotion.payload?.pendingIntents !== 0 ||
+    promotion.payload?.incompleteRanges !== 0 ||
+    promotion.payload?.sessionsRevoked !== true ||
+    promotion.payload?.deletedProfilesAbsent !== true ||
+    promotion.payload?.storageComplete !== true ||
+    promotion.payload?.rlsVerified !== true ||
+    promotion.payload?.aal2Required !== true ||
+    promotion.payload?.securityPolicyDigest !== SECURITY_POLICY_MANIFEST_DIGEST
+  ) {
+    throw new Error("restore_validation_failed");
+  }
+  return true;
 }

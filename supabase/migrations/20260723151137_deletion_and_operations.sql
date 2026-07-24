@@ -433,6 +433,16 @@ begin
   if (p_next_status = 'failed') <> (p_error_code is not null) then
     raise exception using errcode = '22023', message = 'error_code_mismatch';
   end if;
+  if p_next_status = 'purged' and (
+    select count(*)
+    from private.deletion_job_steps step
+    where step.deletion_job_id = v_job.id
+      and step.completed_at is not null
+      and step.receipt_digest is not null
+  ) <> 7 then
+    raise exception using
+      errcode = '55000', message = 'deletion_steps_incomplete';
+  end if;
 
   update private.deletion_jobs
   set status = p_next_status,

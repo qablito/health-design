@@ -3,12 +3,43 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createFixtureKeyring, createRecoverySet } from "../backup/recovery-set.mjs";
+import {
+  createFixtureKeyring,
+  createFixtureLedgerHead,
+  createFixtureLedgerHeadProvider,
+  createRecoverySet,
+} from "../backup/recovery-set.mjs";
 import { printResult } from "../backup/operator-input.mjs";
+import { buildSyntheticLedger } from "../operations/ledger-verifiers.mjs";
 import { restoreFixtureRecoverySet } from "./restore-recovery-set.mjs";
 
 async function createFixture(directory, keyring, backupId) {
-  const marker = "fixture-deleted-marker";
+  const marker = "a".repeat(64);
+  const deletionRecords = buildSyntheticLedger(
+    [
+      {
+        markerKeyVersion: 1,
+        operationId: `${backupId}-deletion`,
+        profileMarker: marker,
+        recordType: "profile_deletion",
+        schemaVersion: 1,
+        stream: "deletions",
+      },
+    ],
+    "deletions",
+  );
+  const auditRecords = buildSyntheticLedger(
+    [{ id: "audit-before" }, { id: "audit-after" }],
+    "admin-audit",
+  );
+  const deletionHead = {
+    hash: deletionRecords.at(-1).recordHash,
+    sequence: deletionRecords.length,
+  };
+  const auditHead = {
+    hash: auditRecords.at(-1).recordHash,
+    sequence: auditRecords.length,
+  };
   await createRecoverySet({
     backupId,
     createdAt: "2026-07-23T00:00:00.000Z",
@@ -25,7 +56,12 @@ async function createFixture(directory, keyring, backupId) {
               { alias: "Borrado", marker },
               { alias: "Conservado", marker: "retained" },
             ],
-            security: { aal2Required: true, rlsEnabled: true },
+            security: {
+              aal2Required: true,
+              policyDigest:
+                "de41957f4b5b5fbf2f19ddf15f3909be9e45a42fdba1083fbe5716108a2cfe16",
+              rlsEnabled: true,
+            },
             sessions: [{ id: "session", revoked: false }],
           }),
         ),
@@ -35,28 +71,26 @@ async function createFixture(directory, keyring, backupId) {
       {
         bytes: new TextEncoder().encode(
           JSON.stringify({
-            head: { hash: "deletion-head", sequence: 1 },
-            records: [{ profileMarker: marker, sequence: 1 }],
+            head: deletionHead,
+            records: deletionRecords,
           }),
         ),
         logicalPath: "ledgers/deletions.json",
-        prefix: { hash: "deletion-head", sequence: 1 },
+        prefix: deletionHead,
         type: "deletions-ledger",
       },
       {
         bytes: new TextEncoder().encode(
           JSON.stringify({
-            head: { hash: "audit-head", sequence: 2 },
+            completedRanges: [],
+            head: auditHead,
             incompleteRanges: [],
             pendingIntents: [],
-            records: [
-              { id: "audit-before", sequence: 1 },
-              { id: "audit-after", sequence: 2 },
-            ],
+            records: auditRecords,
           }),
         ),
         logicalPath: "ledgers/admin-audit.json",
-        prefix: { hash: "audit-head", sequence: 2 },
+        prefix: auditHead,
         type: "admin-audit-ledger",
       },
       {
@@ -68,8 +102,30 @@ async function createFixture(directory, keyring, backupId) {
     ],
     schemaVersion: 18,
     sourceEnvironment: "local",
+    storageInventory: [
+      {
+        bucket: "plan-exports",
+        enumerated: true,
+        logicalPaths: [`storage/plan-exports/${marker}/fixture.pdf`],
+      },
+    ],
     toolVersion: "t18-fixture",
   });
+  return {
+    auditHead: await createFixtureLedgerHead({
+      environment: "local",
+      ...auditHead,
+      keyring,
+      stream: "admin-audit",
+    }),
+    deletionHead: await createFixtureLedgerHead({
+      environment: "local",
+      ...deletionHead,
+      keyring,
+      stream: "deletions",
+    }),
+    marker,
+  };
 }
 
 async function main() {
@@ -81,26 +137,28 @@ async function main() {
       const backupId = `fixture-rotation-${index}`;
       const backupDirectory = join(root, backupId);
       const targetDirectory = join(root, `target-${index}`);
-      await createFixture(backupDirectory, keyring, backupId);
+      const fixture = await createFixture(backupDirectory, keyring, backupId);
       await import("node:fs/promises").then(({ mkdir }) =>
         mkdir(targetDirectory, { mode: 0o700 }),
       );
       const result = await restoreFixtureRecoverySet({
+        backupJobId: crypto.randomUUID(),
         directory: backupDirectory,
         keyring,
+        knownTombstoneKeyVersions: new Set([1]),
         knownProjectRefs: ["development-ref", "production-ref"],
-        remoteLedgerHeads: {
-          "admin-audit": { hash: "audit-head", sequence: 2 },
-          deletions: { hash: "deletion-head", sequence: 1 },
-        },
+        ledgerHeadProvider: createFixtureLedgerHeadProvider({
+          "admin-audit": fixture.auditHead,
+          deletions: fixture.deletionHead,
+        }),
+        restoreJobId: crypto.randomUUID(),
         targetDirectory,
         targetEnvironment: "local-isolated",
+        targetFingerprint: "f".repeat(64),
         targetRef: `fixture-isolated-${index}`,
       });
       if (
-        result.database.profiles.some(
-          (profile) => profile.marker === "fixture-deleted-marker",
-        ) ||
+        result.database.profiles.some((profile) => profile.marker === fixture.marker) ||
         result.restoredStoragePaths.length !== 0 ||
         result.database.sessions.some((session) => !session.revoked)
       ) {

@@ -10,6 +10,7 @@ import {
 } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { createHash, randomBytes, timingSafeEqual, webcrypto } from "node:crypto";
+import { verifyLedgerContinuity } from "../operations/ledger-verifiers.mjs";
 
 const subtle = webcrypto.subtle;
 const encoder = new TextEncoder();
@@ -52,6 +53,14 @@ function base64(value) {
 
 function fromBase64(value) {
   return Buffer.from(value, "base64");
+}
+
+function base64Url(value) {
+  return Buffer.from(value).toString("base64url");
+}
+
+function fromBase64Url(value) {
+  return Buffer.from(value, "base64url");
 }
 
 function equalHex(left, right) {
@@ -213,8 +222,14 @@ function signingPublicKeyForVersion(keyring, version) {
 
 export async function createFixtureKeyring({ keyVersion = 1 } = {}) {
   const signingKeys = await subtle.generateKey("Ed25519", true, ["sign", "verify"]);
+  const ledgerSigningKeys = await subtle.generateKey("Ed25519", true, [
+    "sign",
+    "verify",
+  ]);
   return {
     keks: new Map([[keyVersion, randomBytes(32)]]),
+    ledgerSigningPrivateKey: ledgerSigningKeys.privateKey,
+    ledgerSigningPublicKeys: new Map([[keyVersion, ledgerSigningKeys.publicKey]]),
     signingKeyVersion: keyVersion,
     signingPrivateKey: signingKeys.privateKey,
     signingPublicKeys: new Map([[keyVersion, signingKeys.publicKey]]),
@@ -225,6 +240,7 @@ export async function importOperatorKeyring(bundle, { requirePrivate = false } =
   assertPlainObject(bundle, "invalid_keyring");
   assertPlainObject(bundle.keks, "invalid_keyring");
   assertPlainObject(bundle.signingPublicKeys, "invalid_keyring");
+  assertPlainObject(bundle.ledgerSigningPublicKeys, "invalid_keyring");
   const keks = new Map();
   for (const [rawVersion, encoded] of Object.entries(bundle.keks)) {
     const version = Number(rawVersion);
@@ -241,6 +257,17 @@ export async function importOperatorKeyring(bundle, { requirePrivate = false } =
       throw new Error("invalid_signing_key_version");
     }
     signingPublicKeys.set(
+      version,
+      await subtle.importKey("spki", fromBase64(encoded), "Ed25519", false, ["verify"]),
+    );
+  }
+  const ledgerSigningPublicKeys = new Map();
+  for (const [rawVersion, encoded] of Object.entries(bundle.ledgerSigningPublicKeys)) {
+    const version = Number(rawVersion);
+    if (!Number.isInteger(version) || version < 1) {
+      throw new Error("invalid_ledger_signing_key_version");
+    }
+    ledgerSigningPublicKeys.set(
       version,
       await subtle.importKey("spki", fromBase64(encoded), "Ed25519", false, ["verify"]),
     );
@@ -267,9 +294,99 @@ export async function importOperatorKeyring(bundle, { requirePrivate = false } =
   }
   return {
     keks,
+    ledgerSigningPublicKeys,
     signingKeyVersion: bundle.signingKeyVersion,
     signingPrivateKey,
     signingPublicKeys,
+  };
+}
+
+export async function signOperatorAttestation(keyring, value) {
+  if (!keyring?.signingPrivateKey) {
+    throw new Error("signing_private_key_required");
+  }
+  return {
+    keyVersion: keyring.signingKeyVersion,
+    signature: await sign(keyring.signingPrivateKey, value),
+  };
+}
+
+export async function verifyOperatorAttestation(keyring, value, attestation) {
+  if (
+    !attestation ||
+    !Number.isInteger(attestation.keyVersion) ||
+    typeof attestation.signature !== "string"
+  ) {
+    return false;
+  }
+  const publicKey = signingPublicKeyForVersion(keyring, attestation.keyVersion);
+  return verifySignature(publicKey, value, attestation.signature);
+}
+
+function ledgerReceiptPayload(receipt) {
+  return encoder.encode(
+    canonicalJson({
+      environment: receipt.environment,
+      idempotencyHash: receipt.idempotencyHash,
+      keyVersion: receipt.keyVersion,
+      recordHash: receipt.recordHash,
+      sequence: receipt.sequence,
+      stream: receipt.stream,
+      timestamp: receipt.timestamp,
+    }),
+  );
+}
+
+export async function createFixtureLedgerHead({
+  environment,
+  hash,
+  keyVersion,
+  keyring,
+  sequence,
+  stream,
+}) {
+  const privateKey = keyring?.ledgerSigningPrivateKey;
+  if (!privateKey) throw new Error("ledger_signing_private_key_required");
+  const resolvedKeyVersion = keyVersion ?? keyring.signingKeyVersion;
+  const unsigned = {
+    environment,
+    idempotencyHash: sha256Hex(canonicalJson({ environment, hash, sequence, stream })),
+    keyVersion: resolvedKeyVersion,
+    recordHash: hash,
+    sequence,
+    stream,
+    timestamp: "2026-07-23T00:00:00.000Z",
+  };
+  return {
+    hash,
+    receipt: {
+      ...unsigned,
+      signature: base64Url(
+        await subtle.sign("Ed25519", privateKey, ledgerReceiptPayload(unsigned)),
+      ),
+    },
+    sequence,
+  };
+}
+
+export function createFixtureLedgerHeadProvider(heads, currentHeads = heads) {
+  return async (stream, sequence) => {
+    const requested = heads?.[stream];
+    const current = currentHeads?.[stream];
+    if (
+      !requested ||
+      !current ||
+      requested.sequence !== sequence ||
+      !requested.receipt ||
+      !current.receipt
+    ) {
+      throw new Error("ledger_head_not_found");
+    }
+    return {
+      current: current.receipt,
+      requested: requested.receipt,
+      suffixRecords: current.suffixRecords ?? [],
+    };
   };
 }
 
@@ -279,7 +396,7 @@ function validateCreateInput(input) {
   if (!["weekly", "precritical"].includes(input.kind)) {
     throw new Error("invalid_backup_kind");
   }
-  if (!["local", "development", "production"].includes(input.sourceEnvironment)) {
+  if (!["local", "development"].includes(input.sourceEnvironment)) {
     throw new Error("invalid_source_environment");
   }
   if (!Number.isInteger(input.schemaVersion) || input.schemaVersion < 1) {
@@ -294,9 +411,62 @@ function validateCreateInput(input) {
   if (!Array.isArray(input.objects) || input.objects.length === 0) {
     throw new Error("backup_objects_required");
   }
+  validateRequiredRecoveryObjects(input.objects, input.storageInventory);
   if (!input.keyring?.signingPrivateKey) {
     throw new Error("signing_key_required");
   }
+}
+
+function validateStorageInventory(objects, storageInventory) {
+  if (!Array.isArray(storageInventory) || storageInventory.length === 0) {
+    throw new Error("storage_inventory_required");
+  }
+  const declared = new Set();
+  for (const bucket of storageInventory) {
+    if (
+      !bucket ||
+      typeof bucket !== "object" ||
+      !/^[a-z0-9][a-z0-9._-]{0,62}$/.test(bucket.bucket) ||
+      bucket.enumerated !== true ||
+      !Array.isArray(bucket.logicalPaths) ||
+      bucket.logicalPaths.some(
+        (path) =>
+          typeof path !== "string" ||
+          !path.startsWith(`storage/${bucket.bucket}/`) ||
+          assertSafeLogicalPath(path) !== path,
+      )
+    ) {
+      throw new Error("storage_inventory_invalid");
+    }
+    if (declared.has(bucket.bucket)) throw new Error("storage_inventory_duplicate");
+    declared.add(bucket.bucket);
+    const uniquePaths = new Set(bucket.logicalPaths);
+    if (uniquePaths.size !== bucket.logicalPaths.length) {
+      throw new Error("storage_inventory_duplicate_object");
+    }
+  }
+  const expectedPaths = storageInventory
+    .flatMap((bucket) => bucket.logicalPaths)
+    .sort((left, right) => left.localeCompare(right, "en"));
+  const actualPaths = objects
+    .filter((object) => object?.type === "storage")
+    .map((object) => object.logicalPath)
+    .sort((left, right) => left.localeCompare(right, "en"));
+  if (
+    expectedPaths.length !== actualPaths.length ||
+    expectedPaths.some((path, index) => path !== actualPaths[index])
+  ) {
+    throw new Error("storage_inventory_mismatch");
+  }
+}
+
+function validateRequiredRecoveryObjects(objects, storageInventory) {
+  for (const type of ["database", "deletions-ledger", "admin-audit-ledger"]) {
+    if (objects.filter((object) => object?.type === type).length !== 1) {
+      throw new Error(`${type}_object_required`);
+    }
+  }
+  validateStorageInventory(objects, storageInventory);
 }
 
 export async function createRecoverySet(input) {
@@ -384,6 +554,15 @@ export async function createRecoverySet(input) {
     objects: manifestObjects,
     schemaVersion: input.schemaVersion,
     sourceEnvironment: input.sourceEnvironment,
+    storageInventory: input.storageInventory
+      .map((bucket) => ({
+        bucket: bucket.bucket,
+        enumerated: true,
+        logicalPaths: [...bucket.logicalPaths].sort((left, right) =>
+          left.localeCompare(right, "en"),
+        ),
+      }))
+      .sort((left, right) => left.bucket.localeCompare(right.bucket, "en")),
     toolVersion: input.toolVersion,
   };
   const manifestPlaintext = encoder.encode(canonicalJson(manifest));
@@ -475,37 +654,131 @@ function validateEnvelope(envelope) {
   if (!Number.isInteger(envelope.signingKeyVersion) || envelope.signingKeyVersion < 1) {
     throw new Error("invalid_signing_key_version");
   }
-}
-
-function validateLedgerPrefixes(manifest, remoteLedgerHeads = {}) {
-  for (const object of manifest.objects) {
-    if (!object.type.endsWith("-ledger")) continue;
-    const stream = object.type === "deletions-ledger" ? "deletions" : "admin-audit";
-    const remote = remoteLedgerHeads[stream];
-    if (!remote) continue;
-    if (
-      object.prefix.sequence !== remote.sequence ||
-      object.prefix.hash !== remote.hash
-    ) {
-      throw new Error("ledger_prefix_mismatch");
-    }
+  if (!["local", "development"].includes(envelope.sourceEnvironment)) {
+    throw new Error("invalid_source_environment");
   }
 }
 
-export async function verifyRecoverySet({
-  directory,
-  keyring,
-  remoteLedgerHeads = {},
-}) {
+async function verifyLedgerHeadReceipt(receipt, expected, keyring) {
+  if (
+    !receipt ||
+    receipt.environment !== expected.environment ||
+    receipt.stream !== expected.stream ||
+    receipt.sequence !== expected.sequence ||
+    receipt.recordHash !== expected.hash ||
+    !/^[a-f0-9]{64}$/.test(receipt.idempotencyHash) ||
+    !/^[a-f0-9]{64}$/.test(receipt.recordHash) ||
+    !Number.isInteger(receipt.keyVersion) ||
+    receipt.keyVersion < 1 ||
+    !Number.isFinite(Date.parse(receipt.timestamp)) ||
+    typeof receipt.signature !== "string"
+  ) {
+    throw new Error("ledger_prefix_mismatch");
+  }
+  const publicKey = keyring?.ledgerSigningPublicKeys?.get(receipt.keyVersion);
+  if (!publicKey) throw new Error("unknown_ledger_signing_key_version");
+  let valid;
+  try {
+    valid = await subtle.verify(
+      "Ed25519",
+      publicKey,
+      fromBase64Url(receipt.signature),
+      ledgerReceiptPayload(receipt),
+    );
+  } catch {
+    throw new Error("ledger_receipt_signature_invalid");
+  }
+  if (!valid) throw new Error("ledger_receipt_signature_invalid");
+}
+
+async function validateLedgerPrefixes(manifest, ledgerHeadProvider, keyring) {
+  if (typeof ledgerHeadProvider !== "function") {
+    throw new Error("live_ledger_head_provider_required");
+  }
+  const verifiedHeads = {};
+  for (const object of manifest.objects) {
+    if (!object.type.endsWith("-ledger")) continue;
+    const stream = object.type === "deletions-ledger" ? "deletions" : "admin-audit";
+    const live = await ledgerHeadProvider(stream, object.prefix.sequence);
+    const requested = live?.requested;
+    const current = live?.current;
+    if (
+      !requested ||
+      !current ||
+      requested.sequence !== object.prefix.sequence ||
+      requested.recordHash !== object.prefix.hash
+    ) {
+      throw new Error("ledger_prefix_mismatch");
+    }
+    await verifyLedgerHeadReceipt(
+      requested,
+      {
+        environment: manifest.sourceEnvironment,
+        hash: object.prefix.hash,
+        sequence: object.prefix.sequence,
+        stream,
+      },
+      keyring,
+    );
+    await verifyLedgerHeadReceipt(
+      current,
+      {
+        environment: manifest.sourceEnvironment,
+        hash: current.recordHash,
+        sequence: current.sequence,
+        stream,
+      },
+      keyring,
+    );
+    const suffixRecords = live.suffixRecords ?? [];
+    if (!Array.isArray(suffixRecords)) {
+      throw new Error("invalid_ledger_suffix");
+    }
+    if (current.sequence === requested.sequence) {
+      if (current.recordHash !== requested.recordHash || suffixRecords.length !== 0) {
+        throw new Error("ledger_suffix_mismatch");
+      }
+    } else {
+      const suffixHead = verifyLedgerContinuity(suffixRecords, {
+        initialHead: requested.recordHash,
+        initialSequence: requested.sequence,
+        stream,
+      });
+      if (
+        suffixHead.sequence !== current.sequence ||
+        suffixHead.head !== current.recordHash
+      ) {
+        throw new Error("ledger_suffix_mismatch");
+      }
+    }
+    verifiedHeads[stream] = { current, requested, suffixRecords };
+  }
+  return verifiedHeads;
+}
+
+export async function verifyRecoverySet({ directory, keyring, ledgerHeadProvider }) {
   const resolvedDirectory = resolve(directory);
-  const directoryStat = await lstat(resolvedDirectory);
+  let directoryStat;
+  try {
+    directoryStat = await lstat(resolvedDirectory);
+  } catch {
+    throw new Error("backup_directory_missing");
+  }
   if (!directoryStat.isDirectory() || directoryStat.isSymbolicLink()) {
     throw new Error("backup_directory_invalid");
   }
   await realpath(resolvedDirectory);
-  const envelope = JSON.parse(
-    await readFile(join(resolvedDirectory, "envelope.json"), "utf8"),
-  );
+  const envelopePath = join(resolvedDirectory, "envelope.json");
+  let envelopeStat;
+  try {
+    envelopeStat = await lstat(envelopePath);
+  } catch {
+    throw new Error("envelope_missing");
+  }
+  if (!envelopeStat.isFile() || envelopeStat.isSymbolicLink()) {
+    throw new Error("envelope_symlink");
+  }
+  const envelope = JSON.parse(await readFile(envelopePath, "utf8"));
   validateEnvelope(envelope);
   const unsignedEnvelope = { ...envelope };
   delete unsignedEnvelope.signature;
@@ -553,6 +826,7 @@ export async function verifyRecoverySet({
   ) {
     throw new Error("manifest_envelope_mismatch");
   }
+  validateRequiredRecoveryObjects(manifest.objects, manifest.storageInventory);
 
   const decryptedObjects = [];
   for (const manifestObject of manifest.objects) {
@@ -585,8 +859,12 @@ export async function verifyRecoverySet({
     }
     decryptedObjects.push({ ...manifestObject, bytes });
   }
-  validateLedgerPrefixes(manifest, remoteLedgerHeads);
-  return { decryptedObjects, envelope, manifest };
+  const ledgerHeads = await validateLedgerPrefixes(
+    manifest,
+    ledgerHeadProvider,
+    keyring,
+  );
+  return { decryptedObjects, envelope, ledgerHeads, manifest };
 }
 
 export function planRotation(existing, candidate) {

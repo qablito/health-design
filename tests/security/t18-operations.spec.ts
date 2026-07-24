@@ -6,6 +6,7 @@ import {
   verifyAuditRangeGap,
 } from "../../scripts/operations/audit-range.mjs";
 import {
+  assertDevelopmentCleanupTarget,
   cleanupEligibleAuth,
   selectAuthCleanupCandidates,
 } from "../../scripts/operations/auth-cleanup.mjs";
@@ -14,7 +15,12 @@ import {
   operationalAlerts,
 } from "../../scripts/operations/telemetry.mjs";
 import {
+  assertT18DevelopmentBoundary,
+  t18RemoteDryRun,
+} from "../../scripts/t18-remote-smoke.mjs";
+import {
   buildSyntheticLedger,
+  verifyAdminAuditClosure,
   verifyDeletionTombstones,
   verifyLedgerContinuity,
 } from "../../scripts/operations/ledger-verifiers.mjs";
@@ -48,17 +54,134 @@ describe("verificadores de continuidad", () => {
       "tombstone_replay",
     );
   });
+
+  it("acepta rekey y rangos completos, pero bloquea rangos incompletos", () => {
+    const operationId = crypto.randomUUID();
+    const rangeJobId = crypto.randomUUID();
+    const records = buildSyntheticLedger(
+      [
+        {
+          markerKeyVersion: 1,
+          operationId,
+          profileMarker: "a".repeat(64),
+          recordType: "profile_deletion",
+          schemaVersion: 1,
+          stream: "deletions",
+        },
+        {
+          markerKeyVersion: 2,
+          operationId,
+          previousMarkerKeyVersion: 1,
+          previousProfileMarker: "a".repeat(64),
+          profileMarker: "b".repeat(64),
+          recordType: "profile_marker_rekey",
+          schemaVersion: 1,
+          stream: "deletions",
+        },
+        {
+          auditDeletionJobId: rangeJobId,
+          fromSequence: 4,
+          operationId: rangeJobId,
+          rangeHash: "c".repeat(64),
+          recordType: "audit_range_delete_intent",
+          schemaVersion: 1,
+          stream: "deletions",
+          toSequence: 5,
+        },
+      ],
+      "deletions",
+    );
+    const incomplete = verifyDeletionTombstones(records, new Set([1, 2]));
+    expect(incomplete.activeProfileMarkers).toEqual(["b".repeat(64)]);
+    expect(incomplete.activeProfileMarkerKeyVersions).toEqual([2]);
+    expect(incomplete.incompleteAuditRanges).toEqual([
+      {
+        fromSequence: 4,
+        jobId: rangeJobId,
+        toSequence: 5,
+      },
+    ]);
+    const completed = buildSyntheticLedger(
+      [
+        ...records.map((record) => record.payload),
+        {
+          auditDeletionJobId: rangeJobId,
+          fromSequence: 4,
+          intentRecordHash: records[2]!.recordHash,
+          operationId: rangeJobId,
+          rangeHash: "c".repeat(64),
+          recordType: "audit_range_delete_complete",
+          schemaVersion: 1,
+          stream: "deletions",
+          toSequence: 5,
+        },
+      ],
+      "deletions",
+    );
+    expect(
+      verifyDeletionTombstones(completed, new Set([1, 2])).incompleteAuditRanges,
+    ).toEqual([]);
+    const mismatchedOperation = buildSyntheticLedger(
+      [
+        ...records.map((record) => record.payload),
+        {
+          ...completed.at(-1)!.payload,
+          operationId: crypto.randomUUID(),
+        },
+      ],
+      "deletions",
+    );
+    expect(() =>
+      verifyDeletionTombstones(mismatchedOperation, new Set([1, 2])),
+    ).toThrow("audit_range_receipt_mismatch");
+  });
+
+  it("rechaza outcomes que cambian la identidad inmutable del intent", () => {
+    const requestId = crypto.randomUUID();
+    const intent = {
+      action: "impersonation_start",
+      createdAt: "2026-07-23T00:00:00.000Z",
+      effectiveProfileId: "51000000-0000-4000-8000-000000005101",
+      originalActorId: "31000000-0000-4000-8000-000000005101",
+      phase: "intent",
+      requestId,
+      result: "pending",
+      schemaVersion: 1,
+      stream: "admin-audit",
+      targetId: "51000000-0000-4000-8000-000000005101",
+      targetType: "profile",
+    };
+    const intentRecord = buildSyntheticLedger([intent], "admin-audit")[0]!;
+    const records = buildSyntheticLedger(
+      [
+        intent,
+        {
+          ...intent,
+          createdAt: "2026-07-23T00:00:01.000Z",
+          intentRecordHash: intentRecord.recordHash,
+          originalActorId: "31000000-0000-4000-8000-000000005102",
+          phase: "outcome",
+          result: "success",
+        },
+      ],
+      "admin-audit",
+    );
+
+    expect(() => verifyAdminAuditClosure(records)).toThrow(
+      "admin_audit_outcome_mismatch",
+    );
+  });
 });
 
 describe("borrado excepcional de auditoría", () => {
   const records = [
     {
-      objectKey: "admin-audit/development/00000000000000000002.json",
+      objectKey: "admin-audit/00000000000000000002.json",
       recordHash: "2".repeat(64),
       sequence: 2,
     },
     {
-      objectKey: "admin-audit/development/00000000000000000003.json",
+      objectKey: "admin-audit/00000000000000000003.json",
       recordHash: "3".repeat(64),
       sequence: 3,
     },
@@ -96,6 +219,28 @@ describe("borrado excepcional de auditoría", () => {
         manifest,
       }),
     ).toThrow("audit_range_receipt_mismatch");
+    expect(() =>
+      verifyAuditRangeGap({
+        complete: { ...manifest, operationId },
+        intent: { ...manifest, operationId },
+        manifest: { ...manifest, records: [] },
+      }),
+    ).toThrow("invalid_audit_range");
+  });
+
+  it("rechaza una clave de objeto que no corresponde a la secuencia firmada", async () => {
+    await expect(
+      prepareAuditRangeManifest({
+        hashBeforeRange: "1".repeat(64),
+        records: [
+          {
+            objectKey: "admin-audit/00000000000000000099.json",
+            recordHash: "2".repeat(64),
+            sequence: 2,
+          },
+        ],
+      }),
+    ).rejects.toThrow("invalid_audit_range_record");
   });
 
   it("revoca siempre la credencial JIT y deja un fallo parcial reanudable", async () => {
@@ -144,6 +289,30 @@ describe("borrado excepcional de auditoría", () => {
 describe("limpieza Auth", () => {
   const now = "2026-07-23T12:00:00.000Z";
 
+  it("solo admite el proyecto canónico de Development", () => {
+    expect(() =>
+      assertDevelopmentCleanupTarget({
+        environment: "development",
+        projectRef: "nwoivdxdupklervtnovd",
+        supabaseUrl: "https://nwoivdxdupklervtnovd.supabase.co",
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertDevelopmentCleanupTarget({
+        environment: "development",
+        projectRef: "otro-proyecto",
+        supabaseUrl: "https://otro-proyecto.supabase.co",
+      }),
+    ).toThrow("cleanup_project_boundary_failed");
+    expect(() =>
+      assertDevelopmentCleanupTarget({
+        environment: "production",
+        projectRef: "nwoivdxdupklervtnovd",
+        supabaseUrl: "https://nwoivdxdupklervtnovd.supabase.co",
+      }),
+    ).toThrow("cleanup_project_boundary_failed");
+  });
+
   it("dry-run no elimina, limita a 100 y excluye membresías, SU y operaciones", async () => {
     const candidates = Array.from({ length: 130 }, (_, index) => ({
       actorDisabled: false,
@@ -164,13 +333,24 @@ describe("limpieza Auth", () => {
     );
     let deletions = 0;
     const result = await cleanupEligibleAuth(
-      { candidates, dryRun: true, limit: 100, now },
       {
+        candidates,
+        dryRun: true,
+        limit: 100,
+        now,
+        requestIdForCandidate: () => crypto.randomUUID(),
+      },
+      {
+        appendIntent: () => Promise.resolve({ recordHash: "a".repeat(64) }),
+        appendOutcome: () => Promise.resolve({ recordHash: "b".repeat(64) }),
         deleteAuthUser: () => {
           deletions += 1;
           return Promise.resolve();
         },
         disableActor: () => Promise.resolve(),
+        finalizeOutcome: () => Promise.resolve(),
+        markOutcome: () => Promise.resolve(),
+        recordIntent: () => Promise.resolve(),
       },
     );
     expect(result).toEqual({
@@ -183,7 +363,29 @@ describe("limpieza Auth", () => {
     expect(deletions).toBe(0);
   });
 
-  it("elimina Auth antes de deshabilitar actor, es idempotente y redacta resultados", async () => {
+  it("nunca selecciona una identidad no anónima aunque esté inactiva", () => {
+    expect(
+      selectAuthCleanupCandidates(
+        [
+          {
+            actorDisabled: false,
+            actorRole: "device",
+            anonymous: false,
+            authPresent: true,
+            authSubject: crypto.randomUUID(),
+            createdAt: "2025-01-01T00:00:00.000Z",
+            hasActiveInvitation: false,
+            hasActiveMembership: false,
+            hasPendingOperation: false,
+            lastActiveAt: "2025-01-01T00:00:00.000Z",
+          },
+        ],
+        { limit: 100, now },
+      ),
+    ).toEqual([]);
+  });
+
+  it("deshabilita el actor antes de eliminar Auth, es idempotente y redacta resultados", async () => {
     const candidate = {
       actorDisabled: false,
       actorRole: "device" as const,
@@ -198,8 +400,22 @@ describe("limpieza Auth", () => {
     };
     const calls: string[] = [];
     const result = await cleanupEligibleAuth(
-      { candidates: [candidate], dryRun: false, limit: 100, now },
       {
+        candidates: [candidate],
+        dryRun: false,
+        limit: 100,
+        now,
+        requestIdForCandidate: () => "cleanup-request",
+      },
+      {
+        appendIntent: () => {
+          calls.push("intent");
+          return Promise.resolve({ recordHash: "a".repeat(64) });
+        },
+        appendOutcome: (_candidate, _requestId, _receipt, result) => {
+          calls.push(`outcome:${result}`);
+          return Promise.resolve({ recordHash: "b".repeat(64) });
+        },
         deleteAuthUser: () => {
           calls.push("auth");
           candidate.authPresent = false;
@@ -210,19 +426,50 @@ describe("limpieza Auth", () => {
           candidate.actorDisabled = true;
           return Promise.resolve();
         },
+        finalizeOutcome: (_requestId, _receipt, outcome) => {
+          calls.push(`finalize:${outcome}`);
+          return Promise.resolve();
+        },
+        markOutcome: (_requestId, outcome) => {
+          calls.push(`mark:${outcome}`);
+          return Promise.resolve();
+        },
+        recordIntent: () => {
+          calls.push("record");
+          return Promise.resolve();
+        },
       },
     );
     const repeated = await cleanupEligibleAuth(
-      { candidates: [candidate], dryRun: false, limit: 100, now },
       {
+        candidates: [candidate],
+        dryRun: false,
+        limit: 100,
+        now,
+        requestIdForCandidate: () => "cleanup-request",
+      },
+      {
+        appendIntent: () => Promise.resolve({ recordHash: "a".repeat(64) }),
+        appendOutcome: () => Promise.resolve({ recordHash: "b".repeat(64) }),
         deleteAuthUser: () => {
           calls.push("unexpected");
           return Promise.resolve();
         },
         disableActor: () => Promise.resolve(),
+        finalizeOutcome: () => Promise.resolve(),
+        markOutcome: () => Promise.resolve(),
+        recordIntent: () => Promise.resolve(),
       },
     );
-    expect(calls).toEqual(["actor", "auth"]);
+    expect(calls).toEqual([
+      "intent",
+      "record",
+      "actor",
+      "auth",
+      "mark:success",
+      "outcome:success",
+      "finalize:success",
+    ]);
     expect(result).toEqual({
       attempted: 1,
       eligible: 1,
@@ -296,5 +543,32 @@ describe("observabilidad allowlisted", () => {
       "rotation_prune_pending",
       "restore_rto_over_24h",
     ]);
+  });
+});
+
+describe("preflight remoto T18", () => {
+  it("no usa red ni mutaciones y delimita Development", () => {
+    expect(t18RemoteDryRun({})).toMatchObject({
+      allowedEnvironment: {
+        projectRef: "nwoivdxdupklervtnovd",
+      },
+      mode: "dry-run",
+      mutations: false,
+      network: false,
+      status: "T18_REMOTE_PREFLIGHT_READY",
+    });
+  });
+
+  it("rechaza cualquier referencia de Production", () => {
+    expect(() =>
+      assertT18DevelopmentBoundary({
+        SUPABASE_PROJECT_REF: "rbfrpgafytexrarcfmmp",
+      }),
+    ).toThrow("production_is_forbidden");
+    expect(() =>
+      assertT18DevelopmentBoundary({
+        SUPABASE_URL: "https://rbfrpgafytexrarcfmmp.supabase.co",
+      }),
+    ).toThrow("production_is_forbidden");
   });
 });

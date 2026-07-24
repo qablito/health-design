@@ -53,13 +53,6 @@ function formValue(form: FormData, field: string): string {
   return typeof value === "string" ? value : "";
 }
 
-async function sha256Hex(value: string): Promise<string> {
-  const digest = new Uint8Array(
-    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)),
-  );
-  return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
 export function AdminApp() {
   const [stage, setStage] = useState<Stage>("loading");
   const [profiles, setProfiles] = useState<AdminProfileSummary[]>([]);
@@ -73,6 +66,7 @@ export function AdminApp() {
   const [deletionConfirmation, setDeletionConfirmation] = useState("");
   const [backups, setBackups] = useState<AdminBackupJob[]>([]);
   const [restores, setRestores] = useState<AdminRestoreJob[]>([]);
+  const [recoveryUnavailable, setRecoveryUnavailable] = useState(false);
   const [restoreConfirmation, setRestoreConfirmation] = useState("");
 
   const activeProfile = useMemo(
@@ -84,16 +78,21 @@ export function AdminApp() {
   );
 
   const loadAdminData = useCallback(async () => {
-    const [nextProfiles, nextContext, nextBackups, nextRestores] = await Promise.all([
+    const [nextProfiles, nextContext] = await Promise.all([
       adminClient.listProfiles(),
       adminClient.currentContext(),
-      adminClient.listBackups(),
-      adminClient.listRestores(),
     ]);
     setProfiles(nextProfiles);
     setContext(nextContext);
-    setBackups(nextBackups);
-    setRestores(nextRestores);
+    const [nextBackups, nextRestores] = await Promise.allSettled([
+      adminClient.listBackups(),
+      adminClient.listRestores(),
+    ]);
+    setBackups(nextBackups.status === "fulfilled" ? nextBackups.value : []);
+    setRestores(nextRestores.status === "fulfilled" ? nextRestores.value : []);
+    setRecoveryUnavailable(
+      nextBackups.status === "rejected" || nextRestores.status === "rejected",
+    );
   }, []);
 
   const prepareMfa = useCallback(async () => {
@@ -254,16 +253,6 @@ export function AdminApp() {
     });
   }
 
-  async function createRestore(backupId: string) {
-    await run(async () => {
-      const targetFingerprint = await sha256Hex(
-        `local-isolated:${backupId}:${crypto.randomUUID()}`,
-      );
-      await adminClient.createRestore(backupId, targetFingerprint);
-      await loadAdminData();
-    });
-  }
-
   async function promoteRestore(restore: AdminRestoreJob) {
     if (restoreConfirmation !== "PROMOVER RESTAURACIÓN VERIFICADA") {
       setError("Escribe la frase exacta antes de autorizar la promoción.");
@@ -310,7 +299,7 @@ export function AdminApp() {
       </header>
 
       {stage === "ready" ? (
-        <div className="admin-audit-pending" role="status">
+        <div className="admin-audit-pending">
           Sesión de superadministrador activa. Las acciones de esta pantalla afectan a
           datos reales del entorno seleccionado.
         </div>
@@ -390,6 +379,12 @@ export function AdminApp() {
               El panel gobierna los trabajos. La captura y la restauración se ejecutan
               mediante scripts de operador y nunca guardan la KEK aquí.
             </p>
+            {recoveryUnavailable ? (
+              <p role="note">
+                Los trabajos de recuperación no están disponibles temporalmente. El
+                resto de la administración sigue operativo.
+              </p>
+            ) : null}
             <div className="admin-actions">
               <button
                 disabled={busy}
@@ -417,11 +412,11 @@ export function AdminApp() {
                     </span>
                   </div>
                   <button
-                    disabled={busy || backup.status !== "ready"}
-                    onClick={() => void createRestore(backup.backupId)}
+                    disabled
+                    title="El operador crea el restore después de atestar el destino aislado"
                     type="button"
                   >
-                    Preparar restore aislado
+                    Restore mediante operador
                   </button>
                 </li>
               ))}

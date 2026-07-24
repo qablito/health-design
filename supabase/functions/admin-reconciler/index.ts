@@ -18,7 +18,10 @@ const HEX_64_PATTERN = /^[a-f0-9]{64}$/;
 
 export type PendingAuditIdentity = {
   action: AdminAuditAction;
-  effectiveProfileId: string;
+  desiredErrorCode?:
+    "domain_constraint" | "mutation_failed" | "reconciliation_required" | null;
+  desiredResult?: "failure" | "pending" | "success";
+  effectiveProfileId: string | null;
   impersonationSessionId: string | null;
   intentRecordHash: string;
   originalActorId: string;
@@ -101,8 +104,16 @@ export async function handleAdminReconciliation(
   }
   for (const item of outboxItems) {
     attempted.add(item.requestId);
+    if (item.desiredResult === "pending" || item.desiredResult === undefined) {
+      pending += 1;
+      continue;
+    }
     try {
-      await dependencies.closeSuccess(item);
+      if (item.desiredResult === "failure") {
+        await dependencies.closeFailure(item);
+      } else {
+        await dependencies.closeSuccess(item);
+      }
       closed += 1;
     } catch {
       pending += 1;
@@ -119,12 +130,17 @@ export async function handleAdminReconciliation(
     if (attempted.has(externalItem.requestId)) continue;
     try {
       const state = await dependencies.requestState(externalItem.requestId);
-      if (state) {
+      if (state?.desiredResult === "failure") {
+        await dependencies.closeFailure(state);
+        closed += 1;
+      } else if (state?.desiredResult === "success") {
         await dependencies.closeSuccess(state);
         closed += 1;
-      } else {
+      } else if (!state) {
         await dependencies.closeFailure(externalItem);
         reconciledFailures += 1;
+      } else {
+        pending += 1;
       }
     } catch {
       pending += 1;
@@ -254,10 +270,18 @@ function parseAction(value: unknown): AdminAuditAction {
     value !== "catalog_match_candidates_generate" &&
     value !== "catalog_publication_hide" &&
     value !== "catalog_revision_publish" &&
+    value !== "anonymous_auth_cleanup" &&
+    value !== "audit_range_delete_execute" &&
+    value !== "audit_range_delete_prepare" &&
+    value !== "backup_create" &&
     value !== "impersonation_start" &&
     value !== "impersonation_end" &&
     value !== "matching_rule_activate" &&
-    value !== "matching_rule_review"
+    value !== "matching_rule_review" &&
+    value !== "profile_deletion_permanent" &&
+    value !== "profile_deletion_resume" &&
+    value !== "restore_create" &&
+    value !== "restore_promote"
   ) {
     throw new Error("invalid_action");
   }
@@ -266,13 +290,18 @@ function parseAction(value: unknown): AdminAuditAction {
 
 function parseTargetType(value: unknown): AdminAuditTargetType {
   if (
+    value !== "audit_deletion_job" &&
+    value !== "auth_user" &&
+    value !== "backup_job" &&
     value !== "barcode_correction" &&
     value !== "commercial_product_revision" &&
     value !== "catalog_publication" &&
     value !== "catalog_revision" &&
     value !== "impersonation_session" &&
     value !== "product_matching_rule" &&
-    value !== "profile"
+    value !== "profile" &&
+    value !== "deletion_job" &&
+    value !== "restore_job"
   ) {
     throw new Error("invalid_target_type");
   }
@@ -291,9 +320,28 @@ function parseNullableUuid(value: unknown): string | null {
 }
 
 function pendingFromDatabase(row: Record<string, unknown>): PendingAuditIdentity {
+  const desiredResult =
+    row.desired_result === undefined ? "pending" : row.desired_result;
+  const desiredErrorCode = row.desired_error_code ?? null;
+  if (
+    (desiredResult !== "pending" &&
+      desiredResult !== "success" &&
+      desiredResult !== "failure") ||
+    (desiredErrorCode !== null &&
+      desiredErrorCode !== "domain_constraint" &&
+      desiredErrorCode !== "mutation_failed" &&
+      desiredErrorCode !== "reconciliation_required") ||
+    ((desiredResult === "pending" || desiredResult === "success") &&
+      desiredErrorCode !== null) ||
+    (desiredResult === "failure" && desiredErrorCode === null)
+  ) {
+    throw new Error("invalid_outbox_outcome");
+  }
   return {
     action: parseAction(row.action),
-    effectiveProfileId: parseUuid(row.effective_profile_id),
+    desiredErrorCode,
+    desiredResult,
+    effectiveProfileId: parseNullableUuid(row.effective_profile_id),
     impersonationSessionId: parseNullableUuid(row.impersonation_session_id),
     intentRecordHash: byteaHex(row.intent_record_hash),
     originalActorId: parseUuid(row.original_actor_id),
@@ -338,7 +386,7 @@ function pendingFromLedger(value: unknown): PendingAuditIdentity {
   const targetId = parseUuid(row.targetId);
   return {
     action,
-    effectiveProfileId: parseUuid(row.effectiveProfileId),
+    effectiveProfileId: parseNullableUuid(row.effectiveProfileId),
     impersonationSessionId: action === "impersonation_end" ? targetId : null,
     intentRecordHash: row.intentRecordHash,
     originalActorId: parseUuid(row.originalActorId),
@@ -425,7 +473,9 @@ function runtimeDependencies(): AdminReconciliationDependencies {
       action: item.action,
       effectiveProfileId: item.effectiveProfileId,
       ...(result === "failure"
-        ? { errorCode: "reconciliation_required" as const }
+        ? {
+            errorCode: item.desiredErrorCode ?? ("reconciliation_required" as const),
+          }
         : {}),
       intentRecordHash: item.intentRecordHash,
       originalActorId: item.originalActorId,
@@ -485,22 +535,32 @@ function runtimeDependencies(): AdminReconciliationDependencies {
     },
     closeFailure: async (item) => {
       const receipt = await appendOutcome(item, "failure");
-      const result = await rpc("internal_admin_record_reconciliation", {
-        p_action: item.action,
-        p_effective_profile_id: item.effectiveProfileId,
-        p_impersonation_session_id: item.impersonationSessionId,
-        p_original_actor_id: item.originalActorId,
-        p_request_id: item.requestId,
-        p_target_id: item.targetId,
-        p_target_type: item.targetType,
-        ...receiptRpcArgs(receipt),
-      });
+      const hasDurableOutbox = item.desiredResult === "failure";
+      const result = hasDurableOutbox
+        ? await rpc("internal_admin_finalize_t18_audit_outbox", {
+            p_error_code: item.desiredErrorCode,
+            p_request_id: item.requestId,
+            p_result: "failure",
+            ...receiptRpcArgs(receipt),
+          })
+        : await rpc("internal_admin_record_t18_reconciliation", {
+            p_action: item.action,
+            p_effective_profile_id: item.effectiveProfileId,
+            p_impersonation_session_id: item.impersonationSessionId,
+            p_original_actor_id: item.originalActorId,
+            p_request_id: item.requestId,
+            p_target_id: item.targetId,
+            p_target_type: item.targetType,
+            ...receiptRpcArgs(receipt),
+          });
       if (result.error || result.data !== true) throw new Error("database_unavailable");
     },
     closeSuccess: async (item) => {
       const receipt = await appendOutcome(item, "success");
-      const result = await rpc("internal_admin_finalize_audit_outbox", {
+      const result = await rpc("internal_admin_finalize_t18_audit_outbox", {
+        p_error_code: null,
         p_request_id: item.requestId,
+        p_result: "success",
         ...receiptRpcArgs(receipt),
       });
       if (result.error || result.data !== true) throw new Error("database_unavailable");
@@ -519,7 +579,7 @@ function runtimeDependencies(): AdminReconciliationDependencies {
       return (body as { items: unknown[] }).items.map(pendingFromLedger);
     },
     listPendingOutbox: async () => {
-      const result = await rpc("internal_admin_list_pending_audit_outbox", {
+      const result = await rpc("internal_admin_list_pending_t18_audit_outbox", {
         p_limit: 25,
       });
       if (result.error || !Array.isArray(result.data)) {

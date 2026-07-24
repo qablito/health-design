@@ -1,6 +1,6 @@
 begin;
 
-select plan(21);
+select plan(27);
 
 select ok(
   to_regprocedure(
@@ -55,6 +55,20 @@ insert into auth.users (
     'authenticated', 'authenticated',
     '{}', '{}',
     now() - interval '2 days', now(), true, null
+  ),
+  (
+    '00000000-0000-0000-0000-000000000000',
+    '00000000-0000-4000-8000-000000018403',
+    'authenticated', 'authenticated',
+    '{}', '{}',
+    now() - interval '2 days', now(), true, null
+  ),
+  (
+    '00000000-0000-0000-0000-000000000000',
+    '00000000-0000-4000-8000-000000018404',
+    'authenticated', 'authenticated',
+    '{}', '{}',
+    now() - interval '2 days', now(), true, now()
   );
 insert into auth.sessions (id, user_id, created_at, updated_at, aal) values (
   '21000000-0000-4000-8000-000000018499',
@@ -76,7 +90,24 @@ insert into public.actors (id, auth_subject, role) values
     '31000000-0000-4000-8000-000000018402',
     '00000000-0000-4000-8000-000000018402',
     'device'
+  ),
+  (
+    '31000000-0000-4000-8000-000000018403',
+    '00000000-0000-4000-8000-000000018403',
+    'device'
+  ),
+  (
+    '31000000-0000-4000-8000-000000018404',
+    '00000000-0000-4000-8000-000000018404',
+    'device'
   );
+insert into private.invitations (
+  token_hash, expires_at, created_by
+) values (
+  digest('cleanup-pending-invitation', 'sha256'),
+  now() + interval '1 day',
+  '31000000-0000-4000-8000-000000018403'
+);
 insert into public.profiles (
   id, alias, timezone, adult_attested_at
 ) values (
@@ -110,6 +141,61 @@ select is(
   )::uuid,
   '00000000-0000-4000-8000-000000018401'::uuid,
   'la paginación devuelve el sujeto huérfano exacto'
+);
+select lives_ok(
+  $$
+    select public.internal_record_t18_admin_intent(
+      '00000000-0000-4000-8000-000000018499',
+      '21000000-0000-4000-8000-000000018499',
+      '91000000-0000-4000-8000-000000018401',
+      null, 'anonymous_auth_cleanup', 'auth_user',
+      '00000000-0000-4000-8000-000000018401',
+      900, clock_timestamp(), digest('cleanup-intent', 'sha256'),
+      decode(repeat('ab', 64), 'hex'), 1,
+      digest('cleanup-intent-idempotency', 'sha256')
+    )
+  $$,
+  'el intent de limpieza crea un outbox duradero'
+);
+select is(
+  public.internal_admin_mark_t18_audit_outcome(
+    '91000000-0000-4000-8000-000000018401',
+    'failure',
+    'mutation_failed'
+  ),
+  true,
+  'el fallo se marca antes de publicarse en el ledger'
+);
+select is(
+  (
+    select desired_result || ':' || desired_error_code
+    from public.internal_admin_list_pending_t18_audit_outbox(25)
+    where request_id = '91000000-0000-4000-8000-000000018401'
+  ),
+  'failure:mutation_failed',
+  'el reconciliador recupera la semántica exacta del fallo'
+);
+select is(
+  public.internal_admin_finalize_t18_audit_outbox(
+    '91000000-0000-4000-8000-000000018401',
+    'failure', 'mutation_failed', 901, clock_timestamp(),
+    digest('cleanup-outcome', 'sha256'),
+    decode(repeat('cd', 64), 'hex'), 1,
+    digest('cleanup-outcome-idempotency', 'sha256')
+  ),
+  true,
+  'el outcome fallido firmado cierra el outbox'
+);
+select is(
+  (
+    select event.result || ':' || outbox.error_code
+    from private.technical_audit_events event
+    join private.audit_outbox outbox using (request_id)
+    where event.request_id = '91000000-0000-4000-8000-000000018401'
+      and event.phase = 'outcome'
+  ),
+  'failure:mutation_failed',
+  'el evento técnico conserva el fallo sin convertirlo en éxito'
 );
 select lives_ok(
   $$
@@ -155,6 +241,17 @@ select throws_ok(
   $$,
   '42501', 'superadmin_protected',
   'el superadministrador nunca es elegible'
+);
+select throws_ok(
+  $$
+    select public.internal_admin_disable_auth_cleanup_actor(
+      '00000000-0000-4000-8000-000000018499',
+      '21000000-0000-4000-8000-000000018499',
+      '00000000-0000-4000-8000-000000018403'
+    )
+  $$,
+  '55000', 'auth_cleanup_ineligible',
+  'la aplicación revalida invitaciones activas antes de deshabilitar'
 );
 
 select is(

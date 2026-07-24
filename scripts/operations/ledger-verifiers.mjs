@@ -4,7 +4,7 @@ import { verifyAuditRangeGap } from "./audit-range.mjs";
 
 const HEX_64 = /^[a-f0-9]{64}$/;
 const ZERO_HASH = "0".repeat(64);
-const TOMBSTONE_KEYS = new Set([
+const PROFILE_DELETION_KEYS = new Set([
   "markerKeyVersion",
   "operationId",
   "profileMarker",
@@ -12,6 +12,27 @@ const TOMBSTONE_KEYS = new Set([
   "schemaVersion",
   "stream",
 ]);
+const PROFILE_REKEY_KEYS = new Set([
+  "markerKeyVersion",
+  "operationId",
+  "previousMarkerKeyVersion",
+  "previousProfileMarker",
+  "profileMarker",
+  "recordType",
+  "schemaVersion",
+  "stream",
+]);
+const AUDIT_RANGE_KEYS = new Set([
+  "auditDeletionJobId",
+  "fromSequence",
+  "operationId",
+  "rangeHash",
+  "recordType",
+  "schemaVersion",
+  "stream",
+  "toSequence",
+]);
+const AUDIT_RANGE_COMPLETE_KEYS = new Set([...AUDIT_RANGE_KEYS, "intentRecordHash"]);
 
 function canonicalize(value) {
   if (Array.isArray(value)) return value.map(canonicalize);
@@ -44,15 +65,21 @@ function equalHex(left, right) {
   );
 }
 
-export function buildSyntheticLedger(records, stream) {
-  let previousHash = ZERO_HASH;
+export function buildSyntheticLedger(
+  records,
+  stream,
+  { initialHead = ZERO_HASH, initialSequence = 0 } = {},
+) {
+  let previousHash = initialHead;
   return records.map((payload, index) => {
     const recordWithoutHash = {
-      idempotencyHash: sha256Hex(`idempotency:${stream}:${index + 1}`),
+      idempotencyHash: sha256Hex(
+        `idempotency:${stream}:${initialSequence + index + 1}`,
+      ),
       payload,
       previousHash,
       schemaVersion: 1,
-      sequence: index + 1,
+      sequence: initialSequence + index + 1,
       stream,
       timestamp: `2026-07-23T00:00:${String(index).padStart(2, "0")}.000Z`,
     };
@@ -62,13 +89,23 @@ export function buildSyntheticLedger(records, stream) {
   });
 }
 
-export function verifyLedgerContinuity(records, { gaps = [], stream }) {
+export function verifyLedgerContinuity(
+  records,
+  { gaps = [], initialHead = ZERO_HASH, initialSequence = 0, stream },
+) {
   if (!Array.isArray(records) || !Array.isArray(gaps)) {
     throw new Error("invalid_ledger_input");
   }
   const ordered = [...records].sort((left, right) => left.sequence - right.sequence);
-  let expectedSequence = 1;
-  let previousHash = ZERO_HASH;
+  if (
+    !Number.isSafeInteger(initialSequence) ||
+    initialSequence < 0 ||
+    !HEX_64.test(initialHead)
+  ) {
+    throw new Error("invalid_ledger_anchor");
+  }
+  let expectedSequence = initialSequence + 1;
+  let previousHash = initialHead;
   for (const record of ordered) {
     while (expectedSequence < record.sequence) {
       const gap = gaps.find(
@@ -78,6 +115,9 @@ export function verifyLedgerContinuity(records, { gaps = [], stream }) {
       );
       if (!gap || stream !== "admin-audit") throw new Error("ledger_gap");
       verifyAuditRangeGap(gap);
+      if (gap.manifest.hashBeforeRange !== previousHash) {
+        throw new Error("audit_range_anchor_mismatch");
+      }
       expectedSequence = gap.manifest.toSequence + 1;
       previousHash = gap.manifest.terminalRecordHash;
     }
@@ -91,6 +131,10 @@ export function verifyLedgerContinuity(records, { gaps = [], stream }) {
     }
     const value = { ...record };
     delete value.recordHash;
+    delete value.receipt;
+    if (record.encryptionKeyVersion !== undefined) {
+      delete value.payload;
+    }
     if (!equalHex(record.recordHash, sha256Hex(canonicalJson(value)))) {
       throw new Error("ledger_record_hash_mismatch");
     }
@@ -102,24 +146,180 @@ export function verifyLedgerContinuity(records, { gaps = [], stream }) {
 
 export function verifyDeletionTombstones(records, knownKeyVersions) {
   const operations = new Set();
+  const markers = new Map();
+  const pendingRanges = new Map();
   for (const record of records) {
     const payload = record.payload;
+    if (!payload || typeof payload !== "object") {
+      throw new Error("invalid_deletion_tombstone");
+    }
     if (
-      !payload ||
-      typeof payload !== "object" ||
-      Object.keys(payload).some((key) => !TOMBSTONE_KEYS.has(key)) ||
-      payload.recordType !== "profile_deletion" ||
-      payload.schemaVersion !== 1 ||
-      payload.stream !== "deletions" ||
-      !Number.isInteger(payload.markerKeyVersion) ||
-      !knownKeyVersions.has(payload.markerKeyVersion) ||
-      !/^[a-f0-9]{64}$/.test(payload.profileMarker) ||
-      typeof payload.operationId !== "string"
+      payload.recordType === "profile_deletion" &&
+      (Object.keys(payload).some((key) => !PROFILE_DELETION_KEYS.has(key)) ||
+        payload.schemaVersion !== 1 ||
+        payload.stream !== "deletions" ||
+        !Number.isInteger(payload.markerKeyVersion) ||
+        !knownKeyVersions.has(payload.markerKeyVersion) ||
+        !/^[a-f0-9]{64}$/.test(payload.profileMarker) ||
+        typeof payload.operationId !== "string")
+    ) {
+      throw new Error("invalid_deletion_tombstone");
+    } else if (
+      payload.recordType === "profile_marker_rekey" &&
+      (Object.keys(payload).some((key) => !PROFILE_REKEY_KEYS.has(key)) ||
+        payload.schemaVersion !== 1 ||
+        payload.stream !== "deletions" ||
+        !Number.isInteger(payload.markerKeyVersion) ||
+        !Number.isInteger(payload.previousMarkerKeyVersion) ||
+        payload.markerKeyVersion <= payload.previousMarkerKeyVersion ||
+        !knownKeyVersions.has(payload.markerKeyVersion) ||
+        !knownKeyVersions.has(payload.previousMarkerKeyVersion) ||
+        !/^[a-f0-9]{64}$/.test(payload.profileMarker) ||
+        !/^[a-f0-9]{64}$/.test(payload.previousProfileMarker) ||
+        typeof payload.operationId !== "string")
+    ) {
+      throw new Error("invalid_deletion_tombstone");
+    } else if (
+      (payload.recordType === "audit_range_delete_intent" ||
+        payload.recordType === "audit_range_delete_complete") &&
+      (Object.keys(payload).some(
+        (key) =>
+          !(
+            payload.recordType === "audit_range_delete_complete"
+              ? AUDIT_RANGE_COMPLETE_KEYS
+              : AUDIT_RANGE_KEYS
+          ).has(key),
+      ) ||
+        payload.schemaVersion !== 1 ||
+        payload.stream !== "deletions" ||
+        typeof payload.operationId !== "string" ||
+        typeof payload.auditDeletionJobId !== "string" ||
+        !Number.isSafeInteger(payload.fromSequence) ||
+        !Number.isSafeInteger(payload.toSequence) ||
+        payload.fromSequence < 1 ||
+        payload.toSequence < payload.fromSequence ||
+        !HEX_64.test(payload.rangeHash) ||
+        (payload.recordType === "audit_range_delete_complete" &&
+          !HEX_64.test(payload.intentRecordHash)))
+    ) {
+      throw new Error("invalid_deletion_tombstone");
+    } else if (
+      ![
+        "profile_deletion",
+        "profile_marker_rekey",
+        "audit_range_delete_intent",
+        "audit_range_delete_complete",
+      ].includes(payload.recordType)
     ) {
       throw new Error("invalid_deletion_tombstone");
     }
-    if (operations.has(payload.operationId)) throw new Error("tombstone_replay");
-    operations.add(payload.operationId);
+    if (!payload || typeof payload.operationId !== "string") {
+      throw new Error("invalid_deletion_tombstone");
+    }
+    const operationKey = `${payload.recordType}:${payload.operationId}`;
+    if (operations.has(operationKey)) throw new Error("tombstone_replay");
+    operations.add(operationKey);
+    if (payload.recordType === "profile_deletion") {
+      markers.set(payload.profileMarker, payload.markerKeyVersion);
+    } else if (payload.recordType === "profile_marker_rekey") {
+      if (
+        markers.get(payload.previousProfileMarker) !== payload.previousMarkerKeyVersion
+      ) {
+        throw new Error("invalid_profile_marker_rekey");
+      }
+      markers.delete(payload.previousProfileMarker);
+      markers.set(payload.profileMarker, payload.markerKeyVersion);
+    } else if (payload.recordType === "audit_range_delete_intent") {
+      if (pendingRanges.has(payload.auditDeletionJobId)) {
+        throw new Error("audit_range_replay");
+      }
+      pendingRanges.set(payload.auditDeletionJobId, {
+        fromSequence: payload.fromSequence,
+        intentRecordHash: record.recordHash,
+        operationId: payload.operationId,
+        rangeHash: payload.rangeHash,
+        toSequence: payload.toSequence,
+      });
+    } else {
+      const intent = pendingRanges.get(payload.auditDeletionJobId);
+      if (
+        !intent ||
+        intent.fromSequence !== payload.fromSequence ||
+        intent.toSequence !== payload.toSequence ||
+        intent.operationId !== payload.operationId ||
+        intent.rangeHash !== payload.rangeHash ||
+        intent.intentRecordHash !== payload.intentRecordHash
+      ) {
+        throw new Error("audit_range_receipt_mismatch");
+      }
+      pendingRanges.delete(payload.auditDeletionJobId);
+    }
   }
-  return verifyLedgerContinuity(records, { stream: "deletions" });
+  const continuity = verifyLedgerContinuity(records, { stream: "deletions" });
+  return {
+    ...continuity,
+    activeProfileMarkerKeyVersions: [...new Set(markers.values())].sort(
+      (left, right) => left - right,
+    ),
+    activeProfileMarkers: [...markers.keys()].sort(),
+    incompleteAuditRanges: [...pendingRanges.entries()]
+      .map(([jobId, range]) => ({
+        fromSequence: range.fromSequence,
+        jobId,
+        toSequence: range.toSequence,
+      }))
+      .sort(
+        (left, right) =>
+          left.fromSequence - right.fromSequence ||
+          left.jobId.localeCompare(right.jobId, "en"),
+      ),
+  };
+}
+
+export function verifyAdminAuditClosure(records) {
+  const pending = new Map();
+  const closed = new Set();
+  const identity = (payload) => ({
+    action: payload.action,
+    effectiveProfileId: payload.effectiveProfileId,
+    originalActorId: payload.originalActorId,
+    requestId: payload.requestId,
+    schemaVersion: payload.schemaVersion,
+    stream: payload.stream,
+    targetId: payload.targetId,
+    targetType: payload.targetType,
+  });
+  for (const record of records) {
+    const payload = record?.payload;
+    if (
+      !payload ||
+      payload.stream !== "admin-audit" ||
+      typeof payload.requestId !== "string"
+    ) {
+      throw new Error("invalid_admin_audit_record");
+    }
+    if (payload.phase === "intent") {
+      if (pending.has(payload.requestId) || closed.has(payload.requestId)) {
+        throw new Error("admin_audit_replay");
+      }
+      pending.set(payload.requestId, {
+        identity: canonicalJson(identity(payload)),
+        recordHash: record.recordHash,
+      });
+    } else if (payload.phase === "outcome") {
+      const intent = pending.get(payload.requestId);
+      if (
+        intent?.recordHash !== payload.intentRecordHash ||
+        intent.identity !== canonicalJson(identity(payload)) ||
+        closed.has(payload.requestId)
+      ) {
+        throw new Error("admin_audit_outcome_mismatch");
+      }
+      pending.delete(payload.requestId);
+      closed.add(payload.requestId);
+    } else {
+      throw new Error("invalid_admin_audit_record");
+    }
+  }
+  return { pendingRequestIds: [...pending.keys()].sort() };
 }

@@ -246,6 +246,62 @@ describe("Worker de continuidad", () => {
       ),
     );
     expect(conflict.status).toBe(409);
+
+    const liveHead = await state.ledger.fetch(
+      await signedRequest(
+        {},
+        state.env.CONTINUITY_LEDGER_HMAC_KEY,
+        crypto.randomUUID(),
+        { method: "GET", path: "/v1/deletions/head/1" },
+      ),
+    );
+    expect(liveHead.status).toBe(200);
+    const live = (await liveHead.json()) as {
+      current: { recordHash: string; sequence: number; signature: string };
+      requested: { recordHash: string; sequence: number; signature: string };
+    };
+    expect(live.current).toMatchObject({
+      recordHash: receipt.recordHash,
+      sequence: 1,
+    });
+    expect(live.requested).toMatchObject({
+      recordHash: receipt.recordHash,
+      sequence: 1,
+    });
+    expect(await verifyLedgerReceipt(live.current as never, state.publicKey)).toBe(
+      true,
+    );
+
+    const range = await state.ledger.fetch(
+      await signedRequest(
+        {},
+        state.env.CONTINUITY_LEDGER_HMAC_KEY,
+        crypto.randomUUID(),
+        { method: "GET", path: "/v1/deletions/records/1/1" },
+      ),
+    );
+    expect(range.status).toBe(200);
+    await expect(range.json()).resolves.toMatchObject({
+      records: [
+        {
+          payload: body,
+          receipt,
+          recordHash: receipt.recordHash,
+          sequence: 1,
+          stream: "deletions",
+        },
+      ],
+    });
+
+    const oversizedRange = await state.ledger.fetch(
+      await signedRequest(
+        {},
+        state.env.CONTINUITY_LEDGER_HMAC_KEY,
+        crypto.randomUUID(),
+        { method: "GET", path: "/v1/deletions/records/1/501" },
+      ),
+    );
+    expect(oversizedRange.status).toBe(422);
   });
 
   it("verifica cobertura completa antes de retirar una clave HMAC antigua", () => {
@@ -527,6 +583,27 @@ describe("Worker de continuidad", () => {
       phase: "outcome",
       result: "success",
     };
+    const pendingKey = `pending:${intent.requestId}`;
+    const legacyPending = {
+      ...(state.storage.values.get(pendingKey) as Record<string, unknown>),
+    };
+    delete legacyPending.identityHash;
+    state.storage.values.set(pendingKey, legacyPending);
+
+    const mismatchedOutcome = await state.ledger.fetch(
+      await signedRequest(
+        {
+          ...outcome,
+          originalActorId: "31000000-0000-4000-8000-000000005102",
+        },
+        state.env.CONTINUITY_LEDGER_HMAC_KEY,
+      ),
+    );
+    expect(mismatchedOutcome.status).toBe(409);
+    await expect(mismatchedOutcome.json()).resolves.toEqual({
+      error: "intent_identity_mismatch",
+    });
+
     const outcomeResponse = await state.ledger.fetch(
       await signedRequest(outcome, state.env.CONTINUITY_LEDGER_HMAC_KEY),
     );

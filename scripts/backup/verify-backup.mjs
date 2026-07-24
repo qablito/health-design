@@ -2,10 +2,10 @@
 import {
   parseArguments,
   printResult,
-  readJson,
-  readOperatorKeyring,
+  readOperatorBundle,
   requiredValue,
 } from "./operator-input.mjs";
+import { createLiveLedgerHeadProvider } from "./live-ledger-heads.mjs";
 import { verifyRecoverySet } from "./recovery-set.mjs";
 
 const parsed = parseArguments(process.argv.slice(2));
@@ -14,17 +14,11 @@ try {
   if (!parsed.flags.has("--secrets-stdin")) {
     throw new Error("operator_secrets_stdin_required");
   }
-  const keyring = await readOperatorKeyring();
-  const heads = parsed.values.has("--ledger-heads")
-    ? await readJson(
-        parsed.values.get("--ledger-heads"),
-        "invalid_ledger_heads_descriptor",
-      )
-    : undefined;
+  const { bundle, keyring } = await readOperatorBundle();
   const result = await verifyRecoverySet({
     directory,
     keyring,
-    remoteLedgerHeads: heads,
+    ledgerHeadProvider: createLiveLedgerHeadProvider(bundle),
   });
   printResult({
     backupId: result.envelope.backupId,

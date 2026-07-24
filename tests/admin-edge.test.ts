@@ -140,6 +140,12 @@ function setup(
       if (name === "internal_admin_finalize_audit_outbox") {
         return Promise.resolve({ data: true, error: null });
       }
+      if (name === "internal_admin_mark_t18_audit_outcome") {
+        return Promise.resolve({ data: true, error: null });
+      }
+      if (name === "internal_admin_finalize_t18_audit_outbox") {
+        return Promise.resolve({ data: true, error: null });
+      }
       return Promise.resolve({ data: null, error: null });
     },
     verifyIntentReceipt: () => {
@@ -240,6 +246,12 @@ describe("Edge administrativa", () => {
       if (name === "internal_admin_finalize_audit_outbox") {
         return Promise.resolve({ data: true, error: null });
       }
+      if (name === "internal_admin_mark_t18_audit_outcome") {
+        return Promise.resolve({ data: true, error: null });
+      }
+      if (name === "internal_admin_finalize_t18_audit_outbox") {
+        return Promise.resolve({ data: true, error: null });
+      }
       return Promise.resolve({ data: job(), error: null });
     };
 
@@ -275,8 +287,144 @@ describe("Edge administrativa", () => {
     expect(state.calls.slice(-3)).toEqual([
       "ledger:success",
       "outcome:verify",
-      "rpc:internal_admin_finalize_audit_outbox",
+      "rpc:internal_admin_finalize_t18_audit_outbox",
     ]);
+  });
+
+  it("reanuda por jobId después de purgar el perfil", async () => {
+    const state = setup();
+    const jobId = "71000000-0000-4000-8000-000000005101";
+    let version = 8;
+    let status = "failed";
+    const completed = new Set([
+      "ledger",
+      "access",
+      "exports",
+      "storage",
+      "profile_data",
+    ]);
+    const job = () => ({
+      attempts: 1,
+      completedAt: status === "purged" ? "2026-07-17T16:05:00.000Z" : null,
+      errorCode: status === "failed" ? "auth_cleanup_pending" : null,
+      jobId,
+      profileId: null,
+      requestedAt: "2026-07-17T15:00:00.000Z",
+      schemaVersion: 1,
+      status,
+      steps: [
+        "ledger",
+        "access",
+        "exports",
+        "storage",
+        "profile_data",
+        "auth",
+        "verification",
+      ].map((name) => ({ completed: completed.has(name), name })),
+      version,
+    });
+    state.dependencies.rpc = (name, args) => {
+      state.calls.push(`rpc:${name}`);
+      if (name === "internal_admin_authorize") {
+        return Promise.resolve({ data: actorId, error: null });
+      }
+      if (name === "internal_admin_get_profile_deletion_secret") {
+        expect(args).toMatchObject({
+          p_job_id: jobId,
+          p_profile_id: null,
+        });
+        return Promise.resolve({
+          data: {
+            job: job(),
+            profileMarker: "a".repeat(64),
+            profileMarkerKeyVersion: 1,
+          },
+          error: null,
+        });
+      }
+      if (name === "internal_admin_complete_deletion_step") {
+        completed.add(String(args.p_step_name));
+        version += 1;
+        return Promise.resolve({ data: job(), error: null });
+      }
+      if (name === "internal_admin_transition_deletion_job") {
+        status = String(args.p_next_status);
+        version += 1;
+        return Promise.resolve({ data: job(), error: null });
+      }
+      if (name === "internal_admin_list_orphan_auth_subjects") {
+        return Promise.resolve({
+          data: ["00000000-0000-4000-8000-000000005199"],
+          error: null,
+        });
+      }
+      if (name === "internal_admin_verify_profile_purge") {
+        return Promise.resolve({ data: true, error: null });
+      }
+      if (
+        name === "internal_record_t18_admin_intent" ||
+        name === "internal_admin_mark_t18_audit_outcome" ||
+        name === "internal_admin_finalize_t18_audit_outbox"
+      ) {
+        return Promise.resolve({ data: true, error: null });
+      }
+      return Promise.resolve({ data: job(), error: null });
+    };
+
+    const response = await handleAdmin(
+      new Request(`https://api.test/admin/v1/admin/deletion-jobs/${jobId}`, {
+        body: JSON.stringify({
+          confirmationPhrase: "PURGAR PERFIL PERMANENTEMENTE",
+          confirmed: true,
+          expectedVersion: 8,
+          schemaVersion: 1,
+        }),
+        headers: {
+          authorization: "Bearer test-jwt",
+          "content-type": "application/json",
+          "idempotency-key": requestId,
+          origin: "http://127.0.0.1:5173",
+        },
+        method: "DELETE",
+      }),
+      state.dependencies,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      jobId,
+      profileId: null,
+      status: "purged",
+    });
+    expect(state.calls).not.toContain("ledger:deletion");
+    expect(state.calls).not.toContain("storage:delete");
+    expect(state.calls).toContain("auth:delete");
+  });
+
+  it("rechaza el borrado permanente en Production antes de mutar", async () => {
+    const state = setup();
+    state.dependencies.environment = "production";
+    const response = await handleAdmin(
+      new Request(`https://api.test/admin/v1/admin/profiles/${profileId}/permanent`, {
+        body: JSON.stringify({
+          confirmationPhrase: "PURGAR PERFIL PERMANENTEMENTE",
+          confirmed: true,
+          expectedVersion: 1,
+          schemaVersion: 1,
+        }),
+        headers: {
+          authorization: "Bearer test-jwt",
+          "content-type": "application/json",
+          "idempotency-key": requestId,
+          origin: "https://health-design.pages.dev",
+        },
+        method: "DELETE",
+      }),
+      state.dependencies,
+    );
+
+    expect(response.status).toBe(409);
+    expect(state.calls).toEqual(["auth"]);
   });
 
   it("extrae solo la verificación TOTP más reciente del JWT validado", () => {
@@ -399,6 +547,9 @@ describe("Edge administrativa", () => {
       state.calls.push(`rpc:${name}`);
       if (name === "internal_admin_authorize") {
         return Promise.resolve({ data: actorId, error: null });
+      }
+      if (name === "internal_admin_mark_t18_audit_outcome") {
+        return Promise.resolve({ data: false, error: null });
       }
       return Promise.resolve({
         data: null,

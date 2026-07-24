@@ -296,6 +296,37 @@ select throws_ok(
   'una versión administrativa obsoleta falla antes de mutar'
 );
 
+select lives_ok(
+  format(
+    $sql$select public.internal_admin_transition_deletion_job(
+      '00000000-0000-4000-8000-000000018099',
+      '21000000-0000-4000-8000-000000018099',
+      %L,
+      3,
+      'purging',
+      null
+    )$sql$,
+    (select job_id from t18_job)
+  ),
+  'el job puede entrar en purging'
+);
+
+select throws_ok(
+  format(
+    $sql$select public.internal_admin_transition_deletion_job(
+      '00000000-0000-4000-8000-000000018099',
+      '21000000-0000-4000-8000-000000018099',
+      %L,
+      4,
+      'purged',
+      null
+    )$sql$,
+    (select job_id from t18_job)
+  ),
+  '55000', 'deletion_steps_incomplete',
+  'purged exige los siete recibos completos'
+);
+
 select * from finish();
 
 rollback;

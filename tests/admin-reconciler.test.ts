@@ -13,6 +13,8 @@ const pendingOutbox: PendingAuditIdentity = {
   intentRecordHash: "a".repeat(64),
   originalActorId: "31000000-0000-4000-8000-000000005101",
   requestId: "61000000-0000-4000-8000-000000005104",
+  desiredErrorCode: null,
+  desiredResult: "success",
   targetId: "51000000-0000-4000-8000-000000005101",
   targetType: "profile",
 };
@@ -150,6 +152,98 @@ describe("reconciliador administrativo", () => {
     await expect(response.json()).resolves.toEqual({
       closed: 0,
       pending: 1,
+      reconciledFailures: 0,
+    });
+  });
+
+  it("mantiene pendiente un intent externo cuyo resultado aún no está decidido", async () => {
+    const state = setup();
+    state.dependencies.listPendingOutbox = () => Promise.resolve([]);
+    state.dependencies.requestState = () =>
+      Promise.resolve({
+        ...orphanIntent,
+        desiredErrorCode: null,
+        desiredResult: "pending",
+      });
+
+    const response = await handleAdminReconciliation(request(), state.dependencies);
+
+    expect(state.calls).not.toContain(`success:${orphanIntent.requestId}`);
+    expect(state.calls).not.toContain(`failure:${orphanIntent.requestId}`);
+    await expect(response.json()).resolves.toEqual({
+      closed: 0,
+      pending: 1,
+      reconciledFailures: 0,
+    });
+  });
+
+  it("respeta el fallo duradero al reconciliar un intent externo", async () => {
+    const state = setup();
+    state.dependencies.listPendingOutbox = () => Promise.resolve([]);
+    state.dependencies.requestState = () =>
+      Promise.resolve({
+        ...orphanIntent,
+        desiredErrorCode: "mutation_failed",
+        desiredResult: "failure",
+      });
+
+    const response = await handleAdminReconciliation(request(), state.dependencies);
+
+    expect(state.calls).toContain(`failure:${orphanIntent.requestId}`);
+    expect(state.calls).not.toContain(`success:${orphanIntent.requestId}`);
+    await expect(response.json()).resolves.toEqual({
+      closed: 1,
+      pending: 0,
+      reconciledFailures: 0,
+    });
+  });
+
+  it("no convierte un intent sin resultado decidido en éxito", async () => {
+    const state = setup();
+    state.dependencies.listPendingOutbox = () =>
+      Promise.resolve([
+        {
+          ...pendingOutbox,
+          desiredErrorCode: null,
+          desiredResult: "pending",
+        },
+      ]);
+    state.dependencies.listExternalPending = () => Promise.resolve([]);
+
+    const response = await handleAdminReconciliation(request(), state.dependencies);
+
+    expect(state.calls).not.toContain(`success:${pendingOutbox.requestId}`);
+    expect(state.calls).not.toContain(`failure:${pendingOutbox.requestId}`);
+    await expect(response.json()).resolves.toEqual({
+      closed: 0,
+      pending: 1,
+      reconciledFailures: 0,
+    });
+  });
+
+  it("conserva y cierra como fallo un outbox T18 marcado como fallo", async () => {
+    const state = setup();
+    const failedOutbox: PendingAuditIdentity = {
+      ...pendingOutbox,
+      action: "anonymous_auth_cleanup",
+      desiredErrorCode: "mutation_failed",
+      desiredResult: "failure",
+      effectiveProfileId: null,
+      requestId: "61000000-0000-4000-8000-000000005106",
+      targetId: "00000000-0000-4000-8000-000000005106",
+      targetType: "auth_user",
+    };
+    state.dependencies.listPendingOutbox = () => Promise.resolve([failedOutbox]);
+    state.dependencies.listExternalPending = () => Promise.resolve([]);
+
+    const response = await handleAdminReconciliation(request(), state.dependencies);
+
+    expect(response.status).toBe(200);
+    expect(state.calls).toContain(`failure:${failedOutbox.requestId}`);
+    expect(state.calls).not.toContain(`success:${failedOutbox.requestId}`);
+    await expect(response.json()).resolves.toEqual({
+      closed: 1,
+      pending: 0,
       reconciledFailures: 0,
     });
   });

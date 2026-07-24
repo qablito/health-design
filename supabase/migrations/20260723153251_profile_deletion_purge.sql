@@ -162,7 +162,6 @@ create function private.admin_get_deletion_job(
 )
 returns jsonb
 language plpgsql
-stable
 security definer
 set search_path = pg_catalog
 as $$
@@ -182,6 +181,7 @@ $$;
 create function private.admin_get_profile_deletion_secret(
   p_auth_subject uuid,
   p_auth_session_id uuid,
+  p_job_id uuid,
   p_profile_id uuid
 )
 returns jsonb
@@ -196,11 +196,24 @@ begin
   perform private.require_superadmin_aal2(
     p_auth_subject, p_auth_session_id
   );
+  if (p_job_id is null) = (p_profile_id is null) then
+    raise exception using errcode = '22023', message = 'invalid_input';
+  end if;
   select job.* into v_job
   from private.deletion_jobs job
-  join public.profiles profile on profile.id = job.profile_id
-  where job.profile_id = p_profile_id
-    and profile.status = 'deletion_requested';
+  where (
+    p_job_id is not null
+    and job.id = p_job_id
+  ) or (
+    p_profile_id is not null
+    and job.profile_id = p_profile_id
+    and exists (
+      select 1
+      from public.profiles profile
+      where profile.id = p_profile_id
+        and profile.status = 'deletion_requested'
+    )
+  );
   if not found then
     raise exception using errcode = 'P0002', message = 'deletion_job_not_found';
   end if;
@@ -371,10 +384,11 @@ create function private.admin_list_orphan_auth_subjects(
 )
 returns jsonb
 language plpgsql
-stable
 security definer
 set search_path = pg_catalog
 as $$
+declare
+  v_result jsonb;
 begin
   perform private.require_superadmin_aal2(
     p_auth_subject, p_auth_session_id
@@ -384,12 +398,13 @@ begin
   ) then
     raise exception using errcode = 'P0002', message = 'deletion_job_not_found';
   end if;
-  return (
-    select coalesce(jsonb_agg(actor.auth_subject order by actor.auth_subject), '[]'::jsonb)
-    from private.deletion_job_actors job_actor
-    join public.actors actor on actor.id = job_actor.actor_id
-    where job_actor.job_id = p_job_id
-      and actor.role = 'device'
+  with eligible as (
+      select actor.id, actor.auth_subject
+      from private.deletion_job_actors job_actor
+      join public.actors actor on actor.id = job_actor.actor_id
+      where job_actor.job_id = p_job_id
+        and actor.role = 'device'
+        and actor.auth_subject is not null
       and not exists (
         select 1
         from public.profile_access access
@@ -404,7 +419,50 @@ begin
           and invitation.revoked_at is null
           and invitation.expires_at > clock_timestamp()
       )
-  );
+      and not exists (
+        select 1
+        from private.deletion_jobs job
+        where (
+          job.requester_actor_id = actor.id
+          or job.confirmed_by = actor.id
+        )
+        and job.id <> p_job_id
+        and job.status <> 'purged'
+      )
+      and not exists (
+        select 1
+        from private.backup_jobs job
+        where job.requested_by = actor.id
+          and job.status not in ('ready', 'failed', 'pruned')
+      )
+      and not exists (
+        select 1
+        from private.restore_jobs job
+        where job.requested_by = actor.id
+          and job.status not in ('promoted', 'failed')
+      )
+      and not exists (
+        select 1
+        from private.audit_deletion_jobs job
+        where job.requested_by = actor.id
+          and job.status <> 'verified'
+      )
+      for update of actor
+    ),
+    disabled as (
+      update public.actors actor
+      set disabled_at = coalesce(actor.disabled_at, clock_timestamp())
+      from eligible
+      where actor.id = eligible.id
+      returning eligible.auth_subject
+    )
+    select coalesce(
+      jsonb_agg(disabled.auth_subject order by disabled.auth_subject),
+      '[]'::jsonb
+    )
+    from disabled
+  into v_result;
+  return v_result;
 end;
 $$;
 
@@ -484,6 +542,7 @@ $$;
 create function public.internal_admin_get_profile_deletion_secret(
   p_auth_subject uuid,
   p_auth_session_id uuid,
+  p_job_id uuid,
   p_profile_id uuid
 )
 returns jsonb
@@ -492,7 +551,7 @@ security definer
 set search_path = pg_catalog
 as $$
   select private.admin_get_profile_deletion_secret(
-    p_auth_subject, p_auth_session_id, p_profile_id
+    p_auth_subject, p_auth_session_id, p_job_id, p_profile_id
   )
 $$;
 
@@ -564,7 +623,9 @@ revoke execute on function private.record_t18_admin_intent(
   uuid, uuid, uuid, uuid, text, text, uuid, bigint, timestamptz,
   bytea, bytea, integer, bytea
 ) from public, anon, authenticated, service_role;
-revoke execute on function private.admin_get_profile_deletion_secret(uuid, uuid, uuid)
+revoke execute on function private.admin_get_profile_deletion_secret(
+  uuid, uuid, uuid, uuid
+)
 from public, anon, authenticated, service_role;
 revoke execute on function private.admin_revoke_profile_access(uuid, uuid, uuid, integer)
 from public, anon, authenticated, service_role;
@@ -581,7 +642,9 @@ revoke execute on function public.internal_record_t18_admin_intent(
   uuid, uuid, uuid, uuid, text, text, uuid, bigint, timestamptz,
   bytea, bytea, integer, bytea
 ) from public, anon, authenticated;
-revoke execute on function public.internal_admin_get_profile_deletion_secret(uuid, uuid, uuid)
+revoke execute on function public.internal_admin_get_profile_deletion_secret(
+  uuid, uuid, uuid, uuid
+)
 from public, anon, authenticated;
 revoke execute on function public.internal_admin_revoke_profile_access(
   uuid, uuid, uuid, integer
@@ -601,7 +664,9 @@ grant execute on function public.internal_record_t18_admin_intent(
   uuid, uuid, uuid, uuid, text, text, uuid, bigint, timestamptz,
   bytea, bytea, integer, bytea
 ) to service_role;
-grant execute on function public.internal_admin_get_profile_deletion_secret(uuid, uuid, uuid)
+grant execute on function public.internal_admin_get_profile_deletion_secret(
+  uuid, uuid, uuid, uuid
+)
 to service_role;
 grant execute on function public.internal_admin_revoke_profile_access(
   uuid, uuid, uuid, integer

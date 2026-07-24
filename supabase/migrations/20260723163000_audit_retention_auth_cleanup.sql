@@ -255,17 +255,9 @@ begin
           select 1 from private.audit_deletion_jobs job
           where job.requested_by = actor.id and job.status <> 'verified'
         )
-        and (
-          (
-            coalesce(auth_user.is_anonymous, false)
-            and auth_user.created_at < clock_timestamp() - interval '24 hours'
-          )
-          or (
-            not coalesce(auth_user.is_anonymous, false)
-            and coalesce(auth_user.last_sign_in_at, auth_user.created_at)
-              < clock_timestamp() - interval '30 days'
-          )
-        )
+        and coalesce(auth_user.is_anonymous, false)
+        and coalesce(auth_user.last_sign_in_at, auth_user.created_at)
+          < clock_timestamp() - interval '24 hours'
       order by actor.auth_subject
       limit p_limit
     ) candidate
@@ -297,17 +289,474 @@ begin
   if v_actor.role = 'superadmin' then
     raise exception using errcode = '42501', message = 'superadmin_protected';
   end if;
-  if exists (
-    select 1 from public.profile_access access
-    where access.actor_id = v_actor.id and access.revoked_at is null
-  ) then
-    raise exception using errcode = '55000', message = 'active_membership_exists';
+  if v_actor.role <> 'device'
+    or not exists (
+      select 1
+      from auth.users auth_user
+      where auth_user.id = p_candidate_auth_subject
+        and coalesce(auth_user.is_anonymous, false)
+        and coalesce(auth_user.last_sign_in_at, auth_user.created_at)
+          < clock_timestamp() - interval '24 hours'
+    )
+    or exists (
+      select 1 from public.profile_access access
+      where access.actor_id = v_actor.id and access.revoked_at is null
+    )
+    or exists (
+      select 1 from private.invitations invitation
+      where invitation.created_by = v_actor.id
+        and invitation.consumed_at is null
+        and invitation.revoked_at is null
+        and invitation.expires_at > clock_timestamp()
+    )
+    or exists (
+      select 1 from private.deletion_jobs job
+      where (
+        job.requester_actor_id = v_actor.id
+        or job.confirmed_by = v_actor.id
+      )
+      and job.status <> 'purged'
+    )
+    or exists (
+      select 1 from private.backup_jobs job
+      where job.requested_by = v_actor.id
+        and job.status not in ('ready', 'failed', 'pruned')
+    )
+    or exists (
+      select 1 from private.restore_jobs job
+      where job.requested_by = v_actor.id
+        and job.status not in ('promoted', 'failed')
+    )
+    or exists (
+      select 1 from private.audit_deletion_jobs job
+      where job.requested_by = v_actor.id and job.status <> 'verified'
+    )
+  then
+    raise exception using errcode = '55000', message = 'auth_cleanup_ineligible';
   end if;
   update public.actors
   set disabled_at = coalesce(disabled_at, clock_timestamp())
   where id = v_actor.id;
   return true;
 end;
+$$;
+
+alter table private.audit_outbox
+  add column desired_result text not null default 'success',
+  add column desired_error_code text,
+  add constraint audit_outbox_desired_result_value_check
+    check (desired_result in ('pending', 'success', 'failure')),
+  add constraint audit_outbox_desired_error_code_value_check check (
+      desired_error_code is null
+      or desired_error_code in (
+        'domain_constraint',
+        'mutation_failed',
+        'reconciliation_required'
+      )
+    ),
+  add constraint audit_outbox_desired_result_check check (
+    (desired_result in ('pending', 'success') and desired_error_code is null)
+    or (desired_result = 'failure' and desired_error_code is not null)
+  );
+
+update private.audit_outbox
+set desired_result = 'pending'
+where outcome_status = 'pending'
+  and action in (
+    'anonymous_auth_cleanup',
+    'audit_range_delete_execute',
+    'audit_range_delete_prepare',
+    'backup_create',
+    'profile_deletion_permanent',
+    'profile_deletion_resume',
+    'restore_create',
+    'restore_promote'
+  );
+
+create function private.classify_t18_audit_outbox()
+returns trigger
+language plpgsql
+set search_path = pg_catalog
+as $$
+begin
+  if new.action in (
+    'anonymous_auth_cleanup',
+    'audit_range_delete_execute',
+    'audit_range_delete_prepare',
+    'backup_create',
+    'profile_deletion_permanent',
+    'profile_deletion_resume',
+    'restore_create',
+    'restore_promote'
+  ) then
+    new.desired_result := 'pending';
+    new.desired_error_code := null;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger audit_outbox_classify_t18
+before insert on private.audit_outbox
+for each row execute function private.classify_t18_audit_outbox();
+
+revoke all on function private.classify_t18_audit_outbox()
+from public, anon, authenticated, service_role;
+
+create function private.mark_t18_audit_outbox_outcome(
+  p_request_id uuid,
+  p_result text,
+  p_error_code text
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+begin
+  if p_result not in ('success', 'failure')
+    or (p_result = 'success' and p_error_code is not null)
+    or (
+      p_result = 'failure'
+      and p_error_code not in ('domain_constraint', 'mutation_failed')
+    )
+  then
+    raise exception using errcode = '22023', message = 'invalid_audit_error_code';
+  end if;
+  if not exists (
+    select 1 from private.audit_outbox outbox
+    where outbox.request_id = p_request_id
+  ) then
+    return false;
+  end if;
+  update private.audit_outbox outbox
+  set desired_result = p_result,
+      desired_error_code = p_error_code
+  where outbox.request_id = p_request_id
+    and outbox.outcome_status = 'pending'
+    and outbox.desired_result = 'pending';
+  if not found then
+    if exists (
+      select 1 from private.audit_outbox outbox
+      where outbox.request_id = p_request_id
+        and outbox.outcome_status = 'pending'
+        and outbox.desired_result = p_result
+        and outbox.desired_error_code is not distinct from p_error_code
+    ) then
+      return true;
+    end if;
+    raise exception using errcode = '55000', message = 'audit_outbox_not_pending';
+  end if;
+  return true;
+end;
+$$;
+
+create function private.finalize_t18_audit_outbox(
+  p_request_id uuid,
+  p_result text,
+  p_error_code text,
+  p_external_sequence bigint,
+  p_external_timestamp timestamptz,
+  p_external_record_hash bytea,
+  p_external_receipt_signature bytea,
+  p_external_key_version integer,
+  p_external_idempotency_hash bytea
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+declare
+  v_outbox private.audit_outbox%rowtype;
+  v_existing private.technical_audit_events%rowtype;
+begin
+  perform private.validate_admin_intent(
+    p_external_sequence, p_external_timestamp, p_external_record_hash,
+    p_external_receipt_signature, p_external_key_version,
+    p_external_idempotency_hash
+  );
+  select outbox.* into v_outbox
+  from private.audit_outbox outbox
+  where outbox.request_id = p_request_id
+  for update;
+  if not found then
+    raise exception using errcode = '22023', message = 'audit_outbox_not_found';
+  end if;
+  if p_result <> v_outbox.desired_result
+    or p_error_code is distinct from v_outbox.desired_error_code
+  then
+    raise exception using errcode = '22023', message = 'audit_outcome_mismatch';
+  end if;
+  if v_outbox.outcome_status <> 'pending' then
+    select event.* into v_existing
+    from private.technical_audit_events event
+    where event.request_id = p_request_id and event.phase = 'outcome';
+    if v_existing.result <> p_result
+      or v_existing.error_code is distinct from p_error_code
+      or v_existing.external_record_hash <> p_external_record_hash
+      or v_existing.external_receipt_signature <> p_external_receipt_signature
+      or v_existing.external_idempotency_hash <> p_external_idempotency_hash
+    then
+      raise exception using errcode = '23505', message = 'audit_outcome_conflict';
+    end if;
+    return true;
+  end if;
+  insert into private.technical_audit_events (
+    actor_id, action, target_type, target_id, result,
+    request_id, phase, original_actor_id, effective_profile_id,
+    impersonation_session_id, external_sequence, external_timestamp,
+    external_record_hash, external_receipt_signature, external_key_version,
+    external_idempotency_hash
+  ) values (
+    v_outbox.original_actor_id, v_outbox.action, v_outbox.target_type,
+    v_outbox.target_id, p_result, v_outbox.request_id, 'outcome',
+    v_outbox.original_actor_id, v_outbox.effective_profile_id,
+    v_outbox.impersonation_session_id, p_external_sequence,
+    p_external_timestamp, p_external_record_hash,
+    p_external_receipt_signature, p_external_key_version,
+    p_external_idempotency_hash
+  );
+  update private.audit_outbox outbox
+  set outcome_status = p_result,
+      error_code = p_error_code,
+      dispatched_at = clock_timestamp()
+  where outbox.id = v_outbox.id;
+  return true;
+end;
+$$;
+
+create function private.list_pending_t18_audit_outbox(p_limit integer)
+returns table (
+  request_id uuid,
+  original_actor_id uuid,
+  effective_profile_id uuid,
+  impersonation_session_id uuid,
+  action text,
+  target_type text,
+  target_id uuid,
+  intent_record_hash bytea,
+  desired_result text,
+  desired_error_code text
+)
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+begin
+  if p_limit is null or p_limit < 1 or p_limit > 100 then
+    raise exception using errcode = '22023', message = 'invalid_outbox_limit';
+  end if;
+  return query
+  with selected as (
+    select outbox.id
+    from private.audit_outbox outbox
+    where outbox.outcome_status = 'pending'
+      and (
+        outbox.last_attempt_at is null
+        or outbox.last_attempt_at <= clock_timestamp() - interval '30 seconds'
+      )
+    order by outbox.created_at, outbox.id
+    limit p_limit
+    for update skip locked
+  ),
+  touched as (
+    update private.audit_outbox outbox
+    set attempts = outbox.attempts + 1,
+        last_attempt_at = clock_timestamp()
+    from selected
+    where outbox.id = selected.id
+    returning outbox.*
+  )
+  select
+    touched.request_id, touched.original_actor_id,
+    touched.effective_profile_id, touched.impersonation_session_id,
+    touched.action, touched.target_type, touched.target_id,
+    intent.external_record_hash, touched.desired_result,
+    touched.desired_error_code
+  from touched
+  join private.technical_audit_events intent
+    on intent.id = touched.technical_audit_event_id
+  order by touched.created_at, touched.id;
+end;
+$$;
+
+create function private.record_t18_admin_reconciliation(
+  p_request_id uuid,
+  p_original_actor_id uuid,
+  p_effective_profile_id uuid,
+  p_impersonation_session_id uuid,
+  p_action text,
+  p_target_type text,
+  p_target_id uuid,
+  p_external_sequence bigint,
+  p_external_timestamp timestamptz,
+  p_external_record_hash bytea,
+  p_external_receipt_signature bytea,
+  p_external_key_version integer,
+  p_external_idempotency_hash bytea
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+declare
+  v_existing private.technical_audit_events%rowtype;
+begin
+  perform private.validate_admin_intent(
+    p_external_sequence, p_external_timestamp, p_external_record_hash,
+    p_external_receipt_signature, p_external_key_version,
+    p_external_idempotency_hash
+  );
+  if not (
+    (p_action in ('profile_deletion_permanent', 'profile_deletion_resume')
+      and p_target_type = 'deletion_job')
+    or (p_action = 'backup_create' and p_target_type = 'backup_job')
+    or (p_action in ('restore_create', 'restore_promote')
+      and p_target_type = 'restore_job')
+    or (p_action in ('audit_range_delete_prepare', 'audit_range_delete_execute')
+      and p_target_type = 'audit_deletion_job')
+    or (p_action = 'anonymous_auth_cleanup' and p_target_type = 'auth_user')
+  ) then
+    raise exception using errcode = '22023',
+      message = 'invalid_t18_reconciliation_action';
+  end if;
+  if not exists (
+    select 1 from public.actors actor
+    where actor.id = p_original_actor_id
+      and actor.role = 'superadmin'
+      and actor.disabled_at is null
+  ) then
+    raise exception using errcode = '42501', message = 'superadmin_required';
+  end if;
+  if exists (
+    select 1 from private.audit_outbox outbox
+    where outbox.request_id = p_request_id
+  ) then
+    raise exception using errcode = '55000', message = 'audit_outbox_exists';
+  end if;
+  select event.* into v_existing
+  from private.technical_audit_events event
+  where event.request_id = p_request_id and event.phase = 'reconciliation';
+  if found then
+    if v_existing.external_sequence <> p_external_sequence
+      or v_existing.external_record_hash <> p_external_record_hash
+      or v_existing.external_receipt_signature <> p_external_receipt_signature
+      or v_existing.external_key_version <> p_external_key_version
+      or v_existing.external_idempotency_hash <> p_external_idempotency_hash
+    then
+      raise exception using errcode = '23505',
+        message = 'audit_reconciliation_conflict';
+    end if;
+    return true;
+  end if;
+  insert into private.technical_audit_events (
+    actor_id, action, target_type, target_id, result,
+    request_id, phase, original_actor_id, effective_profile_id,
+    impersonation_session_id, external_sequence, external_timestamp,
+    external_record_hash, external_receipt_signature, external_key_version,
+    external_idempotency_hash
+  ) values (
+    p_original_actor_id, p_action, p_target_type, p_target_id, 'failure',
+    p_request_id, 'reconciliation',
+    p_original_actor_id, p_effective_profile_id, p_impersonation_session_id,
+    p_external_sequence, p_external_timestamp, p_external_record_hash,
+    p_external_receipt_signature, p_external_key_version,
+    p_external_idempotency_hash
+  );
+  return true;
+end;
+$$;
+
+create function public.internal_admin_mark_t18_audit_outcome(
+  p_request_id uuid,
+  p_result text,
+  p_error_code text
+)
+returns boolean
+language sql
+security definer
+set search_path = pg_catalog
+as $$
+  select private.mark_t18_audit_outbox_outcome(
+    p_request_id, p_result, p_error_code
+  )
+$$;
+
+create function public.internal_admin_finalize_t18_audit_outbox(
+  p_request_id uuid,
+  p_result text,
+  p_error_code text,
+  p_external_sequence bigint,
+  p_external_timestamp timestamptz,
+  p_external_record_hash bytea,
+  p_external_receipt_signature bytea,
+  p_external_key_version integer,
+  p_external_idempotency_hash bytea
+)
+returns boolean
+language sql
+security definer
+set search_path = pg_catalog
+as $$
+  select private.finalize_t18_audit_outbox(
+    p_request_id, p_result, p_error_code, p_external_sequence,
+    p_external_timestamp, p_external_record_hash,
+    p_external_receipt_signature, p_external_key_version,
+    p_external_idempotency_hash
+  )
+$$;
+
+create function public.internal_admin_list_pending_t18_audit_outbox(
+  p_limit integer
+)
+returns table (
+  request_id uuid,
+  original_actor_id uuid,
+  effective_profile_id uuid,
+  impersonation_session_id uuid,
+  action text,
+  target_type text,
+  target_id uuid,
+  intent_record_hash bytea,
+  desired_result text,
+  desired_error_code text
+)
+language sql
+security definer
+set search_path = pg_catalog
+as $$
+  select * from private.list_pending_t18_audit_outbox(p_limit)
+$$;
+
+create function public.internal_admin_record_t18_reconciliation(
+  p_request_id uuid,
+  p_original_actor_id uuid,
+  p_effective_profile_id uuid,
+  p_impersonation_session_id uuid,
+  p_action text,
+  p_target_type text,
+  p_target_id uuid,
+  p_external_sequence bigint,
+  p_external_timestamp timestamptz,
+  p_external_record_hash bytea,
+  p_external_receipt_signature bytea,
+  p_external_key_version integer,
+  p_external_idempotency_hash bytea
+)
+returns boolean
+language sql
+security definer
+set search_path = pg_catalog
+as $$
+  select private.record_t18_admin_reconciliation(
+    p_request_id, p_original_actor_id, p_effective_profile_id,
+    p_impersonation_session_id, p_action, p_target_type, p_target_id,
+    p_external_sequence, p_external_timestamp, p_external_record_hash,
+    p_external_receipt_signature, p_external_key_version,
+    p_external_idempotency_hash
+  )
 $$;
 
 create function public.internal_admin_prepare_audit_deletion_job(
@@ -387,6 +836,18 @@ revoke execute on function private.admin_list_auth_cleanup_candidates(
 revoke execute on function private.admin_disable_auth_cleanup_actor(
   uuid, uuid, uuid
 ) from public, anon, authenticated, service_role;
+revoke execute on function private.mark_t18_audit_outbox_outcome(
+  uuid, text, text
+) from public, anon, authenticated, service_role;
+revoke execute on function private.finalize_t18_audit_outbox(
+  uuid, text, text, bigint, timestamptz, bytea, bytea, integer, bytea
+) from public, anon, authenticated, service_role;
+revoke execute on function private.list_pending_t18_audit_outbox(integer)
+from public, anon, authenticated, service_role;
+revoke execute on function private.record_t18_admin_reconciliation(
+  uuid, uuid, uuid, uuid, text, text, uuid, bigint, timestamptz,
+  bytea, bytea, integer, bytea
+) from public, anon, authenticated, service_role;
 
 revoke execute on function public.internal_admin_prepare_audit_deletion_job(
   uuid, uuid, uuid, bigint, bigint, bytea, bytea, bytea
@@ -403,6 +864,19 @@ revoke execute on function public.internal_admin_list_auth_cleanup_candidates(
 revoke execute on function public.internal_admin_disable_auth_cleanup_actor(
   uuid, uuid, uuid
 ) from public, anon, authenticated;
+revoke execute on function public.internal_admin_mark_t18_audit_outcome(
+  uuid, text, text
+) from public, anon, authenticated;
+revoke execute on function public.internal_admin_finalize_t18_audit_outbox(
+  uuid, text, text, bigint, timestamptz, bytea, bytea, integer, bytea
+) from public, anon, authenticated;
+revoke execute on function public.internal_admin_list_pending_t18_audit_outbox(
+  integer
+) from public, anon, authenticated;
+revoke execute on function public.internal_admin_record_t18_reconciliation(
+  uuid, uuid, uuid, uuid, text, text, uuid, bigint, timestamptz,
+  bytea, bytea, integer, bytea
+) from public, anon, authenticated;
 
 grant execute on function public.internal_admin_prepare_audit_deletion_job(
   uuid, uuid, uuid, bigint, bigint, bytea, bytea, bytea
@@ -418,4 +892,17 @@ grant execute on function public.internal_admin_list_auth_cleanup_candidates(
 ) to service_role;
 grant execute on function public.internal_admin_disable_auth_cleanup_actor(
   uuid, uuid, uuid
+) to service_role;
+grant execute on function public.internal_admin_mark_t18_audit_outcome(
+  uuid, text, text
+) to service_role;
+grant execute on function public.internal_admin_finalize_t18_audit_outbox(
+  uuid, text, text, bigint, timestamptz, bytea, bytea, integer, bytea
+) to service_role;
+grant execute on function public.internal_admin_list_pending_t18_audit_outbox(
+  integer
+) to service_role;
+grant execute on function public.internal_admin_record_t18_reconciliation(
+  uuid, uuid, uuid, uuid, text, text, uuid, bigint, timestamptz,
+  bytea, bytea, integer, bytea
 ) to service_role;

@@ -14,6 +14,10 @@ export interface LedgerRecord {
 export function buildSyntheticLedger(
   records: Array<Record<string, unknown>>,
   stream: string,
+  options?: {
+    initialHead?: string;
+    initialSequence?: number;
+  },
 ): LedgerRecord[];
 export function verifyLedgerContinuity(
   records: LedgerRecord[],
@@ -23,10 +27,25 @@ export function verifyLedgerContinuity(
       intent: AuditRangeReceipt;
       manifest: AuditRangeManifest;
     }>;
+    initialHead?: string;
+    initialSequence?: number;
     stream: string;
   },
 ): { head: string; sequence: number };
 export function verifyDeletionTombstones(
   records: LedgerRecord[],
   knownKeyVersions: Set<number>,
-): { head: string; sequence: number };
+): {
+  activeProfileMarkerKeyVersions: number[];
+  activeProfileMarkers: string[];
+  head: string;
+  incompleteAuditRanges: Array<{
+    fromSequence: number;
+    jobId: string;
+    toSequence: number;
+  }>;
+  sequence: number;
+};
+export function verifyAdminAuditClosure(records: LedgerRecord[]): {
+  pendingRequestIds: string[];
+};

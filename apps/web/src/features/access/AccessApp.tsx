@@ -300,10 +300,7 @@ export function AccessApp() {
     event.preventDefault();
     if (!selectedProfileId || !selectedProfile) return;
     const form = new FormData(event.currentTarget);
-    if (
-      formText(form, "confirmation") !==
-      "BORRAR MI PERFIL PERMANENTEMENTE"
-    ) {
+    if (formText(form, "confirmation") !== "BORRAR MI PERFIL PERMANENTEMENTE") {
       setError("La frase de confirmación no coincide.");
       return;
     }
@@ -328,9 +325,7 @@ export function AccessApp() {
   async function refreshDeletionStatus() {
     if (!deletionStatus) return;
     await run(async () => {
-      setDeletionStatus(
-        await accessClient.getDeletionRequest(deletionStatus.handle),
-      );
+      setDeletionStatus(await accessClient.getDeletionRequest(deletionStatus.handle));
     });
   }
 

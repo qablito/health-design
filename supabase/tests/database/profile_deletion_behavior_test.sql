@@ -1,6 +1,6 @@
 begin;
 
-select plan(12);
+select plan(15);
 
 insert into auth.users (
   instance_id, id, aud, role, raw_app_meta_data, raw_user_meta_data,
@@ -194,6 +194,16 @@ select ok(
   'el segundo perfil de la identidad permanece intacto'
 );
 select is(
+  public.internal_admin_get_profile_deletion_secret(
+    '00000000-0000-4000-8000-000000018299',
+    '21000000-0000-4000-8000-000000018299',
+    '71000000-0000-4000-8000-000000018201',
+    null
+  ) -> 'job' ->> 'jobId',
+  '71000000-0000-4000-8000-000000018201',
+  'el job sigue resolviendo su material mínimo después de borrar el perfil'
+);
+select is(
   public.internal_admin_list_orphan_auth_subjects(
     '00000000-0000-4000-8000-000000018299',
     '21000000-0000-4000-8000-000000018299',
@@ -242,6 +252,23 @@ select is(
   ),
   '["00000000-0000-4000-8000-000000018202"]'::jsonb,
   'la identidad exclusiva queda marcada para limpieza Auth'
+);
+select ok(
+  (
+    select disabled_at is not null
+    from public.actors
+    where id = '31000000-0000-4000-8000-000000018202'
+  ),
+  'el actor huérfano queda deshabilitado atómicamente antes de borrar Auth'
+);
+select is(
+  public.internal_admin_list_orphan_auth_subjects(
+    '00000000-0000-4000-8000-000000018299',
+    '21000000-0000-4000-8000-000000018299',
+    '71000000-0000-4000-8000-000000018202'
+  ),
+  '["00000000-0000-4000-8000-000000018202"]'::jsonb,
+  'un reintento mantiene el mismo sujeto deshabilitado hasta borrar Auth'
 );
 select ok(
   (

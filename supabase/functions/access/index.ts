@@ -237,9 +237,8 @@ function expectedMethod(route: AccessRoute): "GET" | "POST" {
 }
 
 function hexToBase64Url(value: string): string {
-  const bytes = Uint8Array.from(
-    value.match(/.{2}/g) ?? [],
-    (pair) => Number.parseInt(pair, 16),
+  const bytes = Uint8Array.from(value.match(/.{2}/g) ?? [], (pair) =>
+    Number.parseInt(pair, 16),
   );
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
@@ -271,7 +270,10 @@ function remoteIp(request: Request): string {
 }
 
 function mapRpcError(error: RpcError, accessSensitive = false): AccessHttpError {
-  if (error.message?.includes("idempotency_key_reused")) {
+  if (
+    error.message?.includes("idempotency_key_reused") ||
+    error.message?.includes("idempotency_conflict")
+  ) {
     return new AccessHttpError("IDEMPOTENCY_KEY_REUSED", 409);
   }
   if (error.message?.includes("unauthenticated")) {
@@ -1062,10 +1064,7 @@ async function handleDeletionRequestCreate(
   );
   const digests = await mutationDigests(request, route, body);
   const rawHandle = hexToBase64Url(
-    await hmacSha256Hex(
-      idempotencyKey(request),
-      dependencies.config.deletionMarkerKey,
-    ),
+    await hmacSha256Hex(idempotencyKey(request), dependencies.config.deletionMarkerKey),
   );
   const data = await rpc(
     dependencies,
@@ -1077,10 +1076,7 @@ async function handleDeletionRequestCreate(
       p_idempotency_key_digest: bytea(digests.keyDigest),
       p_profile_id: route.profileId,
       p_profile_marker: bytea(
-        await hmacSha256Hex(
-          route.profileId,
-          dependencies.config.deletionMarkerKey,
-        ),
+        await hmacSha256Hex(route.profileId, dependencies.config.deletionMarkerKey),
       ),
       p_profile_marker_key_version: dependencies.config.deletionMarkerKeyVersion,
       p_request_digest: bytea(digests.requestDigest),

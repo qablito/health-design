@@ -5,26 +5,22 @@ import { join } from "node:path";
 import {
   parseArguments,
   printResult,
+  readOperatorKeyring,
   requiredValue,
 } from "../backup/operator-input.mjs";
+import { verifyRestoreValidation } from "./restore-recovery-set.mjs";
 
 const parsed = parseArguments(process.argv.slice(2));
 try {
   const target = requiredValue(parsed, "--target");
+  if (!parsed.flags.has("--secrets-stdin")) {
+    throw new Error("operator_secrets_stdin_required");
+  }
+  const keyring = await readOperatorKeyring();
   const validation = JSON.parse(
     await readFile(join(target, "restore-validation.json"), "utf8"),
   );
-  if (
-    validation.status !== "ready_for_promotion" ||
-    validation.targetEnvironment !== "local-isolated" ||
-    validation.trafficEnabled !== false ||
-    validation.database?.security?.rlsEnabled !== true ||
-    validation.database?.security?.aal2Required !== true ||
-    !Array.isArray(validation.database?.sessions) ||
-    validation.database.sessions.some((session) => session.revoked !== true)
-  ) {
-    throw new Error("restore_validation_failed");
-  }
+  await verifyRestoreValidation(validation, keyring);
   printResult({
     backupId: validation.backupId,
     status: "RESTORE_VERIFIED",

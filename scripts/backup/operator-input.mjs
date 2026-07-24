@@ -40,14 +40,21 @@ async function readStdin() {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-export async function readOperatorKeyring({ requirePrivate = false } = {}) {
+export async function readOperatorBundle({ requirePrivate = false } = {}) {
   let bundle;
   try {
     bundle = JSON.parse(await readStdin());
   } catch {
     throw new Error("invalid_operator_secrets");
   }
-  return importOperatorKeyring(bundle, { requirePrivate });
+  return {
+    bundle,
+    keyring: await importOperatorKeyring(bundle, { requirePrivate }),
+  };
+}
+
+export async function readOperatorKeyring(options = {}) {
+  return (await readOperatorBundle(options)).keyring;
 }
 
 export function printResult(value) {

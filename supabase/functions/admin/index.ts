@@ -318,6 +318,9 @@ function methodAllowed(route: AdminRoute, method: string): boolean {
   if (route.kind === "backups" || route.kind === "restores") {
     return method === "GET" || method === "POST";
   }
+  if (route.kind === "deletion-job-detail") {
+    return method === "GET" || method === "DELETE";
+  }
   return method === expectedMethod(route);
 }
 
@@ -464,6 +467,14 @@ function base64UrlToHex(value: string): string {
   ).join("");
 }
 
+const T18_DURABLE_OUTBOX_ACTIONS = new Set([
+  "backup_create",
+  "profile_deletion_permanent",
+  "profile_deletion_resume",
+  "restore_create",
+  "restore_promote",
+]);
+
 async function appendFailureBestEffort(
   dependencies: AdminDependencies,
   input: AdminIntentInput,
@@ -475,6 +486,18 @@ async function appendFailureBestEffort(
       ? "domain_constraint"
       : "mutation_failed";
   try {
+    let hasDurableOutbox = false;
+    if (T18_DURABLE_OUTBOX_ACTIONS.has(input.action)) {
+      const marked = await dependencies.rpc("internal_admin_mark_t18_audit_outcome", {
+        p_error_code: errorCode,
+        p_request_id: input.requestId,
+        p_result: "failure",
+      });
+      if (marked.error || (marked.data !== true && marked.data !== false)) {
+        throw new Error("audit_failure_not_durable");
+      }
+      hasDurableOutbox = marked.data === true;
+    }
     const outcomeInput: AdminOutcomeInput = {
       ...input,
       errorCode,
@@ -490,6 +513,20 @@ async function appendFailureBestEffort(
     );
     if (!(await dependencies.verifyOutcomeReceipt(receipt, outcomeInput))) {
       throw new Error("invalid_ledger_receipt");
+    }
+    if (hasDurableOutbox) {
+      const finalized = await dependencies.rpc(
+        "internal_admin_finalize_t18_audit_outbox",
+        {
+          p_error_code: errorCode,
+          p_request_id: input.requestId,
+          p_result: "failure",
+          ...receiptRpcArgs(receipt),
+        },
+      );
+      if (finalized.error || finalized.data !== true) {
+        throw new Error("audit_failure_not_finalized");
+      }
     }
   } catch {
     // El reconciliador cerrará el intent pendiente; nunca se serializa el error crudo.
@@ -523,14 +560,39 @@ async function completeSuccessOutcome(
     result: "success",
   };
   try {
+    if (!T18_DURABLE_OUTBOX_ACTIONS.has(input.action)) {
+      const receipt = LedgerReceiptSchema.parse(
+        await dependencies.appendSuccessOutcome({ ...input, intentReceipt }),
+      );
+      if (!(await dependencies.verifyOutcomeReceipt(receipt, outcomeInput))) {
+        return false;
+      }
+      const result = await dependencies.rpc("internal_admin_finalize_audit_outbox", {
+        p_request_id: input.requestId,
+        ...receiptRpcArgs(receipt),
+      });
+      return !result.error && result.data === true;
+    }
+    const marked = await dependencies.rpc("internal_admin_mark_t18_audit_outcome", {
+      p_error_code: null,
+      p_request_id: input.requestId,
+      p_result: "success",
+    });
+    if (marked.error || (marked.data !== true && marked.data !== false)) {
+      return false;
+    }
+    const hasDurableOutbox = marked.data === true;
     const receipt = LedgerReceiptSchema.parse(
       await dependencies.appendSuccessOutcome({ ...input, intentReceipt }),
     );
     if (!(await dependencies.verifyOutcomeReceipt(receipt, outcomeInput))) {
       return false;
     }
-    const result = await dependencies.rpc("internal_admin_finalize_audit_outbox", {
+    if (!hasDurableOutbox) return true;
+    const result = await dependencies.rpc("internal_admin_finalize_t18_audit_outbox", {
+      p_error_code: null,
       p_request_id: input.requestId,
+      p_result: "success",
       ...receiptRpcArgs(receipt),
     });
     return !result.error && result.data === true;
@@ -658,6 +720,7 @@ async function listProfiles(
             {
               p_auth_session_id: auth.sessionId,
               p_auth_subject: auth.userId,
+              p_job_id: null,
               p_profile_id: candidate.profile_id,
             },
           ),
@@ -1081,7 +1144,7 @@ async function transitionDeletionJob(
 async function permanentDeleteProfile(
   dependencies: AdminDependencies,
   auth: AuthContext,
-  profileId: string,
+  target: { jobId: string | null; profileId: string | null },
   requestId: string,
   expectedVersion: number,
 ): Promise<{ auditClosed: boolean; job: AdminDeletionJob }> {
@@ -1098,7 +1161,8 @@ async function permanentDeleteProfile(
     await deletionRpc(dependencies, "internal_admin_get_profile_deletion_secret", {
       p_auth_session_id: auth.sessionId,
       p_auth_subject: auth.userId,
-      p_profile_id: profileId,
+      p_job_id: target.jobId,
+      p_profile_id: target.profileId,
     }),
   );
   if (
@@ -1110,15 +1174,22 @@ async function permanentDeleteProfile(
     throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
   }
   let job = deletionJobFrom(secret.job);
+  if (
+    (target.jobId !== null && job.jobId !== target.jobId) ||
+    (target.profileId !== null && job.profileId !== target.profileId)
+  ) {
+    throw new AdminHttpError("DEPENDENCY_UNAVAILABLE", 503);
+  }
   if (job.version !== expectedVersion) {
     throw new AdminHttpError("DOMAIN_CONSTRAINT", 409);
   }
+  if (job.status === "purged") return { auditClosed: true, job };
   const intent: AdminIntentInput = {
     action:
       job.status === "failed"
         ? "profile_deletion_resume"
         : "profile_deletion_permanent",
-    effectiveProfileId: profileId,
+    effectiveProfileId: job.profileId,
     originalActorId,
     requestId,
     targetId: job.jobId,
@@ -1480,6 +1551,25 @@ export async function handleAdmin(
       );
     }
     if (route.kind === "deletion-job-detail") {
+      if (request.method === "DELETE") {
+        if (dependencies.environment === "production") {
+          throw new AdminHttpError("DOMAIN_CONSTRAINT", 409);
+        }
+        requireRecentMfa(auth, dependencies.now());
+        const idempotencyKey = requireUuid(request.headers.get("idempotency-key"));
+        const parsed = AdminPermanentDeletionRequestSchema.safeParse(
+          await readJson(request),
+        );
+        if (!parsed.success) throw new AdminHttpError("INVALID_INPUT", 400);
+        const result = await permanentDeleteProfile(
+          dependencies,
+          auth,
+          { jobId: route.jobId, profileId: null },
+          idempotencyKey,
+          parsed.data.expectedVersion,
+        );
+        return jsonResponse(result.job, result.auditClosed ? 200 : 202, cors.headers);
+      }
       return jsonResponse(
         deletionJobFrom(
           await deletionRpc(dependencies, "internal_admin_get_deletion_job", {
@@ -1493,6 +1583,9 @@ export async function handleAdmin(
       );
     }
     if (route.kind === "profile-permanent-delete") {
+      if (dependencies.environment === "production") {
+        throw new AdminHttpError("DOMAIN_CONSTRAINT", 409);
+      }
       requireRecentMfa(auth, dependencies.now());
       const idempotencyKey = requireUuid(request.headers.get("idempotency-key"));
       const parsed = AdminPermanentDeletionRequestSchema.safeParse(
@@ -1502,7 +1595,7 @@ export async function handleAdmin(
       const result = await permanentDeleteProfile(
         dependencies,
         auth,
-        route.profileId,
+        { jobId: null, profileId: route.profileId },
         idempotencyKey,
         parsed.data.expectedVersion,
       );
@@ -1998,7 +2091,7 @@ function runtimeDependencies(): AdminDependencies {
     },
     deleteAuthUser: async (authSubject) => {
       const { error } = await serviceClient.auth.admin.deleteUser(authSubject, false);
-      if (error) throw new Error("auth_cleanup_pending");
+      if (error && error.status !== 404) throw new Error("auth_cleanup_pending");
     },
     deletePrivateObjects: async (paths) => {
       if (paths.length === 0) return;

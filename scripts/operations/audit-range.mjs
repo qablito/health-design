@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
 const HEX_64 = /^[a-f0-9]{64}$/;
-const SAFE_OBJECT_KEY = /^admin-audit\/[A-Za-z0-9._-]+\/[0-9]{20}\.json$/;
+const SAFE_OBJECT_KEY = /^admin-audit\/[0-9]{20}\.json$/;
 
 function canonicalize(value) {
   if (Array.isArray(value)) return value.map(canonicalize);
@@ -43,7 +43,8 @@ function assertRecord(record) {
     !Number.isSafeInteger(record.sequence) ||
     record.sequence < 1 ||
     !HEX_64.test(record.recordHash) ||
-    !SAFE_OBJECT_KEY.test(record.objectKey)
+    !SAFE_OBJECT_KEY.test(record.objectKey) ||
+    record.objectKey !== `admin-audit/${String(record.sequence).padStart(20, "0")}.json`
   ) {
     throw new Error("invalid_audit_range_record");
   }
@@ -98,6 +99,35 @@ function receiptMatchesManifest(receipt, manifest) {
 }
 
 export function verifyAuditRangeGap({ complete, intent, manifest }) {
+  if (!manifest || !Array.isArray(manifest.records) || manifest.records.length === 0) {
+    throw new Error("invalid_audit_range");
+  }
+  const ordered = [...manifest.records].sort(
+    (left, right) =>
+      left.sequence - right.sequence ||
+      left.objectKey.localeCompare(right.objectKey, "en"),
+  );
+  ordered.forEach(assertRecord);
+  for (let index = 1; index < ordered.length; index += 1) {
+    if (ordered[index].sequence !== ordered[index - 1].sequence + 1) {
+      throw new Error("audit_range_not_contiguous");
+    }
+  }
+  const base = {
+    fromSequence: ordered[0].sequence,
+    hashBeforeRange: manifest.hashBeforeRange,
+    records: ordered,
+    terminalRecordHash: ordered.at(-1).recordHash,
+    toSequence: ordered.at(-1).sequence,
+  };
+  if (
+    manifest.fromSequence !== base.fromSequence ||
+    manifest.toSequence !== base.toSequence ||
+    !equalHex(manifest.terminalRecordHash, base.terminalRecordHash) ||
+    !equalHex(manifest.manifestDigest, sha256Hex(canonicalJson(base)))
+  ) {
+    throw new Error("invalid_audit_range");
+  }
   if (!receiptMatchesManifest(intent, manifest)) {
     throw new Error("audit_range_receipt_mismatch");
   }
@@ -120,6 +150,13 @@ export async function executeAuditRangeDeletion(input, dependencies) {
     input.confirmationId !== input.operationId
   ) {
     throw new Error("audit_range_confirmation_mismatch");
+  }
+  const verifiedManifest = await prepareAuditRangeManifest({
+    hashBeforeRange: input.manifest.hashBeforeRange,
+    records: input.manifest.records,
+  });
+  if (canonicalJson(verifiedManifest) !== canonicalJson(input.manifest)) {
+    throw new Error("invalid_audit_range");
   }
   const objectKeys = input.manifest.records.map((record) => record.objectKey);
   await dependencies.appendIntent({

@@ -8,9 +8,9 @@ select ok(
 );
 select ok(
   to_regprocedure(
-    'public.internal_admin_get_profile_deletion_secret(uuid,uuid,uuid)'
+    'public.internal_admin_get_profile_deletion_secret(uuid,uuid,uuid,uuid)'
   ) is not null,
-  'existe lectura AAL2 del material mínimo de orquestación'
+  'existe lectura AAL2 reanudable por job del material mínimo'
 );
 select ok(
   to_regprocedure(

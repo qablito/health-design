@@ -16,6 +16,8 @@ export interface RecoverySourceObject {
 
 export interface OperatorKeyring {
   keks: Map<number, Uint8Array>;
+  ledgerSigningPrivateKey?: CryptoKey;
+  ledgerSigningPublicKeys: Map<number, CryptoKey>;
   signingKeyVersion: number;
   signingPrivateKey?: CryptoKey;
   signingPublicKeys: Map<number, CryptoKey>;
@@ -40,7 +42,12 @@ export interface RecoveryManifest {
   kind: "weekly" | "precritical";
   objects: ManifestObject[];
   schemaVersion: number;
-  sourceEnvironment: "local" | "development" | "production";
+  sourceEnvironment: "local" | "development";
+  storageInventory: Array<{
+    bucket: string;
+    enumerated: true;
+    logicalPaths: string[];
+  }>;
   toolVersion: string;
 }
 
@@ -61,7 +68,7 @@ export interface RecoveryEnvelope {
   objects: EnvelopeObject[];
   schemaVersion: number;
   signingKeyVersion: number;
-  sourceEnvironment: "local" | "development" | "production";
+  sourceEnvironment: "local" | "development";
   toolVersion: string;
 }
 
@@ -75,17 +82,49 @@ export interface CreateRecoverySetInput {
   objects: RecoverySourceObject[];
   schemaVersion: number;
   sourceEnvironment: "local" | "development" | "production";
+  storageInventory: Array<{
+    bucket: string;
+    enumerated: true;
+    logicalPaths: string[];
+  }>;
   toolVersion: string;
 }
 
 export interface RemoteLedgerHeads {
-  "admin-audit"?: LedgerPrefix;
-  deletions?: LedgerPrefix;
+  "admin-audit": SignedLedgerHead;
+  deletions: SignedLedgerHead;
+}
+
+export interface LiveLedgerHeadResult {
+  current: LedgerReceipt;
+  requested: LedgerReceipt;
+  suffixRecords: unknown[];
+}
+
+export type LedgerHeadProvider = (
+  stream: "admin-audit" | "deletions",
+  sequence: number,
+) => Promise<LiveLedgerHeadResult>;
+
+export interface LedgerReceipt {
+  environment: "development" | "local" | "production";
+  idempotencyHash: string;
+  keyVersion: number;
+  recordHash: string;
+  sequence: number;
+  signature: string;
+  stream: "admin-audit" | "deletions";
+  timestamp: string;
+}
+
+export interface SignedLedgerHead extends LedgerPrefix {
+  receipt: LedgerReceipt;
 }
 
 export interface VerifiedRecoverySet {
   decryptedObjects: Array<ManifestObject & { bytes: Uint8Array }>;
   envelope: RecoveryEnvelope;
+  ledgerHeads: Record<"admin-audit" | "deletions", LiveLedgerHeadResult>;
   manifest: RecoveryManifest;
 }
 
@@ -101,10 +140,31 @@ export function assertContainedPath(root: string, candidate: string): void;
 export function createFixtureKeyring(options?: {
   keyVersion?: number;
 }): Promise<OperatorKeyring>;
+export function createFixtureLedgerHead(input: {
+  environment: "development" | "local" | "production";
+  hash: string;
+  keyVersion?: number;
+  keyring: OperatorKeyring;
+  sequence: number;
+  stream: "admin-audit" | "deletions";
+}): Promise<SignedLedgerHead>;
+export function createFixtureLedgerHeadProvider(
+  heads: RemoteLedgerHeads,
+  currentHeads?: RemoteLedgerHeads,
+): LedgerHeadProvider;
 export function importOperatorKeyring(
   bundle: unknown,
   options?: { requirePrivate?: boolean },
 ): Promise<OperatorKeyring>;
+export function signOperatorAttestation(
+  keyring: OperatorKeyring,
+  value: unknown,
+): Promise<{ keyVersion: number; signature: string }>;
+export function verifyOperatorAttestation(
+  keyring: OperatorKeyring,
+  value: unknown,
+  attestation: { keyVersion: number; signature: string },
+): Promise<boolean>;
 export function createRecoverySet(input: CreateRecoverySetInput): Promise<{
   envelope: RecoveryEnvelope;
   manifest: RecoveryManifest;
@@ -112,7 +172,7 @@ export function createRecoverySet(input: CreateRecoverySetInput): Promise<{
 export function verifyRecoverySet(input: {
   directory: string;
   keyring: OperatorKeyring;
-  remoteLedgerHeads?: RemoteLedgerHeads;
+  ledgerHeadProvider: LedgerHeadProvider;
 }): Promise<VerifiedRecoverySet>;
 export function planRotation(
   existing: RotationRecord[],

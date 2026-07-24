@@ -31,6 +31,10 @@ try {
   if (!parsed.flags.has("--apply") || plan.pruneCandidateId === null) {
     process.exit(0);
   }
+  const environment = requiredValue(parsed, "--environment");
+  if (!["local", "development"].includes(environment)) {
+    throw new Error("prune_environment_forbidden");
+  }
   if (parsed.values.get("--confirm") !== plan.pruneCandidateId) {
     throw new Error("prune_confirmation_mismatch");
   }

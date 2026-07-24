@@ -464,6 +464,21 @@ async function eventIdempotencyHash(environment, event) {
   return sha256Hex(JSON.stringify(base));
 }
 
+async function adminAuditIdentityHash(event) {
+  return sha256Hex(
+    canonicalJson({
+      action: event.action,
+      effectiveProfileId: event.effectiveProfileId,
+      originalActorId: event.originalActorId,
+      requestId: event.requestId,
+      schemaVersion: event.schemaVersion,
+      stream: event.stream,
+      targetId: event.targetId,
+      targetType: event.targetType,
+    }),
+  );
+}
+
 async function deletionIdempotencyHash(environment, event) {
   return sha256Hex(
     canonicalJson({
@@ -570,7 +585,17 @@ export class ContinuityLedger {
     const isAppend = isAdminAppend || isDeletionAppend;
     const isPendingList =
       request.method === "GET" && url.pathname === "/v1/admin-audit/pending";
-    if (url.search || (!isAppend && !isPendingList)) {
+    const headMatch =
+      request.method === "GET"
+        ? url.pathname.match(/^\/v1\/(deletions|admin-audit)\/head\/(current|[0-9]+)$/)
+        : null;
+    const recordsMatch =
+      request.method === "GET"
+        ? url.pathname.match(
+            /^\/v1\/(deletions|admin-audit)\/records\/([0-9]+)\/([0-9]+)$/,
+          )
+        : null;
+    if (url.search || (!isAppend && !isPendingList && !headMatch && !recordsMatch)) {
       return json({ error: "not_found" }, 404);
     }
 
@@ -608,6 +633,156 @@ export class ContinuityLedger {
         items.push({ ...intent, intentRecordHash: value.recordHash });
       }
       return json({ items }, 200);
+    }
+    if (recordsMatch) {
+      const stream = recordsMatch[1];
+      const from = Number(recordsMatch[2]);
+      const to = Number(recordsMatch[3]);
+      if (
+        !Number.isSafeInteger(from) ||
+        !Number.isSafeInteger(to) ||
+        from < 1 ||
+        to < from ||
+        to - from + 1 > 500
+      ) {
+        return json({ error: "invalid_ledger_range" }, 422);
+      }
+      const current = (await this.state.storage.get(`head:${stream}`)) ?? {
+        recordHash: "0".repeat(64),
+        sequence: 0,
+      };
+      if (to > current.sequence) {
+        return json({ error: "ledger_range_not_found" }, 404);
+      }
+      const bucket =
+        stream === "deletions"
+          ? this.env.DELETIONS_BUCKET
+          : this.env.ADMIN_AUDIT_BUCKET;
+      const records = [];
+      for (let sequence = from; sequence <= to; sequence += 1) {
+        const object = await bucket.get(
+          `${stream}/${String(sequence).padStart(20, "0")}.json`,
+        );
+        if (!object) return json({ error: "ledger_range_not_found" }, 404);
+        let record;
+        try {
+          record = JSON.parse(await object.text());
+          if (
+            record.sequence !== sequence ||
+            record.stream !== stream ||
+            !HEX_64_PATTERN.test(record.recordHash)
+          ) {
+            fail("invalid_record");
+          }
+          if (stream === "admin-audit") {
+            record = {
+              ...record,
+              payload: await decryptAdminAuditRecord(
+                record,
+                versionedSecret(
+                  this.env,
+                  "ADMIN_AUDIT_KEK",
+                  record.encryptionKeyVersion,
+                ),
+              ),
+            };
+          }
+          const receipt = await this.state.storage.get(
+            `receipt:${record.idempotencyHash}`,
+          );
+          if (
+            !receipt ||
+            receipt.recordHash !== record.recordHash ||
+            receipt.sequence !== record.sequence ||
+            receipt.stream !== record.stream
+          ) {
+            fail("invalid_record");
+          }
+          record = { ...record, receipt };
+        } catch {
+          return json({ error: "ledger_record_invalid" }, 503);
+        }
+        records.push(record);
+      }
+      return json({ records }, 200);
+    }
+    if (headMatch) {
+      const stream = headMatch[1];
+      const requestedValue = headMatch[2];
+      const current = (await this.state.storage.get(`head:${stream}`)) ?? {
+        recordHash: "0".repeat(64),
+        sequence: 0,
+      };
+      const requestedSequence =
+        requestedValue === "current" ? current.sequence : Number(requestedValue);
+      if (
+        !Number.isSafeInteger(requestedSequence) ||
+        requestedSequence < 0 ||
+        requestedSequence > current.sequence
+      ) {
+        return json({ error: "ledger_head_not_found" }, 404);
+      }
+      let requestedHash = current.recordHash;
+      if (requestedSequence === 0) {
+        requestedHash = "0".repeat(64);
+      } else if (requestedSequence !== current.sequence) {
+        const bucket =
+          stream === "deletions"
+            ? this.env.DELETIONS_BUCKET
+            : this.env.ADMIN_AUDIT_BUCKET;
+        const object = await bucket.get(
+          `${stream}/${String(requestedSequence).padStart(20, "0")}.json`,
+        );
+        if (!object) return json({ error: "ledger_head_not_found" }, 404);
+        let record;
+        try {
+          record = JSON.parse(await object.text());
+        } catch {
+          return json({ error: "ledger_head_invalid" }, 503);
+        }
+        if (
+          record.sequence !== requestedSequence ||
+          typeof record.recordHash !== "string" ||
+          !HEX_64_PATTERN.test(record.recordHash)
+        ) {
+          return json({ error: "ledger_head_invalid" }, 503);
+        }
+        requestedHash = record.recordHash;
+      }
+      const signHead = async (sequence, recordHash) => {
+        const keyVersion = Number(this.env.LEDGER_SIGNING_KEY_VERSION);
+        const unsigned = {
+          environment: this.env.ENVIRONMENT,
+          idempotencyHash: await sha256Hex(
+            canonicalJson({
+              environment: this.env.ENVIRONMENT,
+              recordHash,
+              scope: "ledger_head",
+              sequence,
+              stream,
+            }),
+          ),
+          keyVersion,
+          recordHash,
+          sequence,
+          stream,
+          timestamp: new Date().toISOString(),
+        };
+        return {
+          ...unsigned,
+          signature: await signReceipt(
+            unsigned,
+            versionedSecret(this.env, "LEDGER_SIGNING_PRIVATE_KEY_PKCS8", keyVersion),
+          ),
+        };
+      };
+      return json(
+        {
+          current: await signHead(current.sequence, current.recordHash),
+          requested: await signHead(requestedSequence, requestedHash),
+        },
+        200,
+      );
     }
 
     let event;
@@ -654,6 +829,31 @@ export class ContinuityLedger {
       const intent = await this.state.storage.get(`pending:${event.requestId}`);
       if (!intent || intent.recordHash !== event.intentRecordHash) {
         return json({ error: "intent_not_found" }, 409);
+      }
+      let intentIdentityHash = intent.identityHash;
+      if (typeof intentIdentityHash !== "string") {
+        try {
+          const object = await this.env.ADMIN_AUDIT_BUCKET.get(intent.objectKey);
+          if (!object) throw new Error("pending_record_missing");
+          const record = JSON.parse(await object.text());
+          const payload = await decryptAdminAuditRecord(
+            record,
+            versionedSecret(this.env, "ADMIN_AUDIT_KEK", record.encryptionKeyVersion),
+          );
+          if (payload.phase !== "intent" || payload.requestId !== event.requestId) {
+            throw new Error("invalid_pending_record");
+          }
+          intentIdentityHash = await adminAuditIdentityHash(payload);
+          await this.state.storage.put(`pending:${event.requestId}`, {
+            ...intent,
+            identityHash: intentIdentityHash,
+          });
+        } catch {
+          return json({ error: "intent_identity_unavailable" }, 503);
+        }
+      }
+      if (intentIdentityHash !== (await adminAuditIdentityHash(event))) {
+        return json({ error: "intent_identity_mismatch" }, 409);
       }
     }
 
@@ -762,6 +962,7 @@ export class ContinuityLedger {
     if (isAdminAppend && event.phase === "intent") {
       updates[`pending:${event.requestId}`] = {
         createdAt: timestamp,
+        identityHash: await adminAuditIdentityHash(event),
         objectKey,
         recordHash,
       };
@@ -856,7 +1057,11 @@ export default {
     }
     if (
       request.method === "GET" &&
-      url.pathname === "/v1/admin-audit/pending" &&
+      (url.pathname === "/v1/admin-audit/pending" ||
+        /^\/v1\/(deletions|admin-audit)\/head\/(current|[0-9]+)$/.test(url.pathname) ||
+        /^\/v1\/(deletions|admin-audit)\/records\/[0-9]+\/[0-9]+$/.test(
+          url.pathname,
+        )) &&
       !url.search
     ) {
       if (env?.MUTATIONS_ENABLED !== "true") {

@@ -1,3 +1,20 @@
+export const DEVELOPMENT_PROJECT_REF = "nwoivdxdupklervtnovd";
+export const DEVELOPMENT_SUPABASE_URL = `https://${DEVELOPMENT_PROJECT_REF}.supabase.co`;
+
+export function assertDevelopmentCleanupTarget({
+  environment,
+  projectRef,
+  supabaseUrl,
+}) {
+  if (
+    environment !== "development" ||
+    projectRef !== DEVELOPMENT_PROJECT_REF ||
+    supabaseUrl !== DEVELOPMENT_SUPABASE_URL
+  ) {
+    throw new Error("cleanup_project_boundary_failed");
+  }
+}
+
 function timestamp(value) {
   const parsed = Date.parse(value);
   if (!Number.isFinite(parsed)) throw new Error("invalid_auth_candidate_time");
@@ -17,9 +34,10 @@ function eligible(candidate, nowMs) {
   ) {
     return false;
   }
+  if (candidate.anonymous !== true) return false;
   const reference = timestamp(candidate.lastActiveAt ?? candidate.createdAt);
   const ageHours = (nowMs - reference) / 3_600_000;
-  return candidate.anonymous ? ageHours > 24 : ageHours > 30 * 24;
+  return ageHours > 24;
 }
 
 export function selectAuthCleanupCandidates(candidates, { limit, now }) {
@@ -47,11 +65,40 @@ export async function cleanupEligibleAuth(input, dependencies) {
   let failed = 0;
   let succeeded = 0;
   for (const candidate of selected) {
+    const requestId = input.requestIdForCandidate(candidate);
+    let intentReceipt;
+    let desiredResult = null;
     try {
+      intentReceipt = await dependencies.appendIntent(candidate, requestId);
+      await dependencies.recordIntent(candidate, requestId, intentReceipt);
       await dependencies.disableActor(candidate.authSubject);
       await dependencies.deleteAuthUser(candidate.authSubject);
+      await dependencies.markOutcome(requestId, "success");
+      desiredResult = "success";
+      const outcomeReceipt = await dependencies.appendOutcome(
+        candidate,
+        requestId,
+        intentReceipt,
+        "success",
+      );
+      await dependencies.finalizeOutcome(requestId, outcomeReceipt, "success");
       succeeded += 1;
     } catch {
+      if (intentReceipt && desiredResult === null) {
+        try {
+          await dependencies.markOutcome(requestId, "failure");
+          desiredResult = "failure";
+          const outcomeReceipt = await dependencies.appendOutcome(
+            candidate,
+            requestId,
+            intentReceipt,
+            "failure",
+          );
+          await dependencies.finalizeOutcome(requestId, outcomeReceipt, "failure");
+        } catch {
+          // El intent duradero queda pendiente para reconciliación.
+        }
+      }
       failed += 1;
     }
   }
