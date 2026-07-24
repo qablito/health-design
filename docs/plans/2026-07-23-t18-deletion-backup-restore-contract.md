@@ -1,6 +1,6 @@
 # Contrato ejecutable T18: borrado, backup, restore y operaciones
 
-**Estado:** `T18_P0_COMPLETE`
+**Estado:** `T18_COMPLETE_LOCAL_PASS`
 
 **Base:** `3c561abb5d09cfc8538b1580624e8f18b350fb65`
 
@@ -103,3 +103,14 @@ reanudable y nunca reactiva el perfil.
 - Los scripts destructivos son dry-run por defecto, exigen entorno e ID exactos
   y no reciben secretos por argumentos.
 - T19, T20, Production, despliegues y datos reales no forman parte de T18 local.
+
+## Operación versionada
+
+- [`backup-restore.md`](../runbooks/backup-restore.md)
+- [`permanent-deletion.md`](../runbooks/permanent-deletion.md)
+- [`anonymous-auth-cleanup.md`](../runbooks/anonymous-auth-cleanup.md)
+- [`audit-retention-deletion.md`](../runbooks/audit-retention-deletion.md)
+
+`pnpm test:t18:remote -- --dry-run` verifica sin red que el plan de activación
+está limitado a Development. No concede autorización, no ejecuta mutaciones y
+no sustituye las aprobaciones independientes exigidas para cada operación.

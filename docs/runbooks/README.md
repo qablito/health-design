@@ -2,9 +2,13 @@
 
 **Estado:** contrato general; `local-development.md`, `nutrition-import.md`,
 `exercise-assets.md`, `commercial-product-publication.md` y
-`catalog-publication.md` ya contienen
-procedimientos ejecutables. El último está validado localmente y mantiene su
-simulacro remoto pendiente.
+`catalog-publication.md`, [`backup-restore.md`](./backup-restore.md),
+[`permanent-deletion.md`](./permanent-deletion.md),
+[`anonymous-auth-cleanup.md`](./anonymous-auth-cleanup.md) y
+[`audit-retention-deletion.md`](./audit-retention-deletion.md) ya contienen
+procedimientos ejecutables. Los cuatro runbooks T18 están validados con
+fixtures locales; su activación remota Development permanece pendiente de
+autorizaciones independientes.
 **Fuente:** [`OPERATIONS.md`](../operations/OPERATIONS.md) y
 [`plan de implementación`](../plans/2026-07-16-v1-implementation-plan.md).
 
@@ -22,10 +26,10 @@ obligatorios, qué deben contener y cuándo se consideran verificados.
 | [`exercise-assets.md`](./exercise-assets.md) | alta, licencia, revisión anatómica, accesibilidad y retirada de activos | T11 |
 | [`commercial-product-publication.md`](./commercial-product-publication.md) | ficha nutricional comercial, confirmación privada, revisión global, matching y aplicación a candidato | T16 |
 | [`catalog-publication.md`](./catalog-publication.md) | SKU/cadena/precio, cobertura 60+20, publicación y ocultación | T17 |
-| `backup-restore.md` | backup semanal/precrítico, cuatro rotaciones y restore aislado | T18 |
-| `permanent-deletion.md` | solicitud, tombstone, purga reanudable, alias y verificación | T18 |
-| `anonymous-auth-cleanup.md` | dry-run, selección por lotes, exclusiones y eliminación Auth | T4/T18 |
-| `audit-retention-deletion.md` | borrado excepcional de rangos `admin-audit` con recibos y credencial JIT | T18 |
+| [`backup-restore.md`](./backup-restore.md) | backup semanal/precrítico, cuatro rotaciones y restore aislado | T18 |
+| [`permanent-deletion.md`](./permanent-deletion.md) | solicitud, tombstone, purga reanudable, alias y verificación | T18 |
+| [`anonymous-auth-cleanup.md`](./anonymous-auth-cleanup.md) | dry-run, selección por lotes, exclusiones y eliminación Auth | T4/T18 |
+| [`audit-retention-deletion.md`](./audit-retention-deletion.md) | borrado excepcional de rangos `admin-audit` con recibos y credencial JIT | T18 |
 
 ## Estructura mínima de cada runbook
 

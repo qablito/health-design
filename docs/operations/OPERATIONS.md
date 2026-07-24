@@ -125,6 +125,13 @@ El acceso total del superadministrador es un requisito de producto; no se preten
 
 ## 6. Backups, restauración y borrado
 
+La ejecución local y futura activación Development siguen cuatro procedimientos
+versionados: [`backup-restore.md`](../runbooks/backup-restore.md),
+[`permanent-deletion.md`](../runbooks/permanent-deletion.md),
+[`anonymous-auth-cleanup.md`](../runbooks/anonymous-auth-cleanup.md) y
+[`audit-retention-deletion.md`](../runbooks/audit-retention-deletion.md).
+Los fixtures locales no autorizan ni acreditan una operación remota.
+
 ### 6.1 Política confirmada
 
 - Backup lógico cifrado semanal.
