@@ -48,6 +48,7 @@ export function createLiveLedgerHeadProvider(bundle, fetcher = fetch) {
       throw new Error("invalid_live_ledger_head");
     }
     const suffixRecords = [];
+    const missingSequences = [];
     for (
       let from = value.requested.sequence + 1;
       from <= value.current.sequence;
@@ -62,11 +63,20 @@ export function createLiveLedgerHeadProvider(bundle, fetcher = fetch) {
       });
       if (!recordsResponse.ok) throw new Error("live_ledger_suffix_unavailable");
       const page = await recordsResponse.json();
-      if (!page || !Array.isArray(page.records)) {
+      if (
+        !page ||
+        !Array.isArray(page.records) ||
+        !Array.isArray(page.missingSequences) ||
+        page.missingSequences.some(
+          (sequence) =>
+            !Number.isSafeInteger(sequence) || sequence < from || sequence > to,
+        )
+      ) {
         throw new Error("invalid_live_ledger_suffix");
       }
       suffixRecords.push(...page.records);
+      missingSequences.push(...page.missingSequences);
     }
-    return { ...value, suffixRecords };
+    return { ...value, missingSequences, suffixRecords };
   };
 }

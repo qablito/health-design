@@ -193,14 +193,67 @@ describe("Worker de continuidad", () => {
       validateDeletionLedgerPayload({
         auditDeletionJobId: "61000000-0000-4000-8000-000000005202",
         fromSequence: 10,
+        hashBeforeRange: "a".repeat(64),
         operationId: "61000000-0000-4000-8000-000000005202",
         rangeHash: "b".repeat(64),
         recordType: "audit_range_delete_intent",
         schemaVersion: 1,
         stream: "deletions",
+        terminalRecordHash: "c".repeat(64),
         toSequence: 20,
       }),
     ).not.toThrow();
+  });
+
+  it("devuelve ausencias de admin-audit para validarlas contra borrados autorizados", async () => {
+    const state = await fixture();
+    const requestId = "61000000-0000-4000-8000-000000005209";
+    const intent = payload(requestId);
+    const intentResponse = await state.ledger.fetch(
+      await signedRequest(intent, state.env.CONTINUITY_LEDGER_HMAC_KEY),
+    );
+    const intentReceipt = (await intentResponse.json()) as { recordHash: string };
+    const outcome = {
+      ...intent,
+      createdAt: new Date().toISOString(),
+      intentRecordHash: intentReceipt.recordHash,
+      phase: "outcome",
+      result: "success",
+    };
+    await state.ledger.fetch(
+      await signedRequest(outcome, state.env.CONTINUITY_LEDGER_HMAC_KEY),
+    );
+    state.bucket.objects.delete("admin-audit/00000000000000000002.json");
+
+    const response = await state.ledger.fetch(
+      await signedRequest(
+        {},
+        state.env.CONTINUITY_LEDGER_HMAC_KEY,
+        crypto.randomUUID(),
+        { method: "GET", path: "/v1/admin-audit/records/1/2" },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      missingSequences: [2],
+      records: [{ sequence: 1, stream: "admin-audit" }],
+    });
+
+    state.bucket.objects.delete("admin-audit/00000000000000000001.json");
+    state.storage.values.delete("sequence:admin-audit:00000000000000000001");
+    const historicalHead = await state.ledger.fetch(
+      await signedRequest(
+        {},
+        state.env.CONTINUITY_LEDGER_HMAC_KEY,
+        crypto.randomUUID(),
+        { method: "GET", path: "/v1/admin-audit/head/1" },
+      ),
+    );
+    expect(historicalHead.status).toBe(200);
+    await expect(historicalHead.json()).resolves.toMatchObject({
+      requested: { recordHash: intentReceipt.recordHash, sequence: 1 },
+    });
   });
 
   it("serializa el stream deletions, verifica readback y hace replay idempotente", async () => {

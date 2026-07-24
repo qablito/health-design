@@ -97,6 +97,7 @@ export interface RemoteLedgerHeads {
 
 export interface LiveLedgerHeadResult {
   current: LedgerReceipt;
+  missingSequences: number[];
   requested: LedgerReceipt;
   suffixRecords: unknown[];
 }

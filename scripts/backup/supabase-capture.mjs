@@ -163,7 +163,12 @@ export function runPgDump({ args, environment }) {
   });
 }
 
-function ledgerObject(stream, live, knownTombstoneKeyVersions) {
+function ledgerObject(
+  stream,
+  live,
+  knownTombstoneKeyVersions,
+  completedAuditRanges = [],
+) {
   const records = live.suffixRecords;
   if (!Array.isArray(records)) throw new Error("ledger_snapshot_invalid");
   if (live.requested.sequence !== 0 || live.requested.recordHash !== "0".repeat(64)) {
@@ -189,8 +194,39 @@ function ledgerObject(stream, live, knownTombstoneKeyVersions) {
       type: "deletions-ledger",
     };
   }
+  const missingSequences = live.missingSequences ?? [];
+  if (
+    !Array.isArray(missingSequences) ||
+    missingSequences.some(
+      (sequence, index) =>
+        !Number.isSafeInteger(sequence) ||
+        sequence < 1 ||
+        (index > 0 && missingSequences[index - 1] >= sequence),
+    )
+  ) {
+    throw new Error("admin_audit_ledger_snapshot_invalid");
+  }
+  let missingIndex = 0;
+  for (const range of completedAuditRanges) {
+    for (
+      let sequence = range.manifest.fromSequence;
+      sequence <= range.manifest.toSequence;
+      sequence += 1
+    ) {
+      if (missingSequences[missingIndex] !== sequence) {
+        throw new Error("admin_audit_ledger_snapshot_invalid");
+      }
+      missingIndex += 1;
+    }
+  }
+  if (missingIndex !== missingSequences.length) {
+    throw new Error("admin_audit_ledger_snapshot_invalid");
+  }
   const closure = verifyAdminAuditClosure(records);
-  const verified = verifyLedgerContinuity(records, { stream: "admin-audit" });
+  const verified = verifyLedgerContinuity(records, {
+    gaps: completedAuditRanges,
+    stream: "admin-audit",
+  });
   if (
     verified.head !== head.hash ||
     verified.sequence !== head.sequence ||
@@ -201,7 +237,7 @@ function ledgerObject(stream, live, knownTombstoneKeyVersions) {
   return {
     bytes: encoder.encode(
       JSON.stringify({
-        completedRanges: [],
+        completedRanges: completedAuditRanges,
         head,
         incompleteRanges: [],
         pendingIntents: closure.pendingRequestIds,
@@ -308,7 +344,12 @@ export async function captureLiveBackupInputs(input, dependencies = {}) {
           type: "database",
         },
         ledgerObject("deletions", deletions, knownTombstoneKeyVersions),
-        ledgerObject("admin-audit", adminAudit, knownTombstoneKeyVersions),
+        ledgerObject(
+          "admin-audit",
+          adminAudit,
+          knownTombstoneKeyVersions,
+          deletionState.completedAuditRanges,
+        ),
         ...storageObjects,
       ],
       storageInventory,

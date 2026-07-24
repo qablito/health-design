@@ -187,7 +187,7 @@ export async function restoreFixtureRecoverySet(input) {
     ...verified.ledgerHeads["admin-audit"].suffixRecords,
   ];
   const auditHead = verifyLedgerContinuity(completeAuditRecords, {
-    gaps: adminAudit.completedRanges ?? [],
+    gaps: deletionHead.completedAuditRanges,
     stream: "admin-audit",
   });
   const embeddedDeletionHead = verifyLedgerContinuity(deletions.records, {

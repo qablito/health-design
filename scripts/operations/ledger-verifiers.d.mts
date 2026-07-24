@@ -1,4 +1,9 @@
-import type { AuditRangeManifest, AuditRangeReceipt } from "./audit-range.mjs";
+import type {
+  AuditRangeGapManifest,
+  AuditRangeGapReceipt,
+  AuditRangeManifest,
+  AuditRangeReceipt,
+} from "./audit-range.mjs";
 
 export interface LedgerRecord {
   idempotencyHash: string;
@@ -23,9 +28,9 @@ export function verifyLedgerContinuity(
   records: LedgerRecord[],
   options: {
     gaps?: Array<{
-      complete: AuditRangeReceipt | null;
-      intent: AuditRangeReceipt;
-      manifest: AuditRangeManifest;
+      complete: AuditRangeReceipt | AuditRangeGapReceipt | null;
+      intent: AuditRangeReceipt | AuditRangeGapReceipt;
+      manifest: AuditRangeManifest | AuditRangeGapManifest;
     }>;
     initialHead?: string;
     initialSequence?: number;
@@ -38,6 +43,11 @@ export function verifyDeletionTombstones(
 ): {
   activeProfileMarkerKeyVersions: number[];
   activeProfileMarkers: string[];
+  completedAuditRanges: Array<{
+    complete: AuditRangeGapReceipt;
+    intent: AuditRangeGapReceipt;
+    manifest: AuditRangeGapManifest;
+  }>;
   head: string;
   incompleteAuditRanges: Array<{
     fromSequence: number;
@@ -45,6 +55,18 @@ export function verifyDeletionTombstones(
     toSequence: number;
   }>;
   sequence: number;
+};
+export function verifyAuditRangeTombstones(records: LedgerRecord[]): {
+  completedAuditRanges: Array<{
+    complete: AuditRangeGapReceipt;
+    intent: AuditRangeGapReceipt;
+    manifest: AuditRangeGapManifest;
+  }>;
+  incompleteAuditRanges: Array<{
+    fromSequence: number;
+    jobId: string;
+    toSequence: number;
+  }>;
 };
 export function verifyAdminAuditClosure(records: LedgerRecord[]): {
   pendingRequestIds: string[];

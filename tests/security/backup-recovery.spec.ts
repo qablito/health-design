@@ -22,6 +22,7 @@ import {
   verifyRecoverySet,
 } from "../../scripts/backup/recovery-set.mjs";
 import { buildSyntheticLedger } from "../../scripts/operations/ledger-verifiers.mjs";
+import { createLiveLedgerHeadProvider } from "../../scripts/backup/live-ledger-heads.mjs";
 import { captureLiveBackupInputs } from "../../scripts/backup/supabase-capture.mjs";
 
 const temporaryPaths: string[] = [];
@@ -38,11 +39,183 @@ afterEach(async () => {
   );
 });
 
+function auditGapFixture() {
+  const requestId = "61000000-0000-4000-8000-000000005214";
+  const intent = {
+    action: "profile_deletion_permanent",
+    createdAt: "2026-07-24T00:00:00.000Z",
+    effectiveProfileId: "51000000-0000-4000-8000-000000005101",
+    originalActorId: "31000000-0000-4000-8000-000000005101",
+    phase: "intent",
+    requestId,
+    result: "pending",
+    schemaVersion: 1,
+    stream: "admin-audit",
+    targetId: "51000000-0000-4000-8000-000000005101",
+    targetType: "deletion_job",
+  };
+  const firstAudit = buildSyntheticLedger([intent], "admin-audit")[0]!;
+  const auditRecords = buildSyntheticLedger(
+    [
+      intent,
+      {
+        ...intent,
+        createdAt: "2026-07-24T00:00:01.000Z",
+        intentRecordHash: firstAudit.recordHash,
+        phase: "outcome",
+        result: "success",
+      },
+    ],
+    "admin-audit",
+  );
+  const jobId = "61000000-0000-4000-8000-000000005215";
+  const rangeIntent = {
+    auditDeletionJobId: jobId,
+    fromSequence: 1,
+    hashBeforeRange: "0".repeat(64),
+    operationId: jobId,
+    rangeHash: "c".repeat(64),
+    recordType: "audit_range_delete_intent",
+    schemaVersion: 1,
+    stream: "deletions",
+    terminalRecordHash: auditRecords.at(-1)!.recordHash,
+    toSequence: 2,
+  };
+  const firstDeletion = buildSyntheticLedger([rangeIntent], "deletions")[0]!;
+  return {
+    auditRecords,
+    deletionRecords: buildSyntheticLedger(
+      [
+        rangeIntent,
+        {
+          ...rangeIntent,
+          intentRecordHash: firstDeletion.recordHash,
+          recordType: "audit_range_delete_complete",
+        },
+      ],
+      "deletions",
+    ),
+  };
+}
+
 describe("conjuntos de recuperación cifrados", () => {
   const developmentProjectRef = "nwoivdxdupklervtnovd";
   const productionProjectRef = "abcdefghijklmnopqrst";
   const developmentDatabaseUrl = `postgresql://postgres:secret@db.${developmentProjectRef}.supabase.co/postgres`;
   const developmentSupabaseUrl = `https://${developmentProjectRef}.supabase.co`;
+
+  it("propaga ausencias del ledger remoto sin confundirlas con registros vacíos", async () => {
+    const provider = createLiveLedgerHeadProvider(
+      {
+        continuityLedgerHmacKey: "ledger-hmac-key-with-at-least-256-bits",
+        continuityLedgerUrl: "https://ledger.example",
+      },
+      (input: URL | RequestInfo) => {
+        const path = new URL(
+          input instanceof URL
+            ? input.href
+            : typeof input === "string"
+              ? input
+              : input.url,
+        ).pathname;
+        return Promise.resolve(
+          path.includes("/head/")
+            ? new Response(
+                JSON.stringify({
+                  current: { recordHash: "b".repeat(64), sequence: 2 },
+                  requested: { recordHash: "0".repeat(64), sequence: 0 },
+                }),
+              )
+            : new Response(
+                JSON.stringify({ missingSequences: [2], records: [{ sequence: 1 }] }),
+              ),
+        );
+      },
+    );
+
+    await expect(provider("admin-audit", 0)).resolves.toMatchObject({
+      missingSequences: [2],
+      suffixRecords: [{ sequence: 1 }],
+    });
+  });
+
+  it("captura una cesta de recuperación con un rango auditado ya eliminado", async () => {
+    const { auditRecords, deletionRecords } = auditGapFixture();
+    const captureInput = {
+      authorizedPrivateBuckets: ["plan-exports"],
+      databaseUrl: developmentDatabaseUrl,
+      productionProjectRef,
+      projectRef: developmentProjectRef,
+      serviceRoleKey: "service-role-secret",
+      supabaseUrl: developmentSupabaseUrl,
+      tombstoneHmacKeys: { 1: "fixture-key" },
+    };
+    let missingSequences = [1, 2];
+    const dependencies = {
+      fetcher: (input: URL | RequestInfo) => {
+        const path = new URL(
+          input instanceof URL
+            ? input.href
+            : typeof input === "string"
+              ? input
+              : input.url,
+        ).pathname;
+        return Promise.resolve(
+          new Response(
+            path === "/storage/v1/bucket"
+              ? JSON.stringify([{ id: "plan-exports", public: false }])
+              : "[]",
+          ),
+        );
+      },
+      ledgerHeadProvider: ((stream: string, sequence: number) =>
+        Promise.resolve({
+          current:
+            stream === "deletions"
+              ? {
+                  recordHash: deletionRecords.at(-1)!.recordHash,
+                  sequence: 2,
+                  stream,
+                }
+              : {
+                  recordHash: auditRecords.at(-1)!.recordHash,
+                  sequence: 2,
+                  stream,
+                },
+          missingSequences: stream === "admin-audit" ? missingSequences : [],
+          requested: {
+            recordHash: "0".repeat(64),
+            sequence,
+            stream,
+          },
+          suffixRecords: stream === "deletions" ? deletionRecords : [],
+        })) as never,
+      runPgDump: async ({ outputPath }: { outputPath: string }) => {
+        await writeFile(outputPath, "dump");
+      },
+    };
+    const result = await captureLiveBackupInputs(captureInput, dependencies);
+    const adminAudit = result.objects.find(
+      (object) => object.type === "admin-audit-ledger",
+    )!;
+    const snapshot = JSON.parse(new TextDecoder().decode(adminAudit.bytes)) as {
+      completedRanges: unknown[];
+      head: { hash: string; sequence: number };
+      records: unknown[];
+    };
+
+    expect(snapshot.completedRanges).toHaveLength(1);
+    expect(snapshot.records).toEqual([]);
+    expect(snapshot.head).toEqual({
+      hash: auditRecords.at(-1)!.recordHash,
+      sequence: 2,
+    });
+
+    missingSequences = [1];
+    await expect(captureLiveBackupInputs(captureInput, dependencies)).rejects.toThrow(
+      "admin_audit_ledger_snapshot_invalid",
+    );
+  });
 
   it("captura pg_dump y todos los objetos de buckets privados sin exponer secretos", async () => {
     const profileId = "11111111-1111-4111-8111-111111111111";
@@ -482,6 +655,97 @@ describe("conjuntos de recuperación cifrados", () => {
     expect((await readdir(directory)).every((name) => !name.endsWith(".plain"))).toBe(
       true,
     );
+  });
+
+  it("verifica un backup anterior cuando el sufijo contiene un rango borrado completo", async () => {
+    const directory = await temporaryDirectory("health-design-gap-backup-");
+    const keyring = await createFixtureKeyring();
+    const zero = { hash: "0".repeat(64), sequence: 0 };
+    await createRecoverySet({
+      backupId: "backup-before-audit-gap",
+      createdAt: "2026-07-24T00:00:00.000Z",
+      destinationDirectory: directory,
+      keyVersion: 1,
+      keyring,
+      kind: "precritical",
+      objects: [
+        {
+          bytes: new TextEncoder().encode("db"),
+          logicalPath: "database/postgres.dump",
+          type: "database",
+        },
+        {
+          bytes: new TextEncoder().encode('{"head":{"hash":"0","sequence":0}}'),
+          logicalPath: "ledgers/deletions.json",
+          prefix: zero,
+          type: "deletions-ledger",
+        },
+        {
+          bytes: new TextEncoder().encode(
+            '{"completedRanges":[],"head":{"hash":"0","sequence":0},"incompleteRanges":[],"pendingIntents":[],"records":[]}',
+          ),
+          logicalPath: "ledgers/admin-audit.json",
+          prefix: zero,
+          type: "admin-audit-ledger",
+        },
+      ],
+      schemaVersion: 18,
+      sourceEnvironment: "development",
+      storageInventory: [
+        { bucket: "plan-exports", enumerated: true, logicalPaths: [] },
+      ],
+      toolVersion: "t18-test",
+    });
+    const { auditRecords, deletionRecords } = auditGapFixture();
+    const requested = {
+      "admin-audit": await createFixtureLedgerHead({
+        environment: "development",
+        ...zero,
+        keyring,
+        stream: "admin-audit",
+      }),
+      deletions: await createFixtureLedgerHead({
+        environment: "development",
+        ...zero,
+        keyring,
+        stream: "deletions",
+      }),
+    };
+    const current = {
+      "admin-audit": {
+        ...(await createFixtureLedgerHead({
+          environment: "development",
+          hash: auditRecords.at(-1)!.recordHash,
+          keyring,
+          sequence: 2,
+          stream: "admin-audit",
+        })),
+        missingSequences: [1, 2],
+        suffixRecords: [],
+      },
+      deletions: {
+        ...(await createFixtureLedgerHead({
+          environment: "development",
+          hash: deletionRecords.at(-1)!.recordHash,
+          keyring,
+          sequence: 2,
+          stream: "deletions",
+        })),
+        suffixRecords: deletionRecords,
+      },
+    };
+
+    await expect(
+      verifyRecoverySet({
+        directory,
+        keyring,
+        ledgerHeadProvider: createFixtureLedgerHeadProvider(requested, current),
+      }),
+    ).resolves.toMatchObject({
+      ledgerHeads: {
+        "admin-audit": { current: { sequence: 2 }, missingSequences: [1, 2] },
+      },
+    });
   });
 
   it("falla ante corrupción, objeto ausente, clave desconocida y prefijo divergente", async () => {

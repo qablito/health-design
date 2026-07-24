@@ -47,6 +47,7 @@ async function fixtureBackup(
     brokenLedger?: boolean;
     conflictingAudit?: boolean;
     pendingIntent?: boolean;
+    suffixCompletedRange?: boolean;
     suffixPendingIntent?: boolean;
   } = {},
 ) {
@@ -214,7 +215,109 @@ async function fixtureBackup(
     }),
   };
   let currentHeads = heads;
-  if (options.suffixPendingIntent) {
+  if (options.suffixCompletedRange) {
+    const suffixRequestId = "61000000-0000-4000-8000-000000005198";
+    const suffixIntent = buildSyntheticLedger(
+      [
+        {
+          action: "impersonation_start",
+          createdAt: "2026-07-23T00:01:00.000Z",
+          effectiveProfileId: null,
+          originalActorId: "31000000-0000-4000-8000-000000005101",
+          phase: "intent",
+          requestId: suffixRequestId,
+          result: "pending",
+          schemaVersion: 1,
+          stream: "admin-audit",
+          targetId: "51000000-0000-4000-8000-000000005198",
+          targetType: "profile",
+        },
+      ],
+      "admin-audit",
+      {
+        initialHead: auditHead.hash,
+        initialSequence: auditHead.sequence,
+      },
+    )[0]!;
+    const suffixRecords = [
+      suffixIntent,
+      ...buildSyntheticLedger(
+        [
+          {
+            ...suffixIntent.payload,
+            createdAt: "2026-07-23T00:01:01.000Z",
+            intentRecordHash: suffixIntent.recordHash,
+            phase: "outcome",
+            result: "success",
+          },
+        ],
+        "admin-audit",
+        {
+          initialHead: suffixIntent.recordHash,
+          initialSequence: suffixIntent.sequence,
+        },
+      ),
+    ];
+    const rangeJobId = "61000000-0000-4000-8000-000000005197";
+    const rangeIntent = {
+      auditDeletionJobId: rangeJobId,
+      fromSequence: suffixIntent.sequence,
+      hashBeforeRange: auditHead.hash,
+      operationId: rangeJobId,
+      rangeHash: "c".repeat(64),
+      recordType: "audit_range_delete_intent",
+      schemaVersion: 1,
+      stream: "deletions",
+      terminalRecordHash: suffixRecords.at(-1)!.recordHash,
+      toSequence: suffixRecords.at(-1)!.sequence,
+    };
+    const deletionIntent = buildSyntheticLedger([rangeIntent], "deletions", {
+      initialHead: deletionHead.hash,
+      initialSequence: deletionHead.sequence,
+    })[0]!;
+    const deletionSuffix = [
+      deletionIntent,
+      ...buildSyntheticLedger(
+        [
+          {
+            ...rangeIntent,
+            intentRecordHash: deletionIntent.recordHash,
+            recordType: "audit_range_delete_complete",
+          },
+        ],
+        "deletions",
+        {
+          initialHead: deletionIntent.recordHash,
+          initialSequence: deletionIntent.sequence,
+        },
+      ),
+    ];
+    currentHeads = {
+      "admin-audit": Object.assign(
+        await createFixtureLedgerHead({
+          environment: "development",
+          hash: suffixRecords.at(-1)!.recordHash,
+          keyring,
+          sequence: suffixRecords.at(-1)!.sequence,
+          stream: "admin-audit",
+        }),
+        {
+          missingSequences: suffixRecords.map((record) => record.sequence),
+          suffixRecords: [],
+        },
+      ),
+      deletions: Object.assign(
+        await createFixtureLedgerHead({
+          environment: "development",
+          hash: deletionSuffix.at(-1)!.recordHash,
+          keyring,
+          sequence: deletionSuffix.at(-1)!.sequence,
+          stream: "deletions",
+        }),
+        { suffixRecords: deletionSuffix },
+      ),
+    };
+  } else if (options.suffixPendingIntent) {
     const suffixRecords = buildSyntheticLedger(
       [
         {
@@ -497,7 +600,9 @@ describe("restore aislado fail-closed", () => {
 
   it("ejecuta pg_restore sin secretos en argv y verifica invariantes antes de promover", async () => {
     const marker = "c".repeat(64);
-    const fixture = await fixtureBackup("live-restore", marker);
+    const fixture = await fixtureBackup("live-restore", marker, {
+      suffixCompletedRange: true,
+    });
     const target = await temporaryDirectory("health-design-restore-live-");
     const targetRef = "isolated-live-restore";
     const targetFingerprint = targetIdentityFingerprint({
@@ -784,7 +889,11 @@ describe("restore aislado fail-closed", () => {
   it("elimina perfiles y objetos tombstoned, repone auditoría y revoca sesiones", async () => {
     const marker = "b".repeat(64);
     for (const backupId of ["rotation-1", "rotation-2", "rotation-3", "rotation-4"]) {
-      const fixture = await fixtureBackup(backupId, marker);
+      const fixture = await fixtureBackup(
+        backupId,
+        marker,
+        backupId === "rotation-4" ? { suffixCompletedRange: true } : {},
+      );
       const target = await temporaryDirectory("health-design-restore-");
       const result = await restoreFixtureRecoverySet({
         directory: fixture.directory,

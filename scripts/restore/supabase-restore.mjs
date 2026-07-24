@@ -113,7 +113,7 @@ export async function restoreSupabaseRecoverySet(input, dependencies) {
     throw new Error("incomplete_audit_range");
   }
   verifyLedgerContinuity(auditRecords, {
-    gaps: audit.completedRanges ?? [],
+    gaps: deletionState.completedAuditRanges,
     stream: "admin-audit",
   });
   const auditClosure = verifyAdminAuditClosure(auditRecords);

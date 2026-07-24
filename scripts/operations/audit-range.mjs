@@ -99,7 +99,34 @@ function receiptMatchesManifest(receipt, manifest) {
 }
 
 export function verifyAuditRangeGap({ complete, intent, manifest }) {
-  if (!manifest || !Array.isArray(manifest.records) || manifest.records.length === 0) {
+  if (!manifest || typeof manifest !== "object") {
+    throw new Error("invalid_audit_range");
+  }
+  if (manifest.records === undefined) {
+    if (
+      !Number.isSafeInteger(manifest.fromSequence) ||
+      !Number.isSafeInteger(manifest.toSequence) ||
+      manifest.fromSequence < 1 ||
+      manifest.toSequence < manifest.fromSequence ||
+      !HEX_64.test(manifest.hashBeforeRange) ||
+      !HEX_64.test(manifest.terminalRecordHash) ||
+      !HEX_64.test(manifest.manifestDigest)
+    ) {
+      throw new Error("invalid_audit_range");
+    }
+    if (!receiptMatchesManifest(intent, manifest)) {
+      throw new Error("audit_range_receipt_mismatch");
+    }
+    if (!complete) throw new Error("audit_range_incomplete");
+    if (
+      !receiptMatchesManifest(complete, manifest) ||
+      complete.operationId !== intent.operationId
+    ) {
+      throw new Error("audit_range_receipt_mismatch");
+    }
+    return true;
+  }
+  if (!Array.isArray(manifest.records) || manifest.records.length === 0) {
     throw new Error("invalid_audit_range");
   }
   const ordered = [...manifest.records].sort(

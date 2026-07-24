@@ -106,6 +106,9 @@ eliminan eventos sueltos ni se deja un hueco implícito:
 6. El verificador admite el salto únicamente cuando sus límites coinciden
    exactamente con un par intent/complete válido. El registro siguiente debe
    referenciar `terminal_record_hash`; cualquier otro hueco falla cerrado.
+   Ambos recibos conservan también `hash_before_range`,
+   `terminal_record_hash` y el digest del manifiesto: la API puede declarar las
+   secuencias ausentes, pero solo el cruce con ese par autoriza el hueco.
 7. Restore carga primero `deletions`, ignora o elimina cualquier payload
    restaurado cubierto por el rango, representa el tramo como placeholder de
    hashes y verifica ambos límites. Nunca resucita el contenido eliminado.

@@ -17,14 +17,19 @@ export interface AuditRangeReceipt extends AuditRangeManifest {
   operationId: string;
 }
 
+export type AuditRangeGapManifest = Omit<AuditRangeManifest, "records">;
+export type AuditRangeGapReceipt = AuditRangeGapManifest & {
+  operationId: string;
+};
+
 export function prepareAuditRangeManifest(input: {
   hashBeforeRange: string;
   records: AuditRangeRecord[];
 }): Promise<AuditRangeManifest>;
 export function verifyAuditRangeGap(input: {
-  complete: AuditRangeReceipt | null;
-  intent: AuditRangeReceipt;
-  manifest: AuditRangeManifest;
+  complete: AuditRangeReceipt | AuditRangeGapReceipt | null;
+  intent: AuditRangeReceipt | AuditRangeGapReceipt;
+  manifest: AuditRangeManifest | AuditRangeGapManifest;
 }): true;
 export function executeAuditRangeDeletion(
   input: {

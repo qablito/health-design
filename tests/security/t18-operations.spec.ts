@@ -81,11 +81,13 @@ describe("verificadores de continuidad", () => {
         {
           auditDeletionJobId: rangeJobId,
           fromSequence: 4,
+          hashBeforeRange: "a".repeat(64),
           operationId: rangeJobId,
           rangeHash: "c".repeat(64),
           recordType: "audit_range_delete_intent",
           schemaVersion: 1,
           stream: "deletions",
+          terminalRecordHash: "b".repeat(64),
           toSequence: 5,
         },
       ],
@@ -107,20 +109,48 @@ describe("verificadores de continuidad", () => {
         {
           auditDeletionJobId: rangeJobId,
           fromSequence: 4,
+          hashBeforeRange: "a".repeat(64),
           intentRecordHash: records[2]!.recordHash,
           operationId: rangeJobId,
           rangeHash: "c".repeat(64),
           recordType: "audit_range_delete_complete",
           schemaVersion: 1,
           stream: "deletions",
+          terminalRecordHash: "b".repeat(64),
           toSequence: 5,
         },
       ],
       "deletions",
     );
-    expect(
-      verifyDeletionTombstones(completed, new Set([1, 2])).incompleteAuditRanges,
-    ).toEqual([]);
+    const verified = verifyDeletionTombstones(completed, new Set([1, 2]));
+    expect(verified.incompleteAuditRanges).toEqual([]);
+    expect(verified.completedAuditRanges).toEqual([
+      {
+        complete: {
+          fromSequence: 4,
+          hashBeforeRange: "a".repeat(64),
+          manifestDigest: "c".repeat(64),
+          operationId: rangeJobId,
+          terminalRecordHash: "b".repeat(64),
+          toSequence: 5,
+        },
+        intent: {
+          fromSequence: 4,
+          hashBeforeRange: "a".repeat(64),
+          manifestDigest: "c".repeat(64),
+          operationId: rangeJobId,
+          terminalRecordHash: "b".repeat(64),
+          toSequence: 5,
+        },
+        manifest: {
+          fromSequence: 4,
+          hashBeforeRange: "a".repeat(64),
+          manifestDigest: "c".repeat(64),
+          terminalRecordHash: "b".repeat(64),
+          toSequence: 5,
+        },
+      },
+    ]);
     const mismatchedOperation = buildSyntheticLedger(
       [
         ...records.map((record) => record.payload),
@@ -134,6 +164,80 @@ describe("verificadores de continuidad", () => {
     expect(() =>
       verifyDeletionTombstones(mismatchedOperation, new Set([1, 2])),
     ).toThrow("audit_range_receipt_mismatch");
+  });
+
+  it("cierra un hueco autorizado al final del ledger sin convertir ausencias en cero", () => {
+    const operationId = crypto.randomUUID();
+    const receipt = {
+      fromSequence: 1,
+      hashBeforeRange: "0".repeat(64),
+      manifestDigest: "c".repeat(64),
+      operationId,
+      terminalRecordHash: "b".repeat(64),
+      toSequence: 2,
+    };
+    const gap = {
+      complete: receipt,
+      intent: { ...receipt },
+      manifest: {
+        fromSequence: 1,
+        hashBeforeRange: "0".repeat(64),
+        manifestDigest: "c".repeat(64),
+        terminalRecordHash: "b".repeat(64),
+        toSequence: 2,
+      },
+    };
+
+    expect(
+      verifyLedgerContinuity([], {
+        gaps: [gap],
+        stream: "admin-audit",
+      }),
+    ).toEqual({ head: "b".repeat(64), sequence: 2 });
+    expect(() =>
+      verifyLedgerContinuity([], {
+        gaps: [
+          {
+            ...gap,
+            manifest: { ...gap.manifest, hashBeforeRange: "f".repeat(64) },
+          },
+        ],
+        stream: "admin-audit",
+      }),
+    ).toThrow();
+    expect(() =>
+      verifyLedgerContinuity(
+        buildSyntheticLedger(
+          [
+            {
+              action: "impersonation_start",
+              requestId: crypto.randomUUID(),
+              stream: "admin-audit",
+            },
+          ],
+          "admin-audit",
+        ),
+        {
+          gaps: [
+            {
+              ...gap,
+              complete: { ...gap.complete, fromSequence: 3, toSequence: 4 },
+              intent: { ...gap.intent, fromSequence: 3, toSequence: 4 },
+              manifest: { ...gap.manifest, fromSequence: 3, toSequence: 4 },
+            },
+          ],
+          stream: "admin-audit",
+        },
+      ),
+    ).toThrow("ledger_gap");
+    expect(() =>
+      verifyLedgerContinuity([], {
+        gaps: [gap],
+        initialHead: "b".repeat(64),
+        initialSequence: 2,
+        stream: "admin-audit",
+      }),
+    ).toThrow("audit_range_outside_anchor");
   });
 
   it("rechaza outcomes que cambian la identidad inmutable del intent", () => {

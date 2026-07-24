@@ -40,11 +40,13 @@ const PROFILE_MARKER_REKEY_KEYS = new Set([
 const AUDIT_RANGE_INTENT_KEYS = new Set([
   "auditDeletionJobId",
   "fromSequence",
+  "hashBeforeRange",
   "operationId",
   "rangeHash",
   "recordType",
   "schemaVersion",
   "stream",
+  "terminalRecordHash",
   "toSequence",
 ]);
 const AUDIT_RANGE_COMPLETE_KEYS = new Set([
@@ -306,6 +308,8 @@ export function validateDeletionLedgerPayload(candidate) {
       candidate.fromSequence < 1 ||
       candidate.toSequence < candidate.fromSequence ||
       !HEX_64_PATTERN.test(candidate.rangeHash) ||
+      !HEX_64_PATTERN.test(candidate.hashBeforeRange) ||
+      !HEX_64_PATTERN.test(candidate.terminalRecordHash) ||
       (candidate.recordType === "audit_range_delete_complete" &&
         !HEX_64_PATTERN.test(candidate.intentRecordHash))
     ) {
@@ -659,11 +663,18 @@ export class ContinuityLedger {
           ? this.env.DELETIONS_BUCKET
           : this.env.ADMIN_AUDIT_BUCKET;
       const records = [];
+      const missingSequences = [];
       for (let sequence = from; sequence <= to; sequence += 1) {
         const object = await bucket.get(
           `${stream}/${String(sequence).padStart(20, "0")}.json`,
         );
-        if (!object) return json({ error: "ledger_range_not_found" }, 404);
+        if (!object) {
+          if (stream === "deletions") {
+            return json({ error: "ledger_range_not_found" }, 404);
+          }
+          missingSequences.push(sequence);
+          continue;
+        }
         let record;
         try {
           record = JSON.parse(await object.text());
@@ -704,7 +715,7 @@ export class ContinuityLedger {
         }
         records.push(record);
       }
-      return json({ records }, 200);
+      return json({ missingSequences, records }, 200);
     }
     if (headMatch) {
       const stream = headMatch[1];
@@ -733,21 +744,39 @@ export class ContinuityLedger {
         const object = await bucket.get(
           `${stream}/${String(requestedSequence).padStart(20, "0")}.json`,
         );
-        if (!object) return json({ error: "ledger_head_not_found" }, 404);
-        let record;
-        try {
-          record = JSON.parse(await object.text());
-        } catch {
-          return json({ error: "ledger_head_invalid" }, 503);
+        if (!object) {
+          const indexedReceipt = await this.state.storage.get(
+            `sequence:${stream}:${String(requestedSequence).padStart(20, "0")}`,
+          );
+          let receipt = indexedReceipt;
+          if (!receipt) {
+            const receipts = await this.state.storage.list({ prefix: "receipt:" });
+            receipt = [...receipts.values()].find(
+              (candidate) =>
+                candidate?.stream === stream &&
+                candidate?.sequence === requestedSequence,
+            );
+          }
+          if (!receipt || !HEX_64_PATTERN.test(receipt.recordHash)) {
+            return json({ error: "ledger_head_not_found" }, 404);
+          }
+          requestedHash = receipt.recordHash;
+        } else {
+          let record;
+          try {
+            record = JSON.parse(await object.text());
+          } catch {
+            return json({ error: "ledger_head_invalid" }, 503);
+          }
+          if (
+            record.sequence !== requestedSequence ||
+            typeof record.recordHash !== "string" ||
+            !HEX_64_PATTERN.test(record.recordHash)
+          ) {
+            return json({ error: "ledger_head_invalid" }, 503);
+          }
+          requestedHash = record.recordHash;
         }
-        if (
-          record.sequence !== requestedSequence ||
-          typeof record.recordHash !== "string" ||
-          !HEX_64_PATTERN.test(record.recordHash)
-        ) {
-          return json({ error: "ledger_head_invalid" }, 503);
-        }
-        requestedHash = record.recordHash;
       }
       const signHead = async (sequence, recordHash) => {
         const keyVersion = Number(this.env.LEDGER_SIGNING_KEY_VERSION);
@@ -958,6 +987,7 @@ export class ContinuityLedger {
       [`head:${stream}`]: { recordHash, sequence },
       [`receipt:${idempotencyHash}`]: receipt,
       [requestKey]: idempotencyHash,
+      [`sequence:${stream}:${String(sequence).padStart(20, "0")}`]: receipt,
     };
     if (isAdminAppend && event.phase === "intent") {
       updates[`pending:${event.requestId}`] = {

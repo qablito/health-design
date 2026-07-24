@@ -35,6 +35,12 @@ autorización destructiva independiente.
 6. Revocar siempre la credencial en `finally`.
 7. Marcar `verified`.
 
+Antes de aceptar una copia o un restore, toda secuencia ausente de
+`admin-audit` debe quedar cubierta exactamente por un par
+`audit_range_delete_intent`/`audit_range_delete_complete` con los mismos
+límites, digest, `hash_before_range` y `terminal_record_hash`. Una ausencia
+desconocida o un prefijo de copia situado dentro del rango falla cerrado.
+
 Los verificadores locales se ejecutan con:
 
 ```bash

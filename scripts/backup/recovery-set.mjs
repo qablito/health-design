@@ -10,7 +10,10 @@ import {
 } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { createHash, randomBytes, timingSafeEqual, webcrypto } from "node:crypto";
-import { verifyLedgerContinuity } from "../operations/ledger-verifiers.mjs";
+import {
+  verifyAuditRangeTombstones,
+  verifyLedgerContinuity,
+} from "../operations/ledger-verifiers.mjs";
 
 const subtle = webcrypto.subtle;
 const encoder = new TextEncoder();
@@ -384,6 +387,7 @@ export function createFixtureLedgerHeadProvider(heads, currentHeads = heads) {
     }
     return {
       current: current.receipt,
+      missingSequences: current.missingSequences ?? [],
       requested: requested.receipt,
       suffixRecords: current.suffixRecords ?? [],
     };
@@ -696,6 +700,7 @@ async function validateLedgerPrefixes(manifest, ledgerHeadProvider, keyring) {
     throw new Error("live_ledger_head_provider_required");
   }
   const verifiedHeads = {};
+  const liveLedgers = {};
   for (const object of manifest.objects) {
     if (!object.type.endsWith("-ledger")) continue;
     const stream = object.type === "deletions-ledger" ? "deletions" : "admin-audit";
@@ -734,25 +739,92 @@ async function validateLedgerPrefixes(manifest, ledgerHeadProvider, keyring) {
     if (!Array.isArray(suffixRecords)) {
       throw new Error("invalid_ledger_suffix");
     }
-    if (current.sequence === requested.sequence) {
-      if (current.recordHash !== requested.recordHash || suffixRecords.length !== 0) {
+    liveLedgers[stream] = {
+      current,
+      missingSequences: live.missingSequences ?? [],
+      requested,
+      suffixRecords,
+    };
+  }
+
+  const verifySuffix = (stream, gaps = []) => {
+    const live = liveLedgers[stream];
+    if (!live) throw new Error("ledger_suffix_mismatch");
+    const missingSequences = live.missingSequences;
+    if (
+      !Array.isArray(missingSequences) ||
+      missingSequences.some(
+        (sequence, index) =>
+          !Number.isSafeInteger(sequence) ||
+          sequence <= live.requested.sequence ||
+          sequence > live.current.sequence ||
+          (index > 0 && missingSequences[index - 1] >= sequence),
+      )
+    ) {
+      throw new Error("invalid_ledger_suffix");
+    }
+    let missingIndex = 0;
+    for (const gap of gaps) {
+      if (gap.manifest.toSequence > live.current.sequence) {
+        throw new Error("ledger_suffix_mismatch");
+      }
+      for (
+        let sequence = gap.manifest.fromSequence;
+        sequence <= gap.manifest.toSequence;
+        sequence += 1
+      ) {
+        if (missingSequences[missingIndex] !== sequence) {
+          throw new Error("ledger_suffix_mismatch");
+        }
+        missingIndex += 1;
+      }
+    }
+    if (missingIndex !== missingSequences.length) {
+      throw new Error("ledger_suffix_mismatch");
+    }
+    if (live.current.sequence === live.requested.sequence) {
+      if (
+        live.current.recordHash !== live.requested.recordHash ||
+        live.suffixRecords.length !== 0 ||
+        gaps.length !== 0
+      ) {
         throw new Error("ledger_suffix_mismatch");
       }
     } else {
-      const suffixHead = verifyLedgerContinuity(suffixRecords, {
-        initialHead: requested.recordHash,
-        initialSequence: requested.sequence,
+      const suffixHead = verifyLedgerContinuity(live.suffixRecords, {
+        gaps,
+        initialHead: live.requested.recordHash,
+        initialSequence: live.requested.sequence,
         stream,
       });
       if (
-        suffixHead.sequence !== current.sequence ||
-        suffixHead.head !== current.recordHash
+        suffixHead.sequence !== live.current.sequence ||
+        suffixHead.head !== live.current.recordHash
       ) {
         throw new Error("ledger_suffix_mismatch");
       }
     }
-    verifiedHeads[stream] = { current, requested, suffixRecords };
+    verifiedHeads[stream] = live;
+  };
+
+  verifySuffix("deletions");
+  const deletionRanges = verifyAuditRangeTombstones(
+    liveLedgers.deletions.suffixRecords,
+  );
+  if (deletionRanges.incompleteAuditRanges.length > 0) {
+    throw new Error("ledger_suffix_mismatch");
   }
+  const adminAudit = liveLedgers["admin-audit"];
+  const gaps = deletionRanges.completedAuditRanges.filter((gap) => {
+    if (
+      gap.manifest.fromSequence <= adminAudit.requested.sequence &&
+      gap.manifest.toSequence > adminAudit.requested.sequence
+    ) {
+      throw new Error("ledger_prefix_inside_deleted_range");
+    }
+    return gap.manifest.fromSequence > adminAudit.requested.sequence;
+  });
+  verifySuffix("admin-audit", gaps);
   return verifiedHeads;
 }
 

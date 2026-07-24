@@ -25,14 +25,41 @@ const PROFILE_REKEY_KEYS = new Set([
 const AUDIT_RANGE_KEYS = new Set([
   "auditDeletionJobId",
   "fromSequence",
+  "hashBeforeRange",
   "operationId",
   "rangeHash",
   "recordType",
   "schemaVersion",
   "stream",
+  "terminalRecordHash",
   "toSequence",
 ]);
 const AUDIT_RANGE_COMPLETE_KEYS = new Set([...AUDIT_RANGE_KEYS, "intentRecordHash"]);
+
+function assertAuditRangePayload(payload) {
+  const allowed =
+    payload.recordType === "audit_range_delete_complete"
+      ? AUDIT_RANGE_COMPLETE_KEYS
+      : AUDIT_RANGE_KEYS;
+  if (
+    Object.keys(payload).some((key) => !allowed.has(key)) ||
+    payload.schemaVersion !== 1 ||
+    payload.stream !== "deletions" ||
+    typeof payload.operationId !== "string" ||
+    typeof payload.auditDeletionJobId !== "string" ||
+    !Number.isSafeInteger(payload.fromSequence) ||
+    !Number.isSafeInteger(payload.toSequence) ||
+    payload.fromSequence < 1 ||
+    payload.toSequence < payload.fromSequence ||
+    !HEX_64.test(payload.rangeHash) ||
+    !HEX_64.test(payload.hashBeforeRange) ||
+    !HEX_64.test(payload.terminalRecordHash) ||
+    (payload.recordType === "audit_range_delete_complete" &&
+      !HEX_64.test(payload.intentRecordHash))
+  ) {
+    throw new Error("invalid_deletion_tombstone");
+  }
+}
 
 function canonicalize(value) {
   if (Array.isArray(value)) return value.map(canonicalize);
@@ -106,20 +133,42 @@ export function verifyLedgerContinuity(
   }
   let expectedSequence = initialSequence + 1;
   let previousHash = initialHead;
+  const orderedGaps = [...gaps].sort(
+    (left, right) =>
+      left.manifest.fromSequence - right.manifest.fromSequence ||
+      left.manifest.toSequence - right.manifest.toSequence,
+  );
+  if (orderedGaps.length > 0 && stream !== "admin-audit") {
+    throw new Error("ledger_gap");
+  }
+  for (let index = 0; index < orderedGaps.length; index += 1) {
+    verifyAuditRangeGap(orderedGaps[index]);
+    if (
+      index > 0 &&
+      orderedGaps[index - 1].manifest.toSequence >=
+        orderedGaps[index].manifest.fromSequence
+    ) {
+      throw new Error("audit_range_overlap");
+    }
+  }
+  let gapIndex = 0;
+  if (orderedGaps.some((gap) => gap.manifest.fromSequence < expectedSequence)) {
+    throw new Error("audit_range_outside_anchor");
+  }
+  const consumeGap = () => {
+    const gap = orderedGaps[gapIndex];
+    if (!gap || gap.manifest.fromSequence !== expectedSequence) return false;
+    if (gap.manifest.hashBeforeRange !== previousHash) {
+      throw new Error("audit_range_anchor_mismatch");
+    }
+    expectedSequence = gap.manifest.toSequence + 1;
+    previousHash = gap.manifest.terminalRecordHash;
+    gapIndex += 1;
+    return true;
+  };
   for (const record of ordered) {
     while (expectedSequence < record.sequence) {
-      const gap = gaps.find(
-        (candidate) =>
-          candidate.manifest.fromSequence <= expectedSequence &&
-          candidate.manifest.toSequence >= expectedSequence,
-      );
-      if (!gap || stream !== "admin-audit") throw new Error("ledger_gap");
-      verifyAuditRangeGap(gap);
-      if (gap.manifest.hashBeforeRange !== previousHash) {
-        throw new Error("audit_range_anchor_mismatch");
-      }
-      expectedSequence = gap.manifest.toSequence + 1;
-      previousHash = gap.manifest.terminalRecordHash;
+      if (!consumeGap()) throw new Error("ledger_gap");
     }
     if (
       record.sequence !== expectedSequence ||
@@ -141,32 +190,120 @@ export function verifyLedgerContinuity(
     previousHash = record.recordHash;
     expectedSequence += 1;
   }
+  while (consumeGap()) {
+    // Consume authorized ranges at the current tail.
+  }
+  if (gapIndex !== orderedGaps.length) {
+    throw new Error("ledger_gap");
+  }
   return { head: previousHash, sequence: expectedSequence - 1 };
+}
+
+export function verifyAuditRangeTombstones(records) {
+  const pendingRanges = new Map();
+  const completedAuditRanges = [];
+  for (const record of records) {
+    const payload = record?.payload;
+    if (
+      payload?.recordType !== "audit_range_delete_intent" &&
+      payload?.recordType !== "audit_range_delete_complete"
+    ) {
+      continue;
+    }
+    assertAuditRangePayload(payload);
+    if (payload.recordType === "audit_range_delete_intent") {
+      if (pendingRanges.has(payload.auditDeletionJobId)) {
+        throw new Error("audit_range_replay");
+      }
+      pendingRanges.set(payload.auditDeletionJobId, {
+        fromSequence: payload.fromSequence,
+        hashBeforeRange: payload.hashBeforeRange,
+        intentRecordHash: record.recordHash,
+        operationId: payload.operationId,
+        rangeHash: payload.rangeHash,
+        terminalRecordHash: payload.terminalRecordHash,
+        toSequence: payload.toSequence,
+      });
+      continue;
+    }
+    const intent = pendingRanges.get(payload.auditDeletionJobId);
+    if (
+      !intent ||
+      intent.fromSequence !== payload.fromSequence ||
+      intent.toSequence !== payload.toSequence ||
+      intent.operationId !== payload.operationId ||
+      intent.rangeHash !== payload.rangeHash ||
+      intent.hashBeforeRange !== payload.hashBeforeRange ||
+      intent.terminalRecordHash !== payload.terminalRecordHash ||
+      intent.intentRecordHash !== payload.intentRecordHash
+    ) {
+      throw new Error("audit_range_receipt_mismatch");
+    }
+    const receipt = {
+      fromSequence: payload.fromSequence,
+      hashBeforeRange: payload.hashBeforeRange,
+      manifestDigest: payload.rangeHash,
+      operationId: payload.operationId,
+      terminalRecordHash: payload.terminalRecordHash,
+      toSequence: payload.toSequence,
+    };
+    completedAuditRanges.push({
+      complete: receipt,
+      intent: { ...receipt },
+      manifest: {
+        fromSequence: receipt.fromSequence,
+        hashBeforeRange: receipt.hashBeforeRange,
+        manifestDigest: receipt.manifestDigest,
+        terminalRecordHash: receipt.terminalRecordHash,
+        toSequence: receipt.toSequence,
+      },
+    });
+    pendingRanges.delete(payload.auditDeletionJobId);
+  }
+  return {
+    completedAuditRanges: completedAuditRanges.sort(
+      (left, right) =>
+        left.manifest.fromSequence - right.manifest.fromSequence ||
+        left.manifest.toSequence - right.manifest.toSequence,
+    ),
+    incompleteAuditRanges: [...pendingRanges.entries()]
+      .map(([jobId, range]) => ({
+        fromSequence: range.fromSequence,
+        jobId,
+        toSequence: range.toSequence,
+      }))
+      .sort(
+        (left, right) =>
+          left.fromSequence - right.fromSequence ||
+          left.jobId.localeCompare(right.jobId, "en"),
+      ),
+  };
 }
 
 export function verifyDeletionTombstones(records, knownKeyVersions) {
   const operations = new Set();
   const markers = new Map();
-  const pendingRanges = new Map();
+  const auditRanges = verifyAuditRangeTombstones(records);
   for (const record of records) {
     const payload = record.payload;
     if (!payload || typeof payload !== "object") {
       throw new Error("invalid_deletion_tombstone");
     }
-    if (
-      payload.recordType === "profile_deletion" &&
-      (Object.keys(payload).some((key) => !PROFILE_DELETION_KEYS.has(key)) ||
+    if (payload.recordType === "profile_deletion") {
+      if (
+        Object.keys(payload).some((key) => !PROFILE_DELETION_KEYS.has(key)) ||
         payload.schemaVersion !== 1 ||
         payload.stream !== "deletions" ||
         !Number.isInteger(payload.markerKeyVersion) ||
         !knownKeyVersions.has(payload.markerKeyVersion) ||
         !/^[a-f0-9]{64}$/.test(payload.profileMarker) ||
-        typeof payload.operationId !== "string")
-    ) {
-      throw new Error("invalid_deletion_tombstone");
-    } else if (
-      payload.recordType === "profile_marker_rekey" &&
-      (Object.keys(payload).some((key) => !PROFILE_REKEY_KEYS.has(key)) ||
+        typeof payload.operationId !== "string"
+      ) {
+        throw new Error("invalid_deletion_tombstone");
+      }
+    } else if (payload.recordType === "profile_marker_rekey") {
+      if (
+        Object.keys(payload).some((key) => !PROFILE_REKEY_KEYS.has(key)) ||
         payload.schemaVersion !== 1 ||
         payload.stream !== "deletions" ||
         !Number.isInteger(payload.markerKeyVersion) ||
@@ -176,40 +313,13 @@ export function verifyDeletionTombstones(records, knownKeyVersions) {
         !knownKeyVersions.has(payload.previousMarkerKeyVersion) ||
         !/^[a-f0-9]{64}$/.test(payload.profileMarker) ||
         !/^[a-f0-9]{64}$/.test(payload.previousProfileMarker) ||
-        typeof payload.operationId !== "string")
-    ) {
-      throw new Error("invalid_deletion_tombstone");
+        typeof payload.operationId !== "string"
+      ) {
+        throw new Error("invalid_deletion_tombstone");
+      }
     } else if (
-      (payload.recordType === "audit_range_delete_intent" ||
-        payload.recordType === "audit_range_delete_complete") &&
-      (Object.keys(payload).some(
-        (key) =>
-          !(
-            payload.recordType === "audit_range_delete_complete"
-              ? AUDIT_RANGE_COMPLETE_KEYS
-              : AUDIT_RANGE_KEYS
-          ).has(key),
-      ) ||
-        payload.schemaVersion !== 1 ||
-        payload.stream !== "deletions" ||
-        typeof payload.operationId !== "string" ||
-        typeof payload.auditDeletionJobId !== "string" ||
-        !Number.isSafeInteger(payload.fromSequence) ||
-        !Number.isSafeInteger(payload.toSequence) ||
-        payload.fromSequence < 1 ||
-        payload.toSequence < payload.fromSequence ||
-        !HEX_64.test(payload.rangeHash) ||
-        (payload.recordType === "audit_range_delete_complete" &&
-          !HEX_64.test(payload.intentRecordHash)))
-    ) {
-      throw new Error("invalid_deletion_tombstone");
-    } else if (
-      ![
-        "profile_deletion",
-        "profile_marker_rekey",
-        "audit_range_delete_intent",
-        "audit_range_delete_complete",
-      ].includes(payload.recordType)
+      payload.recordType !== "audit_range_delete_intent" &&
+      payload.recordType !== "audit_range_delete_complete"
     ) {
       throw new Error("invalid_deletion_tombstone");
     }
@@ -229,30 +339,6 @@ export function verifyDeletionTombstones(records, knownKeyVersions) {
       }
       markers.delete(payload.previousProfileMarker);
       markers.set(payload.profileMarker, payload.markerKeyVersion);
-    } else if (payload.recordType === "audit_range_delete_intent") {
-      if (pendingRanges.has(payload.auditDeletionJobId)) {
-        throw new Error("audit_range_replay");
-      }
-      pendingRanges.set(payload.auditDeletionJobId, {
-        fromSequence: payload.fromSequence,
-        intentRecordHash: record.recordHash,
-        operationId: payload.operationId,
-        rangeHash: payload.rangeHash,
-        toSequence: payload.toSequence,
-      });
-    } else {
-      const intent = pendingRanges.get(payload.auditDeletionJobId);
-      if (
-        !intent ||
-        intent.fromSequence !== payload.fromSequence ||
-        intent.toSequence !== payload.toSequence ||
-        intent.operationId !== payload.operationId ||
-        intent.rangeHash !== payload.rangeHash ||
-        intent.intentRecordHash !== payload.intentRecordHash
-      ) {
-        throw new Error("audit_range_receipt_mismatch");
-      }
-      pendingRanges.delete(payload.auditDeletionJobId);
     }
   }
   const continuity = verifyLedgerContinuity(records, { stream: "deletions" });
@@ -262,17 +348,7 @@ export function verifyDeletionTombstones(records, knownKeyVersions) {
       (left, right) => left - right,
     ),
     activeProfileMarkers: [...markers.keys()].sort(),
-    incompleteAuditRanges: [...pendingRanges.entries()]
-      .map(([jobId, range]) => ({
-        fromSequence: range.fromSequence,
-        jobId,
-        toSequence: range.toSequence,
-      }))
-      .sort(
-        (left, right) =>
-          left.fromSequence - right.fromSequence ||
-          left.jobId.localeCompare(right.jobId, "en"),
-      ),
+    ...auditRanges,
   };
 }
 
