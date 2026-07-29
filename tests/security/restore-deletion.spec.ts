@@ -47,6 +47,7 @@ async function fixtureBackup(
     brokenLedger?: boolean;
     conflictingAudit?: boolean;
     pendingIntent?: boolean;
+    storageProfileMarker?: string | null;
     suffixCompletedRange?: boolean;
     suffixPendingIntent?: boolean;
   } = {},
@@ -160,7 +161,9 @@ async function fixtureBackup(
       {
         bytes: new TextEncoder().encode("private object"),
         logicalPath: `storage/plan-exports/${marker}/file.pdf`,
-        profileMarker: marker,
+        ...(options.storageProfileMarker === null
+          ? {}
+          : { profileMarker: options.storageProfileMarker ?? marker }),
         type: "storage",
       },
       {
@@ -596,6 +599,71 @@ describe("restore aislado fail-closed", () => {
     expect(statement).toContain("external_receipt_signature");
     expect(statement).toContain("on conflict (request_id, phase) do nothing");
     expect(statement).not.toContain("where value ->> 'phase' = 'outcome'");
+  });
+
+  it("exige un marcador Storage canónico antes de cualquier mutación", async () => {
+    const marker = "c".repeat(64);
+    for (const [label, storageProfileMarker] of [
+      ["missing", null],
+      ["malformed", "not-a-canonical-marker"],
+    ] as const) {
+      const fixture = await fixtureBackup(`live-restore-${label}`, marker, {
+        storageProfileMarker,
+      });
+      const target = await temporaryDirectory(`health-design-restore-${label}-`);
+      const targetRef = `isolated-live-restore-${label}`;
+      const targetFingerprint = targetIdentityFingerprint({
+        knownProjectRefs,
+        targetDatabaseUrl: isolatedDatabaseUrl,
+        targetRef,
+        targetSupabaseUrl: isolatedSupabaseUrl,
+      });
+      let mutations = 0;
+      const mutate = () => {
+        mutations += 1;
+        return Promise.resolve();
+      };
+
+      await expect(
+        restoreSupabaseRecoverySet(
+          {
+            databaseUrl: isolatedDatabaseUrl,
+            directory: fixture.directory,
+            keyring: fixture.keyring,
+            knownProjectRefs,
+            knownTombstoneKeyVersions: new Set([1]),
+            ledgerHeadProvider: fixture.ledgerHeadProvider,
+            backupJobId: fixture.promotionIdentity.backupJobId,
+            restoreJobId: fixture.promotionIdentity.restoreJobId,
+            targetFingerprint,
+            targetDirectory: target,
+            targetEnvironment: "local-isolated",
+            targetRef,
+            targetSupabaseUrl: isolatedSupabaseUrl,
+          },
+          {
+            applyAuditRecords: mutate,
+            applyCurrentMigrations: mutate,
+            applyTombstones: mutate,
+            assertDatabaseEmpty: () => Promise.resolve(),
+            registerValidationKey: mutate,
+            revokeSessions: mutate,
+            runPgRestore: mutate,
+            uploadStorageObject: mutate,
+            verifyAbsenceAndSecurity: () =>
+              Promise.resolve({
+                aal2Required: true,
+                deletedProfilesAbsent: true,
+                rlsVerified: true,
+                securityPolicyDigest: "d".repeat(64),
+                sessionsRevoked: true,
+                storageComplete: true,
+              }),
+          },
+        ),
+      ).rejects.toThrow("storage_profile_marker_required");
+      expect(mutations).toBe(0);
+    }
   });
 
   it("ejecuta pg_restore sin secretos en argv y verifica invariantes antes de promover", async () => {

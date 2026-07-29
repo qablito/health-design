@@ -77,6 +77,14 @@ export async function restoreSupabaseRecoverySet(input, dependencies) {
   if (!["local", "development"].includes(verified.manifest.sourceEnvironment)) {
     throw new Error("restore_source_environment_forbidden");
   }
+  if (
+    verified.decryptedObjects.some(
+      (object) =>
+        object.type === "storage" && !/^[a-f0-9]{64}$/.test(object.profileMarker),
+    )
+  ) {
+    throw new Error("storage_profile_marker_required");
+  }
   await dependencies.onRecoveryVerified?.(verified);
   const database = requiredObject(verified.decryptedObjects, "database");
   const deletions = jsonObject(
