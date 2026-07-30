@@ -1,11 +1,11 @@
 # Contrato ejecutable T18: borrado, backup, restore y operaciones
 
-**Estado:** `T18_COMPLETE_LOCAL_PASS`
+**Estado:** `T18_COMPLETE_REMOTE_PASS`
 
 **Base:** `3c561abb5d09cfc8538b1580624e8f18b350fb65`
 
-**Entornos:** implementación y validación local. Development requiere una
-autorización posterior y Production permanece fuera de alcance.
+**Entornos:** implementación local y validación operativa en Development
+`nwoivdxdupklervtnovd`. Production permanece fuera de alcance.
 
 ## Invariantes
 
@@ -102,7 +102,7 @@ reanudable y nunca reactiva el perfil.
   cifrado, verificación y restore; la KEK no entra en Edge ni en el navegador.
 - Los scripts destructivos son dry-run por defecto, exigen entorno e ID exactos
   y no reciben secretos por argumentos.
-- T19, T20, Production, despliegues y datos reales no forman parte de T18 local.
+- T19, T20, Production y cualquier promoción no forman parte del cierre T18.
 
 ## Operación versionada
 
@@ -111,6 +111,8 @@ reanudable y nunca reactiva el perfil.
 - [`anonymous-auth-cleanup.md`](../runbooks/anonymous-auth-cleanup.md)
 - [`audit-retention-deletion.md`](../runbooks/audit-retention-deletion.md)
 
-`pnpm test:t18:remote -- --dry-run` verifica sin red que el plan de activación
-está limitado a Development. No concede autorización, no ejecuta mutaciones y
-no sustituye las aprobaciones independientes exigidas para cada operación.
+`pnpm test:t18:remote -- --dry-run` verifica sin red que el plan operativo está
+limitado a Development. El recibo remoto final está en
+[`TASK_18_VERIFICATION.md`](../quality/TASK_18_VERIFICATION.md); no concede
+autorización para repetir operaciones ni sustituye las aprobaciones
+independientes exigidas para cada ejecución.

@@ -138,7 +138,7 @@ flowchart TD
 | Generación y edición de plan | API | API → motor | manipulación de restricciones o versiones | planificado |
 | Exportación PDF/Excel | PWA/API | API → archivo | filtrado de compuestos, XSS/fórmulas, cache | artefactos privados T15 y proyección de snapshot T17E; validación remota T17 pendiente |
 | Funciones superadmin | panel/endpoint autenticado | usuario → privilegio | impersonación, borrado, publicación | AAL2, Edge y ledger remoto probados con SU real solo en desarrollo |
-| Backups/restauración | operador/proveedor | operación → datos | reaparición de perfiles borrados | T18 local: cifrado, cuatro rotaciones sintéticas, restore aislado, tombstones y fail-closed; activación Development pendiente |
+| Backups/restauración | operador/proveedor | operación → datos | reaparición de perfiles borrados | T18 Development: cuatro backups cifrados, cuatro restores aislados, tombstones, auditoría y fail-closed verificados; sin promoción |
 | Dependencias y despliegue | CI/Cloudflare | build → producción | artefactos alterados | `.gitignore` y scripts actuales no son pipeline de producción |
 
 ## Top abuse paths
@@ -168,7 +168,7 @@ flowchart TD
 | TM-009 | prompt adversarial | llamada a LLM | induce números o dosis inventados | información peligrosa | explicaciones, confianza | contrato: LLM posterior y no dueño de cálculos | guardia de salida pendiente | JSON schema, variables allowlisted, rechazo íntegro y fallback determinista | rechazo de campos/claims prohibidos | media | alta | high |
 | TM-010 | atacante de disponibilidad | endpoint de generación/exportación | repite solicitudes pesadas | coste y caída | API, presupuesto, disponibilidad | límite de 10 €/mes acordado | rate limit y presupuesto no implementados | ventanas por perfil/actor/IP, idempotencia, reutilización de artefacto, cota máxima EUR/FX atómica, timeout pendiente, kill switch y alertas de anomalía | p95, 429, reservas, errores y coste por operación | media | alta | high |
 | TM-011 | invitado | datos de error/log | provoca excepción | filtra contexto clínico | logs, secretos | planificado: log técnico privado | redacción pendiente | allowlist antes de proxy/Edge/error/job; no body/query/headers; canarios de token/QR/medicación | escaneo de todos los sinks y patrones de excepción | media | alta | high |
-| TM-012 | operador/bug | restore sin exclusiones/continuidad | reanima perfil, trunca auditoría o acepta hueco falso | violación de borrado/trazabilidad | backups, salud, auditoría | T18 local: streams independientes, copia local cifrada, tombstone anterior a purga, AEAD/Ed25519, manifiesto de rangos y restore fail-closed de cuatro fixtures | falta activar y medir el flujo completo en Development | mantener destino aislado, aprobaciones separadas y bloquear ante intent/rango incompleto | divergencia, hueco no cubierto, intent pendiente y comparación borrado/auditoría/restore | baja | crítica | high |
+| TM-012 | operador/bug | restore sin exclusiones/continuidad | reanima perfil, trunca auditoría o acepta hueco falso | violación de borrado/trazabilidad | backups, salud, auditoría | T18 Development: streams independientes, backups cifrados, tombstone anterior a purga, AEAD/Ed25519, manifiesto de rangos y cuatro restores fail-closed aislados verificados | Production no ensayada; mantener monitorización y simulacros periódicos | mantener destino aislado, aprobaciones separadas y bloquear ante intent/rango incompleto | divergencia, hueco no cubierto, intent pendiente y comparación borrado/auditoría/restore | baja | crítica | high |
 | TM-013 | supply chain | dependencia/build comprometido | altera cliente o pipeline | bypass de controles | artefactos, secretos | contrato: lockfile, SCA, SBOM y procedencia/firma | CI y release no implementados | revisión, escaneo, artefactos firmados, secretos fuera del build y bloqueo por severidad | hashes, provenance y alertas de dependencia | baja | crítica | high |
 | TM-014 | usuario | nombre/SKU malicioso | inserta fórmula en Excel | ejecución al abrir | exportación | neutralización de prefijos, texto externo sanitizado y descarga privada implementados | smoke remoto T17 pendiente | conservar límites, pruebas hostiles y descarga no cacheada | pruebas con payloads de fórmula | baja | media | medium |
 | TM-015 | fuente externa | URL redirigida | provoca SSRF durante ingestión | acceso a red interna | ingestión, secretos | no se ha implementado ingestión remota | no implementar fetch arbitrario | allowlist de dominios, egress restringido, sin seguir redirecciones internas | logs de DNS/HTTP y bloqueos | baja | alta | medium |
@@ -221,6 +221,6 @@ Estos paths son futuros y deben existir durante la implementación; los scripts 
 - [x] Se separan runtime, fuentes externas y tooling local.
 - [x] Se distinguen controles planificados de controles ya evidenciados en el repositorio.
 - [x] Se explicitan supuestos, preguntas abiertas y caminos futuros.
-- [x] T18 valida localmente RLS, rotación sintética de claves, cuatro rotaciones,
-  restore aislado y límites operativos. La activación Development y T20 siguen
-  pendientes.
+- [x] T18 valida en Development RLS, cuatro backups, cuatro restores aislados,
+  tombstones, auditoría y límites operativos. Production queda fuera y T20
+  mantiene la agregación restante de G7.

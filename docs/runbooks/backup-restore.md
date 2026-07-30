@@ -1,11 +1,12 @@
 # Backup cifrado y restauración aislada
 
 **Propietario:** superadministrador operador
-**Última revisión:** 2026-07-23
-**Último simulacro:** 2026-07-23, fixture local, cuatro rotaciones, PASS
-**RPO/RTO observado:** RPO sintético 0 días; RTO del fixture de cuatro
-rotaciones 0,70 s. Development debe medirse durante la activación remota y
-Production queda fuera.
+**Última revisión:** 2026-07-30
+**Último simulacro:** 2026-07-30, Development, cuatro backups y cuatro restores
+aislados, PASS
+**RPO/RTO observado:** cuatro capturas verificadas el mismo día; verificación
+máxima de backup 16 min 30 s y RTO máximo de restore 4 min 24 s. Cumple RPO ≤7
+días y RTO ≤24 h en esta observación. Production queda fuera.
 
 ## Objetivo y alcance
 
@@ -100,9 +101,9 @@ y solo emite `BACKUP_DESCRIPTOR_VERIFIED`; nunca sustituye una captura real.
 `BACKUP_READY` seguido de `BACKUP_VERIFIED` permite marcar el job `ready`.
 Una copia `failed` no desplaza ninguna rotación.
 
-Antes de activar Development se debe comprobar fuera del código que los
-buckets R2 de continuidad tienen Object Lock/retención inmutable habilitados.
-La ausencia de esa propiedad bloquea la activación remota.
+Antes de cada ejecución en Development se debe comprobar fuera del código que
+los buckets R2 de continuidad tienen Object Lock/retención inmutable
+habilitados. La ausencia de esa propiedad bloquea la operación.
 
 ## Rotación y poda
 
@@ -184,7 +185,7 @@ promover.
 `RESTORE_VERIFIED` no promueve nada. La promoción se solicita por separado en
 el panel administrativo y exige que PostgreSQL vuelva a validar esa atestación
 completa, además de AAL2, TOTP reciente y doble confirmación. No existe rollback
-de una promoción; por eso T18 local no la ejecuta.
+de una promoción; por eso el cierre remoto de T18 no la ejecutó.
 
 ## Reanudación, validación y evidencia
 
@@ -196,5 +197,6 @@ de una promoción; por eso T18 local no la ejecuta.
   `pnpm verify:audit-ledger`, `pnpm test:operations` y `pnpm test:db`.
 - Alertas: backup `ready` >7 días, backup fallido, prefijo atrasado, restore
   bloqueado, RTO ≥24 h o poda pendiente.
-- Development requiere medir RPO/RTO reales y archivar el recibo antes de
-  declarar cualquier estado remoto.
+- Cada simulacro remoto debe volver a medir RPO/RTO y archivar su recibo. El
+  cierre Development del 2026-07-30 está en
+  [`TASK_18_VERIFICATION.md`](../quality/TASK_18_VERIFICATION.md).

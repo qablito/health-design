@@ -44,12 +44,12 @@ de productos comerciales tienen recibo local T16 en
 [`TASK_16_VERIFICATION.md`](TASK_16_VERIFICATION.md); la puerta remota de T16
 sigue pendiente. La puerta AA final continúa en T19 y los SKU,
 supermercados/precios están cerrados en
-[`TASK_17_VERIFICATION.md`](TASK_17_VERIFICATION.md). T18 implementa localmente
-borrado permanente, ledger de tombstones, cuatro rotaciones cifradas, restore
-aislado, limpieza Auth y observabilidad; su recibo está en
+[`TASK_17_VERIFICATION.md`](TASK_17_VERIFICATION.md). T18 valida en Development
+borrado permanente, ledger de tombstones, cuatro backups cifrados, cuatro
+restores aislados, limpieza Auth y observabilidad; su recibo está en
 [`TASK_18_VERIFICATION.md`](TASK_18_VERIFICATION.md) con estado
-`T18_COMPLETE_LOCAL_PASS`. La activación remota de T18 y la puerta agregada G7
-continúan pendientes.
+`T18_COMPLETE_REMOTE_PASS`. El fragmento T18 de G7 está cerrado; la puerta
+agregada G7 continúa pendiente de T20.
 
 ## 1. Bloques de producto
 

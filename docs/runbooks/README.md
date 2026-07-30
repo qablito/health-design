@@ -7,8 +7,9 @@
 [`anonymous-auth-cleanup.md`](./anonymous-auth-cleanup.md) y
 [`audit-retention-deletion.md`](./audit-retention-deletion.md) ya contienen
 procedimientos ejecutables. Los cuatro runbooks T18 están validados con
-fixtures locales; su activación remota Development permanece pendiente de
-autorizaciones independientes.
+fixtures locales y con el recorrido operativo de Development registrado en
+[`TASK_18_VERIFICATION.md`](../quality/TASK_18_VERIFICATION.md). Production y
+cualquier repetición destructiva requieren autorización independiente.
 **Fuente:** [`OPERATIONS.md`](../operations/OPERATIONS.md) y
 [`plan de implementación`](../plans/2026-07-16-v1-implementation-plan.md).
 

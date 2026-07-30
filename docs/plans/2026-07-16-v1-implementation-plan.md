@@ -1164,10 +1164,10 @@ pnpm test:e2e -- shopping.spec.ts
 
 ## Tarea 18 — Borrado, backups, restore y observabilidad
 
-> **Estado 2026-07-24:** `T18_COMPLETE_LOCAL_PASS`. Validación local,
-> remediación de 17 hallazgos de Codex Security y revisión independiente
-> cerradas sin residuales materiales. Development requiere autorizaciones
-> destructivas separadas; Production no se ha tocado.
+> **Estado 2026-07-30:** `T18_COMPLETE_REMOTE_PASS`. Validación local y de
+> Development cerrada con borrado permanente, rango de auditoría, cuatro
+> backups y cuatro restores aislados sin promoción. El escaneo final de Codex
+> Security quedó sellado con 0 hallazgos. Production no se ha tocado.
 
 **Resultado:** continuidad verificable con cuatro rotaciones y ningún perfil
 borrado reaparece.
