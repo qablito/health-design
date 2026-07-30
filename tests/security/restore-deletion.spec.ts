@@ -90,7 +90,7 @@ writeFileSync(output, JSON.stringify({
     user: string;
   };
   expect(captured).toEqual({
-    args: ["--exit-on-error", "--capture", outputPath],
+    args: ["--dbname", "postgres", "--exit-on-error", "--capture", outputPath],
     database: "postgres",
     host: "127.0.0.1",
     password: "local-secret",

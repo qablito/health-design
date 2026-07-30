@@ -40,10 +40,11 @@ function jsonObject(bytes, code) {
 
 export function runPgRestore({ args, environment }) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn("pg_restore", args, {
+    const connection = libpqEnvironment(environment.PGDATABASE);
+    const child = spawn("pg_restore", ["--dbname", connection.PGDATABASE, ...args], {
       env: {
         PATH: process.env.PATH,
-        ...libpqEnvironment(environment.PGDATABASE),
+        ...connection,
       },
       stdio: ["ignore", "ignore", "pipe"],
     });
