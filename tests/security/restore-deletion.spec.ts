@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -50,6 +51,7 @@ async function fixtureBackup(
     brokenLedger?: boolean;
     conflictingAudit?: boolean;
     pendingIntent?: boolean;
+    storageProfileId?: string;
     storageProfileMarker?: string | null;
     suffixCompletedRange?: boolean;
     suffixPendingIntent?: boolean;
@@ -57,6 +59,8 @@ async function fixtureBackup(
 ) {
   const directory = await temporaryDirectory("health-design-recovery-set-");
   const keyring = await createFixtureKeyring();
+  const storageProfileId =
+    options.storageProfileId ?? "51000000-0000-4000-8000-000000005101";
   const database = {
     audit: [
       {
@@ -163,7 +167,7 @@ async function fixtureBackup(
       },
       {
         bytes: new TextEncoder().encode("private object"),
-        logicalPath: `storage/plan-exports/${marker}/file.pdf`,
+        logicalPath: `storage/plan-exports/${storageProfileId}/file.pdf`,
         ...(options.storageProfileMarker === null
           ? {}
           : { profileMarker: options.storageProfileMarker ?? marker }),
@@ -201,7 +205,7 @@ async function fixtureBackup(
       {
         bucket: "plan-exports",
         enumerated: true,
-        logicalPaths: [`storage/plan-exports/${marker}/file.pdf`],
+        logicalPaths: [`storage/plan-exports/${storageProfileId}/file.pdf`],
       },
     ],
     toolVersion: "t18-test",
@@ -407,6 +411,80 @@ describe("restore aislado fail-closed", () => {
         tombstoneHmacKeys: { 1: "fixture-key" },
       }),
     ).toThrow("restore_target_identity_mismatch");
+  });
+
+  it("valida el marcador Storage contra el UUID con claves vigentes e históricas", () => {
+    const targetRef = "isolated-marker-test";
+    const dependencies = createSupabaseRestoreDependencies({
+      knownProjectRefs,
+      targetDatabaseUrl: isolatedDatabaseUrl,
+      targetFingerprint: targetIdentityFingerprint({
+        knownProjectRefs,
+        targetDatabaseUrl: isolatedDatabaseUrl,
+        targetRef,
+        targetSupabaseUrl: isolatedSupabaseUrl,
+      }),
+      targetRef,
+      targetServiceRoleKey: "service-role-secret",
+      targetSupabaseUrl: isolatedSupabaseUrl,
+      tombstoneHmacKeys: { 1: "legacy-key", 2: "current-key" },
+    });
+    const profileId = "5a000000-0000-4000-8000-000000005101";
+    const legacyMarker = createHmac("sha256", "legacy-key")
+      .update(profileId)
+      .digest("hex");
+
+    expect(
+      dependencies.isStorageProfileMarkerValid({
+        profileId,
+        profileMarker: legacyMarker,
+      }),
+    ).toBe(true);
+    expect(
+      dependencies.isStorageProfileMarkerValid({
+        profileId: "5b000000-0000-4000-8000-000000005102",
+        profileMarker: legacyMarker,
+      }),
+    ).toBe(false);
+    expect(
+      dependencies.isStorageProfileMarkerValid({
+        profileId: profileId.toUpperCase(),
+        profileMarker: legacyMarker,
+      }),
+    ).toBe(false);
+  });
+
+  it("mantiene alineado el digest de política entre restore y SQL", async () => {
+    const files = await Promise.all([
+      readFile(
+        new URL(
+          "../../supabase/migrations/20260723160000_backup_restore_operations.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+      readFile(
+        new URL(
+          "../../supabase/migrations/20260730133410_align_restore_policy_digest.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+      readFile(
+        new URL(
+          "../../supabase/tests/database/backup_restore_behavior_test.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    ]);
+
+    for (const file of files) {
+      expect(file).toContain(SECURITY_POLICY_MANIFEST_DIGEST);
+      expect(file).not.toContain(
+        "de41957f4b5b5fbf2f19ddf15f3909be9e45a42fdba1083fbe5716108a2cfe16",
+      );
+    }
   });
 
   it("impide redirecciones al enviar la credencial de Storage", async () => {
@@ -666,6 +744,7 @@ describe("restore aislado fail-closed", () => {
             applyCurrentMigrations: mutate,
             applyTombstones: mutate,
             assertDatabaseEmpty: () => Promise.resolve(),
+            isStorageProfileMarkerValid: () => true,
             registerValidationKey: mutate,
             revokeSessions: mutate,
             runPgRestore: mutate,
@@ -686,9 +765,92 @@ describe("restore aislado fail-closed", () => {
     }
   });
 
+  it("rechaza marcadores Storage no ligados al UUID antes de cualquier mutación", async () => {
+    const profileId = "5a000000-0000-4000-8000-000000005101";
+    const marker = createHmac("sha256", "fixture-key").update(profileId).digest("hex");
+    for (const [label, storageProfileId, storageProfileMarker] of [
+      ["wrong-canonical", profileId, "d".repeat(64)],
+      ["cross-profile", "5b000000-0000-4000-8000-000000005102", marker],
+      ["uppercase-profile", profileId.toUpperCase(), marker],
+    ] as const) {
+      const fixture = await fixtureBackup(`binding-${label}`, marker, {
+        storageProfileId,
+        storageProfileMarker,
+      });
+      const targetRef = `isolated-binding-${label}`;
+      const targetFingerprint = targetIdentityFingerprint({
+        knownProjectRefs,
+        targetDatabaseUrl: isolatedDatabaseUrl,
+        targetRef,
+        targetSupabaseUrl: isolatedSupabaseUrl,
+      });
+      const validator = createSupabaseRestoreDependencies({
+        knownProjectRefs,
+        targetDatabaseUrl: isolatedDatabaseUrl,
+        targetFingerprint,
+        targetRef,
+        targetServiceRoleKey: "service-role-secret",
+        targetSupabaseUrl: isolatedSupabaseUrl,
+        tombstoneHmacKeys: { 1: "fixture-key" },
+      });
+      let mutations = 0;
+      const mutate = () => {
+        mutations += 1;
+        return Promise.resolve();
+      };
+
+      await expect(
+        restoreSupabaseRecoverySet(
+          {
+            backupJobId: fixture.promotionIdentity.backupJobId,
+            databaseUrl: isolatedDatabaseUrl,
+            directory: fixture.directory,
+            keyring: fixture.keyring,
+            knownProjectRefs,
+            knownTombstoneKeyVersions: new Set([1]),
+            ledgerHeadProvider: fixture.ledgerHeadProvider,
+            restoreJobId: fixture.promotionIdentity.restoreJobId,
+            targetDirectory: await temporaryDirectory(
+              `health-design-restore-binding-${label}-`,
+            ),
+            targetEnvironment: "local-isolated",
+            targetFingerprint,
+            targetRef,
+            targetSupabaseUrl: isolatedSupabaseUrl,
+          },
+          {
+            applyAuditRecords: mutate,
+            applyCurrentMigrations: mutate,
+            applyTombstones: mutate,
+            assertDatabaseEmpty: () => Promise.resolve(),
+            isStorageProfileMarkerValid: (input) =>
+              validator.isStorageProfileMarkerValid(input),
+            onRecoveryVerified: mutate,
+            registerValidationKey: mutate,
+            revokeSessions: mutate,
+            runPgRestore: mutate,
+            uploadStorageObject: mutate,
+            verifyAbsenceAndSecurity: () =>
+              Promise.resolve({
+                aal2Required: true,
+                deletedProfilesAbsent: true,
+                rlsVerified: true,
+                securityPolicyDigest: SECURITY_POLICY_MANIFEST_DIGEST,
+                sessionsRevoked: true,
+                storageComplete: true,
+              }),
+          },
+        ),
+      ).rejects.toThrow("storage_profile_marker_binding_invalid");
+      expect(mutations).toBe(0);
+    }
+  });
+
   it("ejecuta pg_restore sin secretos en argv y verifica invariantes antes de promover", async () => {
-    const marker = "c".repeat(64);
+    const profileId = "51000000-0000-4000-8000-000000005101";
+    const marker = createHmac("sha256", "fixture-key").update(profileId).digest("hex");
     const fixture = await fixtureBackup("live-restore", marker, {
+      storageProfileId: profileId,
       suffixCompletedRange: true,
     });
     const target = await temporaryDirectory("health-design-restore-live-");
@@ -733,6 +895,9 @@ describe("restore aislado fail-closed", () => {
           calls.push("empty");
           return Promise.resolve();
         },
+        isStorageProfileMarkerValid: ({ profileId: candidateId, profileMarker }) =>
+          profileMarker ===
+          createHmac("sha256", "fixture-key").update(candidateId).digest("hex"),
         registerValidationKey: () => {
           calls.push("key");
           return Promise.resolve();
@@ -786,8 +951,11 @@ describe("restore aislado fail-closed", () => {
   });
 
   it("bloquea la promoción si el destino no conserva AAL2", async () => {
-    const marker = "c".repeat(64);
-    const fixture = await fixtureBackup("live-restore-without-aal2", marker);
+    const profileId = "51000000-0000-4000-8000-000000005101";
+    const marker = createHmac("sha256", "fixture-key").update(profileId).digest("hex");
+    const fixture = await fixtureBackup("live-restore-without-aal2", marker, {
+      storageProfileId: profileId,
+    });
     const target = await temporaryDirectory("health-design-restore-no-aal2-");
     const targetRef = "isolated-live-restore-no-aal2";
     const targetFingerprint = targetIdentityFingerprint({
@@ -818,6 +986,9 @@ describe("restore aislado fail-closed", () => {
           applyCurrentMigrations: () => Promise.resolve(),
           applyTombstones: () => Promise.resolve(),
           assertDatabaseEmpty: () => Promise.resolve(),
+          isStorageProfileMarkerValid: ({ profileId: candidateId, profileMarker }) =>
+            profileMarker ===
+            createHmac("sha256", "fixture-key").update(candidateId).digest("hex"),
           registerValidationKey: () => Promise.resolve(),
           revokeSessions: () => Promise.resolve(),
           runPgRestore: () => Promise.resolve(),
@@ -1094,6 +1265,7 @@ describe("restore aislado fail-closed", () => {
         },
         {
           assertDatabaseEmpty: () => Promise.resolve(),
+          isStorageProfileMarkerValid: () => true,
         } as never,
       ),
     ).rejects.toThrow("restore_ledger_not_closed");

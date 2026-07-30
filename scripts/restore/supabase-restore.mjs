@@ -16,6 +16,7 @@ import { assertRestoreTargetIdentity } from "../operations/supabase-project-iden
 import { assertIsolatedRestoreTarget } from "./restore-recovery-set.mjs";
 
 const decoder = new TextDecoder();
+const PROFILE_UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
 
 function requiredObject(objects, type) {
   const matching = objects.filter((object) => object.type === type);
@@ -77,13 +78,23 @@ export async function restoreSupabaseRecoverySet(input, dependencies) {
   if (!["local", "development"].includes(verified.manifest.sourceEnvironment)) {
     throw new Error("restore_source_environment_forbidden");
   }
-  if (
-    verified.decryptedObjects.some(
-      (object) =>
-        object.type === "storage" && !/^[a-f0-9]{64}$/.test(object.profileMarker),
-    )
-  ) {
+  const storageObjects = verified.decryptedObjects.filter(
+    (object) => object.type === "storage",
+  );
+  if (storageObjects.some((object) => !/^[a-f0-9]{64}$/.test(object.profileMarker))) {
     throw new Error("storage_profile_marker_required");
+  }
+  for (const object of storageObjects) {
+    const profileId = storageIdentity(object.logicalPath).path.split("/", 1)[0];
+    if (
+      !PROFILE_UUID.test(profileId) ||
+      !(await dependencies.isStorageProfileMarkerValid?.({
+        profileId,
+        profileMarker: object.profileMarker,
+      }))
+    ) {
+      throw new Error("storage_profile_marker_binding_invalid");
+    }
   }
   await dependencies.onRecoveryVerified?.(verified);
   const database = requiredObject(verified.decryptedObjects, "database");
@@ -149,9 +160,7 @@ export async function restoreSupabaseRecoverySet(input, dependencies) {
   await dependencies.revokeSessions();
   let restoredStorageObjects = 0;
   let suppressedStorageObjects = 0;
-  for (const object of verified.decryptedObjects.filter(
-    (candidate) => candidate.type === "storage",
-  )) {
+  for (const object of storageObjects) {
     if (object.profileMarker && deletedMarkers.has(object.profileMarker)) {
       suppressedStorageObjects += 1;
       continue;

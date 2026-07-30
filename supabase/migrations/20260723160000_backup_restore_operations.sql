@@ -440,7 +440,7 @@ begin
       or v_payload ->> 'storageComplete' <> 'true'
       or v_payload ->> 'rlsVerified' <> 'true'
       or v_payload ->> 'securityPolicyDigest' <>
-        'de41957f4b5b5fbf2f19ddf15f3909be9e45a42fdba1083fbe5716108a2cfe16'
+        '949f93950219470fe325bb427912bcf274ba594c60f94a5623add2517de73bf5'
       or v_payload ->> 'targetIsolated' <> 'true'
       or v_payload ->> 'trafficEnabled' <> 'false'
       or not exists (

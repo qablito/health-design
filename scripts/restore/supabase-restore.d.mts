@@ -21,6 +21,10 @@ export function restoreSupabaseRecoverySet(
     applyCurrentMigrations(): Promise<void>;
     applyTombstones(markers: string[]): Promise<void>;
     assertDatabaseEmpty(): Promise<void>;
+    isStorageProfileMarkerValid(input: {
+      profileId: string;
+      profileMarker: string;
+    }): boolean | Promise<boolean>;
     onDatabaseRestored?(): Promise<void>;
     onRecoveryVerified?(verified: unknown): Promise<void>;
     registerValidationKey(input: { keyVersion: number }): Promise<void>;

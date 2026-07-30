@@ -1,4 +1,4 @@
-import { createHash, createHmac } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { spawn } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
 import { basename, join } from "node:path";
@@ -7,6 +7,7 @@ import { assertRestoreTargetIdentity } from "../operations/supabase-project-iden
 
 export const SECURITY_POLICY_MANIFEST_DIGEST =
   "949f93950219470fe325bb427912bcf274ba594c60f94a5623add2517de73bf5";
+const PROFILE_UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
 
 function run(command, args, { environment, input = "" }) {
   return new Promise((resolvePromise, reject) => {
@@ -342,6 +343,19 @@ where relation.relkind in ('r','p','v','m','S')
         ).trim(),
       );
       if (count !== 0) throw new Error("restore_target_database_not_empty");
+    },
+    isStorageProfileMarkerValid: ({ profileId, profileMarker }) => {
+      if (!PROFILE_UUID.test(profileId) || !/^[a-f0-9]{64}$/.test(profileMarker)) {
+        return false;
+      }
+      const actual = Buffer.from(profileMarker, "hex");
+      let valid = false;
+      for (const key of Object.values(bundle.tombstoneHmacKeys)) {
+        if (typeof key !== "string" || key.length === 0) continue;
+        const expected = createHmac("sha256", key).update(profileId).digest();
+        valid = timingSafeEqual(actual, expected) || valid;
+      }
+      return valid;
     },
     registerValidationKey: async ({ keyVersion }) => {
       const publicKey = bundle.signingPublicKeys?.[String(keyVersion)];

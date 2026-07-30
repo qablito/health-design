@@ -24,6 +24,10 @@ export function createSupabaseRestoreDependencies(
   },
 ): {
   applyAuditRecords(records: unknown[]): Promise<void>;
+  isStorageProfileMarkerValid(input: {
+    profileId: string;
+    profileMarker: string;
+  }): boolean;
   uploadStorageObject(input: {
     bucket: string;
     bytes: Uint8Array;

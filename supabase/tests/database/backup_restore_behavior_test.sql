@@ -181,7 +181,7 @@ select convert_to(
   || '","pendingIntents":0'
   || ',"restoreJobId":"81000000-0000-4000-8000-000000018301"'
   || ',"rlsVerified":true,"schemaVersion":1'
-  || ',"securityPolicyDigest":"de41957f4b5b5fbf2f19ddf15f3909be9e45a42fdba1083fbe5716108a2cfe16"'
+  || ',"securityPolicyDigest":"949f93950219470fe325bb427912bcf274ba594c60f94a5623add2517de73bf5"'
   || ',"sessionsRevoked":true,"storageComplete":true'
   || ',"targetFingerprint":"' || encode(digest('isolated-target', 'sha256'), 'hex')
   || '","targetIsolated":true,"trafficEnabled":false}',
