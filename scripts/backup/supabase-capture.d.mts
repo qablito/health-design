@@ -10,6 +10,11 @@ export interface CaptureSecrets {
   tombstoneHmacKeys: Record<string, string>;
 }
 
+export function runPgDump(input: {
+  args: string[];
+  environment: { PGDATABASE: string };
+}): Promise<void>;
+
 export function captureLiveBackupInputs(
   input: CaptureSecrets,
   dependencies: {

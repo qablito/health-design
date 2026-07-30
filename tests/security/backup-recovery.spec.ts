@@ -1,5 +1,6 @@
 import { createHmac } from "node:crypto";
 import {
+  chmod,
   mkdtemp,
   readFile,
   readdir,
@@ -23,7 +24,10 @@ import {
 } from "../../scripts/backup/recovery-set.mjs";
 import { buildSyntheticLedger } from "../../scripts/operations/ledger-verifiers.mjs";
 import { createLiveLedgerHeadProvider } from "../../scripts/backup/live-ledger-heads.mjs";
-import { captureLiveBackupInputs } from "../../scripts/backup/supabase-capture.mjs";
+import {
+  captureLiveBackupInputs,
+  runPgDump,
+} from "../../scripts/backup/supabase-capture.mjs";
 
 const temporaryPaths: string[] = [];
 
@@ -37,6 +41,61 @@ afterEach(async () => {
   await Promise.all(
     temporaryPaths.splice(0).map((path) => rm(path, { force: true, recursive: true })),
   );
+});
+
+it("entrega la conexión remota a libpq sin exponer secretos en argumentos", async () => {
+  const directory = await temporaryDirectory("health-design-pg-dump-env-");
+  const executable = join(directory, "pg_dump");
+  const outputPath = join(directory, "postgres.dump");
+  await writeFile(
+    executable,
+    `#!/usr/bin/env node
+const { writeFileSync } = require("node:fs");
+const output = process.argv[process.argv.indexOf("--file") + 1];
+writeFileSync(output, JSON.stringify({
+  args: process.argv.slice(2),
+  database: process.env.PGDATABASE,
+  host: process.env.PGHOST,
+  password: process.env.PGPASSWORD,
+  port: process.env.PGPORT,
+  sslmode: process.env.PGSSLMODE,
+  user: process.env.PGUSER,
+}));
+`,
+  );
+  await chmod(executable, 0o700);
+  const originalPath = process.env.PATH;
+  process.env.PATH = `${directory}:${originalPath}`;
+  try {
+    await runPgDump({
+      args: ["--format=custom", "--file", outputPath],
+      environment: {
+        PGDATABASE:
+          "postgresql://postgres.nwoivdxdupklervtnovd:database-secret@aws-0-eu-west-3.pooler.supabase.com:5432/postgres?sslmode=require",
+      },
+    });
+  } finally {
+    process.env.PATH = originalPath;
+  }
+  const captured = JSON.parse(await readFile(outputPath, "utf8")) as {
+    args: string[];
+    database: string;
+    host: string;
+    password: string;
+    port: string;
+    sslmode: string;
+    user: string;
+  };
+  expect(captured).toEqual({
+    args: ["--format=custom", "--file", outputPath],
+    database: "postgres",
+    host: "aws-0-eu-west-3.pooler.supabase.com",
+    password: "database-secret",
+    port: "5432",
+    sslmode: "require",
+    user: "postgres.nwoivdxdupklervtnovd",
+  });
+  expect(captured.args.join(" ")).not.toContain("database-secret");
 });
 
 function auditGapFixture() {
