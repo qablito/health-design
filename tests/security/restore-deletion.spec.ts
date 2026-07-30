@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -25,9 +25,13 @@ import {
 } from "../../scripts/restore/restore-failure.mjs";
 import {
   createSupabaseRestoreDependencies,
+  runOperatorProcess,
   SECURITY_POLICY_MANIFEST_DIGEST,
 } from "../../scripts/restore/supabase-operator-adapter.mjs";
-import { restoreSupabaseRecoverySet } from "../../scripts/restore/supabase-restore.mjs";
+import {
+  restoreSupabaseRecoverySet,
+  runPgRestore,
+} from "../../scripts/restore/supabase-restore.mjs";
 
 const temporaryPaths: string[] = [];
 
@@ -41,6 +45,130 @@ afterEach(async () => {
   await Promise.all(
     temporaryPaths.splice(0).map((path) => rm(path, { force: true, recursive: true })),
   );
+});
+
+it("entrega la conexión aislada a pg_restore sin exponer secretos en argumentos", async () => {
+  const directory = await temporaryDirectory("health-design-pg-restore-env-");
+  const executable = join(directory, "pg_restore");
+  const outputPath = join(directory, "captured.json");
+  await writeFile(
+    executable,
+    `#!/usr/bin/env node
+const { writeFileSync } = require("node:fs");
+const output = process.argv[process.argv.indexOf("--capture") + 1];
+writeFileSync(output, JSON.stringify({
+  args: process.argv.slice(2),
+  database: process.env.PGDATABASE,
+  host: process.env.PGHOST,
+  password: process.env.PGPASSWORD,
+  port: process.env.PGPORT,
+  sslmode: process.env.PGSSLMODE,
+  user: process.env.PGUSER,
+}));
+`,
+  );
+  await chmod(executable, 0o700);
+  const originalPath = process.env.PATH;
+  process.env.PATH = `${directory}:${originalPath}`;
+  try {
+    await runPgRestore({
+      args: ["--exit-on-error", "--capture", outputPath],
+      environment: {
+        PGDATABASE: "postgresql://postgres:local-secret@127.0.0.1:55422/postgres",
+      },
+    });
+  } finally {
+    process.env.PATH = originalPath;
+  }
+  const captured = JSON.parse(await readFile(outputPath, "utf8")) as {
+    args: string[];
+    database: string;
+    host: string;
+    password: string;
+    port: string;
+    sslmode: string;
+    user: string;
+  };
+  expect(captured).toEqual({
+    args: ["--exit-on-error", "--capture", outputPath],
+    database: "postgres",
+    host: "127.0.0.1",
+    password: "local-secret",
+    port: "55422",
+    sslmode: "disable",
+    user: "postgres",
+  });
+  expect(captured.args.join(" ")).not.toContain("local-secret");
+});
+
+it("entrega la conexión aislada a psql sin exponer secretos en argumentos", async () => {
+  const directory = await temporaryDirectory("health-design-psql-env-");
+  const executable = join(directory, "psql");
+  const outputPath = join(directory, "captured.json");
+  await writeFile(
+    executable,
+    `#!/usr/bin/env node
+const { writeFileSync } = require("node:fs");
+writeFileSync(${JSON.stringify(outputPath)}, JSON.stringify({
+  args: process.argv.slice(2),
+  database: process.env.PGDATABASE,
+  host: process.env.PGHOST,
+  password: process.env.PGPASSWORD,
+  port: process.env.PGPORT,
+  sslmode: process.env.PGSSLMODE,
+  user: process.env.PGUSER,
+}));
+process.stdout.write("0\\n");
+`,
+  );
+  await chmod(executable, 0o700);
+  const originalPath = process.env.PATH;
+  process.env.PATH = `${directory}:${originalPath}`;
+  try {
+    await runOperatorProcess(
+      "psql",
+      [
+        "--no-psqlrc",
+        "--set=ON_ERROR_STOP=1",
+        "--quiet",
+        "--tuples-only",
+        "--no-align",
+      ],
+      {
+        environment: {
+          PGDATABASE: "postgresql://postgres:local-secret@127.0.0.1:55422/postgres",
+        },
+        input: "select 0;\n",
+      },
+    );
+  } finally {
+    process.env.PATH = originalPath;
+  }
+  const captured = JSON.parse(await readFile(outputPath, "utf8")) as {
+    args: string[];
+    database: string;
+    host: string;
+    password: string;
+    port: string;
+    sslmode: string;
+    user: string;
+  };
+  expect(captured).toEqual({
+    args: [
+      "--no-psqlrc",
+      "--set=ON_ERROR_STOP=1",
+      "--quiet",
+      "--tuples-only",
+      "--no-align",
+    ],
+    database: "postgres",
+    host: "127.0.0.1",
+    password: "local-secret",
+    port: "55422",
+    sslmode: "disable",
+    user: "postgres",
+  });
+  expect(captured.args.join(" ")).not.toContain("local-secret");
 });
 
 async function fixtureBackup(

@@ -12,6 +12,7 @@ import {
   verifyDeletionTombstones,
   verifyLedgerContinuity,
 } from "../operations/ledger-verifiers.mjs";
+import { libpqEnvironment } from "../operations/libpq-environment.mjs";
 import { assertRestoreTargetIdentity } from "../operations/supabase-project-identity.mjs";
 import { assertIsolatedRestoreTarget } from "./restore-recovery-set.mjs";
 
@@ -40,7 +41,10 @@ function jsonObject(bytes, code) {
 export function runPgRestore({ args, environment }) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn("pg_restore", args, {
-      env: { PATH: process.env.PATH, PGDATABASE: environment.PGDATABASE },
+      env: {
+        PATH: process.env.PATH,
+        ...libpqEnvironment(environment.PGDATABASE),
+      },
       stdio: ["ignore", "ignore", "pipe"],
     });
     child.stderr.resume();

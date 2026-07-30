@@ -1,5 +1,10 @@
 import type { LedgerHeadProvider, OperatorKeyring } from "../backup/recovery-set.mjs";
 
+export function runPgRestore(input: {
+  args: string[];
+  environment: { PGDATABASE: string };
+}): Promise<void>;
+
 export function restoreSupabaseRecoverySet(
   input: {
     backupJobId: string;

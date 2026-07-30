@@ -8,6 +8,7 @@ import {
   verifyDeletionTombstones,
   verifyLedgerContinuity,
 } from "../operations/ledger-verifiers.mjs";
+import { libpqEnvironment } from "../operations/libpq-environment.mjs";
 import { assertBackupSourceIdentity } from "../operations/supabase-project-identity.mjs";
 
 const encoder = new TextEncoder();
@@ -146,34 +147,11 @@ async function downloadStorageObject(input, bucket, path, fetcher) {
 }
 
 export function runPgDump({ args, environment }) {
-  let databaseUrl;
-  try {
-    databaseUrl = new URL(environment.PGDATABASE);
-  } catch {
-    throw new Error("invalid_database_url");
-  }
-  const sslmode = databaseUrl.searchParams.get("sslmode") ?? "require";
-  const database = decodeURIComponent(databaseUrl.pathname.slice(1));
-  if (
-    !["postgres:", "postgresql:"].includes(databaseUrl.protocol) ||
-    !databaseUrl.hostname ||
-    !databaseUrl.username ||
-    !databaseUrl.password ||
-    !database ||
-    !["require", "verify-ca", "verify-full"].includes(sslmode)
-  ) {
-    throw new Error("invalid_database_url");
-  }
   return new Promise((resolvePromise, reject) => {
     const child = spawn("pg_dump", args, {
       env: {
         PATH: process.env.PATH,
-        PGDATABASE: database,
-        PGHOST: databaseUrl.hostname,
-        PGPASSWORD: decodeURIComponent(databaseUrl.password),
-        PGPORT: databaseUrl.port || "5432",
-        PGSSLMODE: sslmode,
-        PGUSER: decodeURIComponent(databaseUrl.username),
+        ...libpqEnvironment(environment.PGDATABASE),
       },
       stdio: ["ignore", "ignore", "pipe"],
     });

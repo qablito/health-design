@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
 import { basename, join } from "node:path";
 
+import { libpqEnvironment } from "../operations/libpq-environment.mjs";
 import { assertRestoreTargetIdentity } from "../operations/supabase-project-identity.mjs";
 
 export const SECURITY_POLICY_MANIFEST_DIGEST =
@@ -12,7 +13,10 @@ const PROFILE_UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
 function run(command, args, { environment, input = "" }) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, {
-      env: { PATH: process.env.PATH, PGDATABASE: environment.PGDATABASE },
+      env: {
+        PATH: process.env.PATH,
+        ...libpqEnvironment(environment.PGDATABASE),
+      },
       stdio: ["pipe", "pipe", "pipe"],
     });
     const stdout = [];
