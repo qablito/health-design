@@ -22,7 +22,10 @@ import {
   prepareQuarantinedRetry,
   quarantineFailedRestore,
 } from "../../scripts/restore/restore-failure.mjs";
-import { createSupabaseRestoreDependencies } from "../../scripts/restore/supabase-operator-adapter.mjs";
+import {
+  createSupabaseRestoreDependencies,
+  SECURITY_POLICY_MANIFEST_DIGEST,
+} from "../../scripts/restore/supabase-operator-adapter.mjs";
 import { restoreSupabaseRecoverySet } from "../../scripts/restore/supabase-restore.mjs";
 
 const temporaryPaths: string[] = [];
@@ -68,7 +71,7 @@ async function fixtureBackup(
     ],
     security: {
       aal2Required: true,
-      policyDigest: "de41957f4b5b5fbf2f19ddf15f3909be9e45a42fdba1083fbe5716108a2cfe16",
+      policyDigest: SECURITY_POLICY_MANIFEST_DIGEST,
       rlsEnabled: true,
     },
     sessions: [{ id: "restored-session", revoked: false }],
@@ -472,9 +475,7 @@ describe("restore aislado fail-closed", () => {
           if (sql.includes("from public.profiles")) return Promise.resolve("");
           if (sql.includes("from auth.sessions")) return Promise.resolve("0");
           if (sql.includes("security_policy_manifest")) {
-            return Promise.resolve(
-              "de41957f4b5b5fbf2f19ddf15f3909be9e45a42fdba1083fbe5716108a2cfe16",
-            );
+            return Promise.resolve(SECURITY_POLICY_MANIFEST_DIGEST);
           }
           if (sql.includes("from storage.objects")) {
             return Promise.resolve(
@@ -502,6 +503,7 @@ describe("restore aislado fail-closed", () => {
       targetRef,
       targetSupabaseUrl: isolatedSupabaseUrl,
     });
+    let policyStatement = "";
     const dependencies = createSupabaseRestoreDependencies(
       {
         knownProjectRefs,
@@ -517,6 +519,7 @@ describe("restore aislado fail-closed", () => {
           if (sql.includes("from public.profiles")) return Promise.resolve("");
           if (sql.includes("from auth.sessions")) return Promise.resolve("0");
           if (sql.includes("security_policy_manifest")) {
+            policyStatement = sql;
             return Promise.resolve("f".repeat(64));
           }
           if (sql.includes("from storage.objects")) return Promise.resolve("[]");
@@ -535,6 +538,12 @@ describe("restore aislado fail-closed", () => {
       rlsVerified: false,
       securityPolicyDigest: "f".repeat(64),
     });
+    expect(policyStatement).toContain(
+      "aclexplode(\n        coalesce(relation.relacl, acldefault('r'",
+    );
+    expect(policyStatement).toContain(
+      "aclexplode(\n        coalesce(procedure.proacl, acldefault('f'",
+    );
   });
 
   it("reconstruye ambas fases con identidad y enlace criptográfico exactos", async () => {
@@ -597,7 +606,18 @@ describe("restore aislado fail-closed", () => {
     expect(statement).toContain("phase, original_actor_id, effective_profile_id");
     expect(statement).toContain("external_record_hash");
     expect(statement).toContain("external_receipt_signature");
-    expect(statement).toContain("on conflict (request_id, phase) do nothing");
+    expect(statement).toContain("delete from private.technical_audit_events");
+    expect(statement).toContain("disable trigger technical_audit_events_are_immutable");
+    expect(statement).toContain("enable trigger technical_audit_events_are_immutable");
+    expect(statement).toContain("delete from private.audit_outbox");
+    expect(statement.indexOf("delete from private.audit_outbox")).toBeLessThan(
+      statement.indexOf("delete from private.technical_audit_events"),
+    );
+    expect(statement).toContain("where external_sequence is not null");
+    expect(statement).toContain("on conflict (request_id, phase) do update");
+    expect(statement).toContain("external_sequence = excluded.external_sequence");
+    expect(statement).toContain("created_at = excluded.created_at");
+    expect(statement).toContain("result = excluded.result");
     expect(statement).not.toContain("where value ->> 'phase' = 'outcome'");
   });
 
@@ -723,6 +743,8 @@ describe("restore aislado fail-closed", () => {
         },
         runPgRestore: ({ args, environment }) => {
           expect(args.join(" ")).not.toContain("isolated-secret");
+          expect(args).not.toContain("--no-owner");
+          expect(args).not.toContain("--no-privileges");
           expect(environment.PGDATABASE).toBe(isolatedDatabaseUrl);
           calls.push("restore");
           return Promise.resolve();
@@ -737,8 +759,7 @@ describe("restore aislado fail-closed", () => {
             aal2Required: true,
             deletedProfilesAbsent: true,
             rlsVerified: true,
-            securityPolicyDigest:
-              "de41957f4b5b5fbf2f19ddf15f3909be9e45a42fdba1083fbe5716108a2cfe16",
+            securityPolicyDigest: SECURITY_POLICY_MANIFEST_DIGEST,
             sessionsRevoked: true,
             storageComplete: true,
           });
@@ -760,8 +781,7 @@ describe("restore aislado fail-closed", () => {
     expect(result.trafficEnabled).toBe(false);
     expect(result.promotion.payload).toMatchObject({
       aal2Required: true,
-      securityPolicyDigest:
-        "de41957f4b5b5fbf2f19ddf15f3909be9e45a42fdba1083fbe5716108a2cfe16",
+      securityPolicyDigest: SECURITY_POLICY_MANIFEST_DIGEST,
     });
   });
 
@@ -807,8 +827,7 @@ describe("restore aislado fail-closed", () => {
               aal2Required: false,
               deletedProfilesAbsent: true,
               rlsVerified: true,
-              securityPolicyDigest:
-                "de41957f4b5b5fbf2f19ddf15f3909be9e45a42fdba1083fbe5716108a2cfe16",
+              securityPolicyDigest: SECURITY_POLICY_MANIFEST_DIGEST,
               sessionsRevoked: true,
               storageComplete: true,
             }),
@@ -989,8 +1008,7 @@ describe("restore aislado fail-closed", () => {
       expect(result.restoredStoragePaths).toEqual([]);
       expect(result.database.security).toEqual({
         aal2Required: true,
-        policyDigest:
-          "de41957f4b5b5fbf2f19ddf15f3909be9e45a42fdba1083fbe5716108a2cfe16",
+        policyDigest: SECURITY_POLICY_MANIFEST_DIGEST,
         rlsEnabled: true,
       });
       await expect(verifyRestoreValidation(result, fixture.keyring)).resolves.toBe(

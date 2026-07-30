@@ -134,7 +134,7 @@ export async function restoreSupabaseRecoverySet(input, dependencies) {
     await writeFile(dumpPath, database.bytes, { flag: "wx", mode: 0o600 });
     await chmod(dumpPath, 0o600);
     await (dependencies.runPgRestore ?? runPgRestore)({
-      args: ["--exit-on-error", "--no-owner", "--no-privileges", dumpPath],
+      args: ["--exit-on-error", dumpPath],
       environment: { PGDATABASE: input.databaseUrl },
       inputPath: dumpPath,
     });

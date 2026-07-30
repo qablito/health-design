@@ -302,7 +302,7 @@ export async function captureLiveBackupInputs(input, dependencies = {}) {
   try {
     const outputPath = join(temporaryDirectory, "postgres.dump");
     await (dependencies.runPgDump ?? runPgDump)({
-      args: ["--format=custom", "--no-owner", "--no-privileges", "--file", outputPath],
+      args: ["--format=custom", "--file", outputPath],
       environment: { PGDATABASE: input.databaseUrl },
       outputPath,
     });

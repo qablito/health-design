@@ -6,7 +6,7 @@ import { basename, join } from "node:path";
 import { assertRestoreTargetIdentity } from "../operations/supabase-project-identity.mjs";
 
 export const SECURITY_POLICY_MANIFEST_DIGEST =
-  "de41957f4b5b5fbf2f19ddf15f3909be9e45a42fdba1083fbe5716108a2cfe16";
+  "949f93950219470fe325bb427912bcf274ba594c60f94a5623add2517de73bf5";
 
 function run(command, args, { environment, input = "" }) {
   return new Promise((resolvePromise, reject) => {
@@ -158,6 +158,19 @@ export function createSupabaseRestoreDependencies(bundle, options = {}) {
           await query(
             databaseUrl,
             `
+begin;
+
+alter table private.technical_audit_events
+disable trigger technical_audit_events_are_immutable;
+
+delete from private.audit_outbox outbox
+using private.technical_audit_events event
+where outbox.technical_audit_event_id = event.id
+  and event.external_sequence is not null;
+
+delete from private.technical_audit_events
+where external_sequence is not null;
+
 with payload as (
   select value
   from jsonb_array_elements(
@@ -201,7 +214,25 @@ select
   (value ->> 'externalKeyVersion')::integer,
   decode(value ->> 'externalIdempotencyHash', 'hex')
 from payload
-on conflict (request_id, phase) do nothing;
+on conflict (request_id, phase) do update set
+  actor_id = excluded.actor_id,
+  action = excluded.action,
+  target_type = excluded.target_type,
+  target_id = excluded.target_id,
+  result = excluded.result,
+  created_at = excluded.created_at,
+  original_actor_id = excluded.original_actor_id,
+  effective_profile_id = excluded.effective_profile_id,
+  impersonation_session_id = excluded.impersonation_session_id,
+  external_sequence = excluded.external_sequence,
+  external_timestamp = excluded.external_timestamp,
+  external_record_hash = excluded.external_record_hash,
+  external_receipt_signature = excluded.external_receipt_signature,
+  external_key_version = excluded.external_key_version,
+  external_idempotency_hash = excluded.external_idempotency_hash;
+
+alter table private.technical_audit_events
+enable trigger technical_audit_events_are_immutable;
 
 with payload as (
   select value
@@ -248,9 +279,11 @@ where event.action = value ->> 'action'
   and event.external_record_hash = decode(value ->> 'externalRecordHash', 'hex')
   and event.external_receipt_signature =
     decode(value ->> 'externalReceiptSignature', 'hex')
-  and event.external_key_version = (value ->> 'externalKeyVersion')::integer
-  and event.external_idempotency_hash =
-    decode(value ->> 'externalIdempotencyHash', 'hex');
+   and event.external_key_version = (value ->> 'externalKeyVersion')::integer
+   and event.external_idempotency_hash =
+     decode(value ->> 'externalIdempotencyHash', 'hex');
+
+commit;
 `,
           )
         ).trim(),
@@ -395,7 +428,27 @@ with security_policy_manifest_relations as (
     relation.relrowsecurity,
     relation.relforcerowsecurity,
     relation.relowner::regrole::text as owner,
-    coalesce(relation.relacl::text, '') as acl
+    (
+      select coalesce(
+        jsonb_agg(
+          jsonb_build_object(
+            'grantor', entry.grantor::regrole::text,
+            'grantee', case
+              when entry.grantee = 0 then 'PUBLIC'
+              else entry.grantee::regrole::text
+            end,
+            'privilege', entry.privilege_type,
+            'grantable', entry.is_grantable
+          )
+          order by entry.grantor, entry.grantee, entry.privilege_type,
+            entry.is_grantable
+        ),
+        '[]'::jsonb
+      )
+      from aclexplode(
+        coalesce(relation.relacl, acldefault('r', relation.relowner))
+      ) entry
+    ) as acl
   from pg_class relation
   join pg_namespace namespace on namespace.oid = relation.relnamespace
   where relation.relkind in ('r', 'p')
@@ -426,7 +479,27 @@ security_policy_manifest_functions as (
     pg_get_function_identity_arguments(procedure.oid) as arguments,
     procedure.prosecdef,
     procedure.proowner::regrole::text as owner,
-    coalesce(procedure.proacl::text, '') as acl,
+    (
+      select coalesce(
+        jsonb_agg(
+          jsonb_build_object(
+            'grantor', entry.grantor::regrole::text,
+            'grantee', case
+              when entry.grantee = 0 then 'PUBLIC'
+              else entry.grantee::regrole::text
+            end,
+            'privilege', entry.privilege_type,
+            'grantable', entry.is_grantable
+          )
+          order by entry.grantor, entry.grantee, entry.privilege_type,
+            entry.is_grantable
+        ),
+        '[]'::jsonb
+      )
+      from aclexplode(
+        coalesce(procedure.proacl, acldefault('f', procedure.proowner))
+      ) entry
+    ) as acl,
     pg_get_functiondef(procedure.oid) as definition
   from pg_proc procedure
   join pg_namespace namespace on namespace.oid = procedure.pronamespace

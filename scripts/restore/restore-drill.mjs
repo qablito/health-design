@@ -11,6 +11,7 @@ import {
 } from "../backup/recovery-set.mjs";
 import { printResult } from "../backup/operator-input.mjs";
 import { buildSyntheticLedger } from "../operations/ledger-verifiers.mjs";
+import { SECURITY_POLICY_MANIFEST_DIGEST } from "./supabase-operator-adapter.mjs";
 import { restoreFixtureRecoverySet } from "./restore-recovery-set.mjs";
 
 async function createFixture(directory, keyring, backupId) {
@@ -58,8 +59,7 @@ async function createFixture(directory, keyring, backupId) {
             ],
             security: {
               aal2Required: true,
-              policyDigest:
-                "de41957f4b5b5fbf2f19ddf15f3909be9e45a42fdba1083fbe5716108a2cfe16",
+              policyDigest: SECURITY_POLICY_MANIFEST_DIGEST,
               rlsEnabled: true,
             },
             sessions: [{ id: "session", revoked: false }],

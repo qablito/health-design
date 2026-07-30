@@ -288,6 +288,8 @@ describe("conjuntos de recuperación cifrados", () => {
         fetcher,
         ledgerHeadProvider: ledgerHeadProvider as never,
         runPgDump: async ({ args, environment, outputPath }) => {
+          expect(args).not.toContain("--no-owner");
+          expect(args).not.toContain("--no-privileges");
           calls.push({ args, env: environment });
           await writeFile(outputPath, "dump");
         },
